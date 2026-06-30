@@ -17,6 +17,8 @@ function setup() {
   )
 }
 
+const NOW = new Date().toISOString()
+
 describe('ProjectsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -34,14 +36,14 @@ describe('ProjectsPage', () => {
   it('renders projects loaded from API', async () => {
     projectApi.listProjects.mockResolvedValueOnce({
       data: [
-        { id: 1, name: 'Thesis', description: 'My thesis', createdAt: new Date().toISOString() },
-        { id: 2, name: 'Work', description: null, createdAt: new Date().toISOString() }
+        { id: 1, name: 'Thesis', description: 'My thesis', subprojects: [], totalSeconds: 0, createdAt: NOW },
+        { id: 2, name: 'Work',   description: null,        subprojects: [], totalSeconds: 0, createdAt: NOW }
       ]
     })
     setup()
     await waitFor(() => {
-      expect(screen.getByText('Thesis')).toBeInTheDocument()
-      expect(screen.getByText('Work')).toBeInTheDocument()
+      expect(screen.getByTestId('project-name-1')).toHaveTextContent('Thesis')
+      expect(screen.getByTestId('project-name-2')).toHaveTextContent('Work')
     })
   })
 
@@ -52,12 +54,13 @@ describe('ProjectsPage', () => {
     fireEvent.click(screen.getByTestId('new-project-btn'))
     expect(screen.getByTestId('project-form')).toBeInTheDocument()
     expect(screen.getByTestId('project-name-input')).toBeInTheDocument()
+    expect(screen.getByTestId('parent-project-select')).toBeInTheDocument()
   })
 
-  it('calls createProject and refreshes list on submit', async () => {
+  it('calls createProject with null parentProjectId for top-level and refreshes list', async () => {
     projectApi.listProjects
       .mockResolvedValueOnce({ data: [] })
-      .mockResolvedValueOnce({ data: [{ id: 1, name: 'NewProject', description: null, createdAt: new Date().toISOString() }] })
+      .mockResolvedValueOnce({ data: [{ id: 1, name: 'NewProject', description: null, subprojects: [], totalSeconds: 0, createdAt: NOW }] })
     projectApi.createProject.mockResolvedValueOnce({ data: { id: 1, name: 'NewProject' } })
 
     setup()
@@ -67,8 +70,62 @@ describe('ProjectsPage', () => {
     fireEvent.change(screen.getByTestId('project-name-input'), { target: { value: 'NewProject' } })
     fireEvent.click(screen.getByTestId('create-project-btn'))
 
-    await waitFor(() => expect(projectApi.createProject).toHaveBeenCalledWith('NewProject', null))
-    await waitFor(() => expect(screen.getByText('NewProject')).toBeInTheDocument())
+    await waitFor(() => expect(projectApi.createProject).toHaveBeenCalledWith('NewProject', null, null))
+    await waitFor(() => expect(screen.getByTestId('project-name-1')).toBeInTheDocument())
+  })
+
+  it('passes parentProjectId when a parent is selected', async () => {
+    projectApi.listProjects
+      .mockResolvedValueOnce({
+        data: [{ id: 5, name: 'Parent', description: null, subprojects: [], totalSeconds: 0, createdAt: NOW }]
+      })
+      .mockResolvedValueOnce({ data: [] })
+    projectApi.createProject.mockResolvedValueOnce({ data: { id: 6, name: 'Child' } })
+
+    setup()
+    await waitFor(() => screen.getByTestId('new-project-btn'))
+    fireEvent.click(screen.getByTestId('new-project-btn'))
+
+    fireEvent.change(screen.getByTestId('project-name-input'), { target: { value: 'Child' } })
+    fireEvent.change(screen.getByTestId('parent-project-select'), { target: { value: '5' } })
+    fireEvent.click(screen.getByTestId('create-project-btn'))
+
+    await waitFor(() => expect(projectApi.createProject).toHaveBeenCalledWith('Child', null, 5))
+  })
+
+  it('shows subprojects nested in tree', async () => {
+    projectApi.listProjects.mockResolvedValueOnce({
+      data: [{
+        id: 10, name: 'Lecture', description: null, totalSeconds: 3600, createdAt: NOW,
+        subprojects: [{
+          id: 11, name: 'Assignment 1', description: null, totalSeconds: 1800, createdAt: NOW,
+          subprojects: []
+        }]
+      }]
+    })
+    setup()
+    await waitFor(() => {
+      expect(screen.getByTestId('project-name-10')).toHaveTextContent('Lecture')
+      expect(screen.getByTestId('project-name-11')).toHaveTextContent('Assignment 1')
+    })
+  })
+
+  it('collapse button toggles subproject visibility', async () => {
+    projectApi.listProjects.mockResolvedValueOnce({
+      data: [{
+        id: 20, name: 'Parent', description: null, totalSeconds: 0, createdAt: NOW,
+        subprojects: [{ id: 21, name: 'Child', description: null, totalSeconds: 0, createdAt: NOW, subprojects: [] }]
+      }]
+    })
+    setup()
+    await waitFor(() => screen.getByTestId('collapse-btn-20'))
+    expect(screen.getByTestId('project-name-21')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('collapse-btn-20'))
+    expect(screen.queryByTestId('project-name-21')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('collapse-btn-20'))
+    expect(screen.getByTestId('project-name-21')).toBeInTheDocument()
   })
 
   it('shows error when createProject returns 409', async () => {
@@ -92,7 +149,7 @@ describe('ProjectsPage', () => {
   it('hides form after successful creation', async () => {
     projectApi.listProjects
       .mockResolvedValueOnce({ data: [] })
-      .mockResolvedValueOnce({ data: [{ id: 1, name: 'Done', description: null, createdAt: new Date().toISOString() }] })
+      .mockResolvedValueOnce({ data: [{ id: 1, name: 'Done', description: null, subprojects: [], totalSeconds: 0, createdAt: NOW }] })
     projectApi.createProject.mockResolvedValueOnce({ data: { id: 1, name: 'Done' } })
 
     setup()
@@ -102,5 +159,15 @@ describe('ProjectsPage', () => {
     fireEvent.click(screen.getByTestId('create-project-btn'))
 
     await waitFor(() => expect(screen.queryByTestId('project-form')).not.toBeInTheDocument())
+  })
+
+  it('displays totalSeconds as formatted duration', async () => {
+    projectApi.listProjects.mockResolvedValueOnce({
+      data: [{ id: 30, name: 'Timed', description: null, subprojects: [], totalSeconds: 7200, createdAt: NOW }]
+    })
+    setup()
+    await waitFor(() =>
+      expect(screen.getByTestId('project-total-30')).toHaveTextContent('2h 0m')
+    )
   })
 })
