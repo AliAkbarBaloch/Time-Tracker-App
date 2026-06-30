@@ -1,95 +1,99 @@
-import { useState } from 'react'
-
-const MOCK_PROJECTS = [
-  {
-    id: 1, name: 'AI-Driven Software Dev', totalTime: '28h 15m', color: '#4f46e5',
-    subprojects: [
-      { id: 11, name: 'Weekly Assignments', totalTime: '12h 00m' },
-      { id: 12, name: 'Final Project',      totalTime: '16h 15m' },
-    ],
-  },
-  {
-    id: 2, name: 'Thesis', totalTime: '21h 30m', color: '#0891b2',
-    subprojects: [
-      { id: 21, name: 'Literature Review', totalTime: '9h 00m' },
-      { id: 22, name: 'Experiments',       totalTime: '12h 30m' },
-    ],
-  },
-  {
-    id: 3, name: 'Part-time Job', totalTime: '8h 00m', color: '#16a34a',
-    subprojects: [],
-  },
-]
+import { useState, useEffect, useCallback } from 'react'
+import * as projectApi from '../api/projectApi'
 
 export default function ProjectsPage() {
-  const [expanded, setExpanded] = useState(new Set([1]))
+  const [projects, setProjects]       = useState([])
+  const [showForm, setShowForm]       = useState(false)
+  const [name, setName]               = useState('')
+  const [description, setDescription] = useState('')
+  const [loading, setLoading]         = useState(false)
+  const [error, setError]             = useState('')
 
-  const toggle = (id) => {
-    setExpanded(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
+  const fetchProjects = useCallback(() => {
+    projectApi.listProjects()
+      .then(res => setProjects(res.data))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => { fetchProjects() }, [fetchProjects])
+
+  const handleCreate = async (e) => {
+    e.preventDefault()
+    setError('')
+    setLoading(true)
+    try {
+      await projectApi.createProject(name, description || null)
+      setName('')
+      setDescription('')
+      setShowForm(false)
+      fetchProjects()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to create project')
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
     <div className="page">
       <div className="page-header">
         <h2 className="page-title">Projects</h2>
-        <button className="btn btn-primary btn-sm">+ New Project</button>
+        <button
+          className="btn btn-primary btn-sm"
+          onClick={() => { setShowForm(f => !f); setError('') }}
+          data-testid="new-project-btn"
+        >
+          {showForm ? 'Cancel' : '+ New Project'}
+        </button>
       </div>
 
-      <div className="project-list">
-        {MOCK_PROJECTS.map(p => (
-          <div key={p.id} className="project-card">
-            <div className="project-row" onClick={() => toggle(p.id)}>
-              <span className="project-chevron">{expanded.has(p.id) ? '▾' : '▸'}</span>
-              <span className="project-dot" style={{ background: p.color }} />
-              <span className="project-name">{p.name}</span>
-              <span className="project-time">{p.totalTime}</span>
-              <div className="project-actions" onClick={e => e.stopPropagation()}>
-                <button className="btn btn-ghost btn-xs">Edit</button>
-                <button className="btn btn-ghost btn-xs">+ Sub</button>
-                <button className="btn btn-ghost btn-xs danger">Delete</button>
-              </div>
-            </div>
+      {showForm && (
+        <form className="project-form" onSubmit={handleCreate} data-testid="project-form">
+          <input
+            className="timer-input"
+            type="text"
+            placeholder="Project name"
+            value={name}
+            onChange={e => setName(e.target.value)}
+            required
+            disabled={loading}
+            data-testid="project-name-input"
+          />
+          <input
+            className="timer-input"
+            type="text"
+            placeholder="Description (optional)"
+            value={description}
+            onChange={e => setDescription(e.target.value)}
+            disabled={loading}
+            data-testid="project-desc-input"
+          />
+          <button
+            type="submit"
+            className="btn btn-primary"
+            disabled={loading || !name.trim()}
+            data-testid="create-project-btn"
+          >
+            {loading ? 'Creating…' : 'Create Project'}
+          </button>
+          {error && <p className="timer-error" role="alert">{error}</p>}
+        </form>
+      )}
 
-            {expanded.has(p.id) && p.subprojects.map(s => (
-              <div key={s.id} className="project-row subproject-row">
-                <span className="project-chevron" />
-                <span className="subproject-indent">↳</span>
-                <span className="project-name">{s.name}</span>
-                <span className="project-time">{s.totalTime}</span>
-                <div className="project-actions">
-                  <button className="btn btn-ghost btn-xs">Edit</button>
-                  <button className="btn btn-ghost btn-xs danger">Delete</button>
-                </div>
-              </div>
-            ))}
+      <div className="project-list" data-testid="project-list">
+        {projects.length === 0 && !showForm && (
+          <p className="empty-state">No projects yet. Create your first project above.</p>
+        )}
+        {projects.map(p => (
+          <div key={p.id} className="project-card">
+            <div className="project-row">
+              <span className="project-name">{p.name}</span>
+              {p.description && (
+                <span className="project-description">{p.description}</span>
+              )}
+            </div>
           </div>
         ))}
-      </div>
-
-      {/* Project Detail Preview */}
-      <div className="section" style={{ marginTop: '2rem' }}>
-        <div className="section-header">
-          <h3>AI-Driven Software Dev — Time Summary</h3>
-          <div className="date-range-bar">
-            <button className="btn btn-ghost btn-xs active">This Week</button>
-            <button className="btn btn-ghost btn-xs">This Month</button>
-            <button className="btn btn-ghost btn-xs">All Time</button>
-          </div>
-        </div>
-        <table className="task-table">
-          <thead>
-            <tr><th>Subproject</th><th>Time</th><th>% of Total</th></tr>
-          </thead>
-          <tbody>
-            <tr><td>Weekly Assignments</td><td>12h 00m</td><td>43%</td></tr>
-            <tr><td>Final Project</td><td>16h 15m</td><td>57%</td></tr>
-            <tr className="total-row"><td><strong>Total</strong></td><td><strong>28h 15m</strong></td><td>100%</td></tr>
-          </tbody>
-        </table>
       </div>
     </div>
   )
