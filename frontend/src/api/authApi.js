@@ -22,3 +22,7 @@ export function login(email, password) {
 export function logout() {
   return api.post('/auth/logout')
 }
+
+export function changePassword(currentPassword, newPassword) {
+  return api.put('/auth/password', { currentPassword, newPassword })
+}
