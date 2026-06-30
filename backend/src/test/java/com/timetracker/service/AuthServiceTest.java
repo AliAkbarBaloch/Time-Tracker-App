@@ -1,10 +1,12 @@
 package com.timetracker.service;
 
 import com.timetracker.dto.auth.AuthResponse;
+import com.timetracker.dto.auth.ChangePasswordRequest;
 import com.timetracker.dto.auth.LoginRequest;
 import com.timetracker.dto.auth.RegisterRequest;
 import com.timetracker.entity.User;
 import com.timetracker.exception.EmailAlreadyExistsException;
+import com.timetracker.exception.WrongPasswordException;
 import com.timetracker.repository.UserRepository;
 import com.timetracker.security.JwtTokenProvider;
 import org.junit.jupiter.api.Test;
@@ -105,5 +107,50 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.login(new LoginRequest("alice@example.com", "wrong")))
                 .isInstanceOf(BadCredentialsException.class);
+    }
+
+    @Test
+    void changePassword_correctCurrentPassword_updatesHash() {
+        User user = new User();
+        user.setEmail("alice@example.com");
+        user.setPasswordHash("old-hash");
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("old-pass", "old-hash")).thenReturn(true);
+        when(passwordEncoder.encode("new-pass-123")).thenReturn("new-hash");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        authService.changePassword("alice@example.com", new ChangePasswordRequest("old-pass", "new-pass-123"));
+
+        verify(userRepository).save(argThat(u -> u.getPasswordHash().equals("new-hash")));
+    }
+
+    @Test
+    void changePassword_wrongCurrentPassword_throwsWrongPasswordException() {
+        User user = new User();
+        user.setEmail("alice@example.com");
+        user.setPasswordHash("old-hash");
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("wrong", "old-hash")).thenReturn(false);
+
+        assertThatThrownBy(() ->
+                authService.changePassword("alice@example.com", new ChangePasswordRequest("wrong", "new-pass-123")))
+                .isInstanceOf(WrongPasswordException.class);
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void changePassword_newPasswordIsHashed_neverStoredPlainText() {
+        User user = new User();
+        user.setEmail("alice@example.com");
+        user.setPasswordHash("old-hash");
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
+        when(passwordEncoder.matches("old-pass", "old-hash")).thenReturn(true);
+        when(passwordEncoder.encode("brandNewPass1")).thenReturn("hashed-new");
+        when(userRepository.save(any(User.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        authService.changePassword("alice@example.com", new ChangePasswordRequest("old-pass", "brandNewPass1"));
+
+        verify(passwordEncoder).encode("brandNewPass1");
+        verify(userRepository).save(argThat(u -> "hashed-new".equals(u.getPasswordHash())));
     }
 }
