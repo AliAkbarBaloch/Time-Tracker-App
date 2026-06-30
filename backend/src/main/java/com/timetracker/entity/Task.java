@@ -1,9 +1,6 @@
 package com.timetracker.entity;
 
 import jakarta.persistence.*;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -11,7 +8,6 @@ import java.util.Set;
 
 @Entity
 @Table(name = "tasks")
-@Getter @Setter @NoArgsConstructor
 public class Task {
 
     @Id
@@ -24,7 +20,6 @@ public class Task {
     @Column(nullable = false)
     private Instant startTime;
 
-    // null means the task is currently running
     @Column
     private Instant endTime;
 
@@ -43,7 +38,21 @@ public class Task {
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
-    public boolean isRunning() {
-        return endTime == null;
-    }
+    public Task() {}
+
+    public Long getId() { return id; }
+    public String getDescription() { return description; }
+    public Instant getStartTime() { return startTime; }
+    public Instant getEndTime() { return endTime; }
+    public User getUser() { return user; }
+    public Set<Project> getProjects() { return projects; }
+    public Instant getCreatedAt() { return createdAt; }
+
+    public void setDescription(String description) { this.description = description; }
+    public void setStartTime(Instant startTime) { this.startTime = startTime; }
+    public void setEndTime(Instant endTime) { this.endTime = endTime; }
+    public void setUser(User user) { this.user = user; }
+    public void setProjects(Set<Project> projects) { this.projects = projects; }
+
+    public boolean isRunning() { return endTime == null; }
 }

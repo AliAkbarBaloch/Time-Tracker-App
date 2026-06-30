@@ -3,9 +3,6 @@ package com.timetracker.entity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -15,7 +12,6 @@ import java.util.Set;
 
 @Entity
 @Table(name = "projects")
-@Getter @Setter @NoArgsConstructor
 public class Project {
 
     @Id
@@ -34,7 +30,6 @@ public class Project {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
-    // Self-referencing for hierarchy: null = top-level project
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_project_id")
     private Project parent;
@@ -47,4 +42,22 @@ public class Project {
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
+
+    public Project() {}
+
+    public Long getId() { return id; }
+    public String getName() { return name; }
+    public String getDescription() { return description; }
+    public User getUser() { return user; }
+    public Project getParent() { return parent; }
+    public List<Project> getSubprojects() { return subprojects; }
+    public Set<Task> getTasks() { return tasks; }
+    public Instant getCreatedAt() { return createdAt; }
+
+    public void setName(String name) { this.name = name; }
+    public void setDescription(String description) { this.description = description; }
+    public void setUser(User user) { this.user = user; }
+    public void setParent(Project parent) { this.parent = parent; }
+    public void setSubprojects(List<Project> subprojects) { this.subprojects = subprojects; }
+    public void setTasks(Set<Task> tasks) { this.tasks = tasks; }
 }

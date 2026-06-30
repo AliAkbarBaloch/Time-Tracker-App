@@ -3,9 +3,6 @@ package com.timetracker.entity;
 import jakarta.persistence.*;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -13,7 +10,6 @@ import java.util.List;
 
 @Entity
 @Table(name = "users")
-@Getter @Setter @NoArgsConstructor
 public class User {
 
     @Id
@@ -41,4 +37,20 @@ public class User {
 
     @OneToMany(mappedBy = "user", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<Task> tasks = new ArrayList<>();
+
+    public User() {}
+
+    public Long getId() { return id; }
+    public String getEmail() { return email; }
+    public String getDisplayName() { return displayName; }
+    public String getPasswordHash() { return passwordHash; }
+    public Instant getCreatedAt() { return createdAt; }
+    public List<Project> getProjects() { return projects; }
+    public List<Task> getTasks() { return tasks; }
+
+    public void setEmail(String email) { this.email = email; }
+    public void setDisplayName(String displayName) { this.displayName = displayName; }
+    public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+    public void setProjects(List<Project> projects) { this.projects = projects; }
+    public void setTasks(List<Task> tasks) { this.tasks = tasks; }
 }
