@@ -4,7 +4,9 @@ import com.timetracker.dto.project.CreateProjectRequest;
 import com.timetracker.dto.project.ProjectResponse;
 import com.timetracker.entity.Project;
 import com.timetracker.entity.User;
+import com.timetracker.exception.CircularProjectHierarchyException;
 import com.timetracker.exception.ProjectNameAlreadyExistsException;
+import com.timetracker.exception.ProjectNotFoundException;
 import com.timetracker.repository.ProjectRepository;
 import com.timetracker.repository.UserRepository;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -39,6 +41,13 @@ public class ProjectService {
         project.setName(request.name());
         project.setDescription(request.description());
 
+        if (request.parentProjectId() != null) {
+            Project parent = projectRepository.findByIdAndUser(request.parentProjectId(), user)
+                    .orElseThrow(() -> new ProjectNotFoundException(request.parentProjectId()));
+            guardAgainstCircularHierarchy(project, parent);
+            project.setParent(parent);
+        }
+
         return ProjectResponse.from(projectRepository.save(project));
     }
 
@@ -47,6 +56,16 @@ public class ProjectService {
         return projectRepository.findByUserAndParentIsNull(user).stream()
                 .map(ProjectResponse::from)
                 .toList();
+    }
+
+    private void guardAgainstCircularHierarchy(Project project, Project candidate) {
+        Project cursor = candidate;
+        while (cursor != null) {
+            if (project.getId() != null && project.getId().equals(cursor.getId())) {
+                throw new CircularProjectHierarchyException();
+            }
+            cursor = cursor.getParent();
+        }
     }
 
     private User loadUser(String email) {
