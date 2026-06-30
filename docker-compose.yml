@@ -1,0 +1,27 @@
+services:
+  backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    volumes:
+      # H2 file DB persists across container restarts
+      - timetracker-data:/app/data
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:h2:file:/app/data/timetracker
+      SPRING_H2_CONSOLE_ENABLED: "false"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  timetracker-data:

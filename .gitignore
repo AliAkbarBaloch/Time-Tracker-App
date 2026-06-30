@@ -1,6 +1,7 @@
 # Backend
 backend/target/
 backend/data/
+data/
 backend/.mvn/wrapper/maven-wrapper.jar
 
 # Frontend
