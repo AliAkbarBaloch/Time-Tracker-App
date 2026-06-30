@@ -1,7 +1,18 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 
 export default function Layout() {
+  const { user, logout } = useAuth()
   const navigate = useNavigate()
+
+  async function handleLogout() {
+    await logout()
+    navigate('/login')
+  }
+
+  const initials = user?.displayName
+    ? user.displayName.split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    : '?'
 
   return (
     <div className="app-shell">
@@ -11,14 +22,6 @@ export default function Layout() {
           <span className="brand-name">TimeTracker</span>
         </div>
 
-        {/* Active timer indicator — will be driven by real state later */}
-        <div className="topbar-timer running">
-          <span className="timer-dot" />
-          <span className="timer-label">Studying React</span>
-          <span className="timer-elapsed">01:23:45</span>
-          <button className="btn btn-stop btn-sm">Stop</button>
-        </div>
-
         <nav className="topbar-nav">
           <NavLink to="/dashboard" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Dashboard</NavLink>
           <NavLink to="/projects"  className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Projects</NavLink>
@@ -26,8 +29,8 @@ export default function Layout() {
         </nav>
 
         <div className="topbar-user">
-          <span className="user-avatar">AA</span>
-          <button className="btn btn-ghost btn-sm" onClick={() => navigate('/login')}>Logout</button>
+          <span className="user-avatar" title={user?.displayName}>{initials}</span>
+          <button className="btn btn-ghost btn-sm" onClick={handleLogout}>Logout</button>
         </div>
       </header>
 

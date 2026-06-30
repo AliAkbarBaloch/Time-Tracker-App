@@ -30,7 +30,8 @@ export function AuthProvider({ children }) {
     persist(data)
   }
 
-  function logout() {
+  async function logout() {
+    try { await authApi.logout() } catch (_) { /* best-effort */ }
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
     setToken(null)
