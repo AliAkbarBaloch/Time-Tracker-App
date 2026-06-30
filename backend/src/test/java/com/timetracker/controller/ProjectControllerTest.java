@@ -57,7 +57,7 @@ class ProjectControllerTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Thesis", "My thesis project"))))
+                        new CreateProjectRequest("Thesis", "My thesis project", null))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id", notNullValue()))
                 .andExpect(jsonPath("$.name", is("Thesis")))
@@ -71,7 +71,7 @@ class ProjectControllerTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("", null))))
+                        new CreateProjectRequest("", null, null))))
                 .andExpect(status().isBadRequest());
     }
 
@@ -81,14 +81,14 @@ class ProjectControllerTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Work", null))))
+                        new CreateProjectRequest("Work", null, null))))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/projects")
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Work", "desc"))))
+                        new CreateProjectRequest("Work", "desc", null))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message", containsString("already exists")));
     }
@@ -98,7 +98,7 @@ class ProjectControllerTest {
         mockMvc.perform(post("/api/projects")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Test", null))))
+                        new CreateProjectRequest("Test", null, null))))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -108,14 +108,14 @@ class ProjectControllerTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Alpha", null))))
+                        new CreateProjectRequest("Alpha", null, null))))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(post("/api/projects")
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Beta", null))))
+                        new CreateProjectRequest("Beta", null, null))))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(get("/api/projects")
