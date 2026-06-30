@@ -9,6 +9,7 @@ import com.timetracker.entity.Task;
 import com.timetracker.entity.User;
 import com.timetracker.exception.InvalidTimeRangeException;
 import com.timetracker.exception.NoActiveTimerException;
+import com.timetracker.exception.ProjectNotFoundException;
 import com.timetracker.exception.TaskNotFoundException;
 import com.timetracker.exception.TimerAlreadyRunningException;
 import com.timetracker.repository.ProjectRepository;
@@ -75,7 +76,9 @@ public class TaskService {
         Set<Project> projects = new HashSet<>();
         if (request.projectIds() != null) {
             for (Long pid : request.projectIds()) {
-                projectRepository.findByIdAndUser(pid, user).ifPresent(projects::add);
+                Project p = projectRepository.findByIdAndUser(pid, user)
+                        .orElseThrow(() -> new ProjectNotFoundException(pid));
+                projects.add(p);
             }
         }
 
@@ -106,7 +109,9 @@ public class TaskService {
         Set<Project> projects = new HashSet<>();
         if (request.projectIds() != null) {
             for (Long pid : request.projectIds()) {
-                projectRepository.findByIdAndUser(pid, user).ifPresent(projects::add);
+                Project p = projectRepository.findByIdAndUser(pid, user)
+                        .orElseThrow(() -> new ProjectNotFoundException(pid));
+                projects.add(p);
             }
         }
 

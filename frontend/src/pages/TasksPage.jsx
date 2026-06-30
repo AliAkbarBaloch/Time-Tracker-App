@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import * as taskApi from '../api/taskApi'
+import * as projectApi from '../api/projectApi'
 
 function formatDuration(startTime, endTime) {
   if (!endTime) return '—'
@@ -19,22 +20,59 @@ function toLocalDatetimeValue(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
+function flattenProjects(projects, depth = 0) {
+  const result = []
+  for (const p of projects) {
+    result.push({ ...p, depth })
+    if (p.subprojects && p.subprojects.length > 0) {
+      result.push(...flattenProjects(p.subprojects, depth + 1))
+    }
+  }
+  return result
+}
+
+function ProjectCheckboxList({ flatProjects, selectedIds, onToggle, prefix, disabled }) {
+  if (flatProjects.length === 0) return null
+  return (
+    <fieldset className="project-selector" data-testid={`${prefix}-project-selector`}>
+      <legend className="form-label">Projects (optional)</legend>
+      {flatProjects.map(p => (
+        <label key={p.id} className="project-checkbox-label"
+          style={{ paddingLeft: `${p.depth * 1.5}rem`, display: 'block' }}>
+          <input
+            type="checkbox"
+            data-testid={`${prefix}-project-checkbox-${p.id}`}
+            checked={selectedIds.includes(p.id)}
+            onChange={() => onToggle(p.id)}
+            disabled={disabled}
+          />
+          {' '}{'— '.repeat(p.depth)}{p.name}
+        </label>
+      ))}
+    </fieldset>
+  )
+}
+
 export default function TasksPage() {
-  const [tasks, setTasks]             = useState([])
-  const [showForm, setShowForm]       = useState(false)
-  const [description, setDescription] = useState('')
-  const [startTime, setStartTime]     = useState('')
-  const [endTime, setEndTime]         = useState('')
-  const [loading, setLoading]         = useState(false)
-  const [error, setError]             = useState('')
+  const [tasks, setTasks]                   = useState([])
+  const [availableProjects, setAvailableProjects] = useState([])
+
+  const [showForm, setShowForm]             = useState(false)
+  const [description, setDescription]       = useState('')
+  const [startTime, setStartTime]           = useState('')
+  const [endTime, setEndTime]               = useState('')
+  const [createProjectIds, setCreateProjectIds] = useState([])
+  const [loading, setLoading]               = useState(false)
+  const [error, setError]                   = useState('')
 
   // edit state
-  const [editingId, setEditingId]         = useState(null)
-  const [editDesc, setEditDesc]           = useState('')
-  const [editStart, setEditStart]         = useState('')
-  const [editEnd, setEditEnd]             = useState('')
-  const [editError, setEditError]         = useState('')
-  const [editLoading, setEditLoading]     = useState(false)
+  const [editingId, setEditingId]           = useState(null)
+  const [editDesc, setEditDesc]             = useState('')
+  const [editStart, setEditStart]           = useState('')
+  const [editEnd, setEditEnd]               = useState('')
+  const [editProjectIds, setEditProjectIds] = useState([])
+  const [editError, setEditError]           = useState('')
+  const [editLoading, setEditLoading]       = useState(false)
 
   const fetchTasks = useCallback(() => {
     taskApi.listTasks()
@@ -42,7 +80,22 @@ export default function TasksPage() {
       .catch(() => {})
   }, [])
 
+  const fetchProjects = useCallback(() => {
+    projectApi.listProjects()
+      .then(res => setAvailableProjects(res.data))
+      .catch(() => {})
+  }, [])
+
   useEffect(() => { fetchTasks() }, [fetchTasks])
+  useEffect(() => { fetchProjects() }, [fetchProjects])
+
+  const toggleCreateProject = (id) => {
+    setCreateProjectIds(ids => ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id])
+  }
+
+  const toggleEditProject = (id) => {
+    setEditProjectIds(ids => ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id])
+  }
 
   const handleCreate = async (e) => {
     e.preventDefault()
@@ -53,10 +106,16 @@ export default function TasksPage() {
     if (end > new Date()) { setError('End time cannot be in the future.'); return }
     setLoading(true)
     try {
-      await taskApi.createTask(description || null, start.toISOString(), end.toISOString())
-      setDescription(''); setStartTime(''); setEndTime('')
+      await taskApi.createTask(
+        description || null,
+        start.toISOString(),
+        end.toISOString(),
+        createProjectIds.length > 0 ? createProjectIds : null
+      )
+      setDescription(''); setStartTime(''); setEndTime(''); setCreateProjectIds([])
       setShowForm(false)
       fetchTasks()
+      fetchProjects()
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to create task.')
     } finally {
@@ -69,6 +128,7 @@ export default function TasksPage() {
     setEditDesc(task.description || '')
     setEditStart(toLocalDatetimeValue(task.startTime))
     setEditEnd(toLocalDatetimeValue(task.endTime))
+    setEditProjectIds((task.projects || []).map(p => p.id))
     setEditError('')
   }
 
@@ -79,6 +139,7 @@ export default function TasksPage() {
     try {
       await taskApi.deleteTask(taskId)
       fetchTasks()
+      fetchProjects()
     } catch (err) {
       alert(err.response?.data?.message || 'Failed to delete task.')
     }
@@ -92,15 +153,24 @@ export default function TasksPage() {
     if (start >= end) { setEditError('Start time must be before end time.'); return }
     setEditLoading(true)
     try {
-      await taskApi.updateTask(taskId, editDesc || null, start.toISOString(), end.toISOString())
+      await taskApi.updateTask(
+        taskId,
+        editDesc || null,
+        start.toISOString(),
+        end.toISOString(),
+        editProjectIds.length > 0 ? editProjectIds : null
+      )
       setEditingId(null)
       fetchTasks()
+      fetchProjects()
     } catch (err) {
       setEditError(err.response?.data?.message || 'Failed to update task.')
     } finally {
       setEditLoading(false)
     }
   }
+
+  const flatProjects = flattenProjects(availableProjects)
 
   return (
     <div className="page">
@@ -128,6 +198,13 @@ export default function TasksPage() {
           <input className="timer-input" type="datetime-local" value={endTime}
             onChange={e => setEndTime(e.target.value)} required disabled={loading}
             data-testid="task-end-input" />
+          <ProjectCheckboxList
+            flatProjects={flatProjects}
+            selectedIds={createProjectIds}
+            onToggle={toggleCreateProject}
+            prefix="create"
+            disabled={loading}
+          />
           <button type="submit" className="btn btn-primary" disabled={loading}
             data-testid="submit-task-btn">
             {loading ? 'Saving…' : 'Save Task'}
@@ -154,6 +231,13 @@ export default function TasksPage() {
                 <input className="timer-input" type="datetime-local" value={editEnd}
                   onChange={e => setEditEnd(e.target.value)} required disabled={editLoading}
                   data-testid="edit-end-input" />
+                <ProjectCheckboxList
+                  flatProjects={flatProjects}
+                  selectedIds={editProjectIds}
+                  onToggle={toggleEditProject}
+                  prefix="edit"
+                  disabled={editLoading}
+                />
                 {editError && <p className="timer-error" role="alert">{editError}</p>}
                 <div className="task-actions">
                   <button type="submit" className="btn btn-primary btn-xs"
@@ -169,6 +253,11 @@ export default function TasksPage() {
                 <span className="task-description">{t.description || '(no description)'}</span>
                 <span className="task-time">{new Date(t.startTime).toLocaleString()}</span>
                 <span className="task-duration">{formatDuration(t.startTime, t.endTime)}</span>
+                {t.projects && t.projects.length > 0 && (
+                  <span className="task-projects" data-testid={`task-projects-${t.id}`}>
+                    {t.projects.map(p => p.name).join(', ')}
+                  </span>
+                )}
                 <div className="task-actions">
                   <button className="btn btn-ghost btn-xs" onClick={() => startEdit(t)}
                     data-testid={`edit-btn-${t.id}`}>Edit</button>

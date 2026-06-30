@@ -4,8 +4,26 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import TasksPage from './TasksPage'
 import { AuthProvider } from '../context/AuthContext'
 import * as taskApi from '../api/taskApi'
+import * as projectApi from '../api/projectApi'
 
 vi.mock('../api/taskApi')
+vi.mock('../api/projectApi')
+
+const NOW = new Date().toISOString()
+
+const PROJECTS = [
+  { id: 100, name: 'Thesis', description: null, subprojects: [], totalSeconds: 0, createdAt: NOW },
+  { id: 101, name: 'Work',   description: null, subprojects: [], totalSeconds: 0, createdAt: NOW }
+]
+
+const PROJECT_WITH_CHILD = [
+  {
+    id: 200, name: 'Parent', description: null, totalSeconds: 0, createdAt: NOW,
+    subprojects: [
+      { id: 201, name: 'Child', description: null, subprojects: [], totalSeconds: 0, createdAt: NOW }
+    ]
+  }
+]
 
 function setup() {
   return render(
@@ -24,6 +42,7 @@ describe('TasksPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
+    projectApi.listProjects.mockResolvedValue({ data: [] })
   })
 
   it('shows empty state when no tasks', async () => {
@@ -37,8 +56,8 @@ describe('TasksPage', () => {
   it('renders tasks loaded from API', async () => {
     taskApi.listTasks.mockResolvedValueOnce({
       data: [
-        { id: 1, description: 'Meeting', startTime: PAST_START, endTime: PAST_END, running: false },
-        { id: 2, description: null,      startTime: PAST_START, endTime: PAST_END, running: false }
+        { id: 1, description: 'Meeting', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] },
+        { id: 2, description: null,      startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
       ]
     })
     setup()
@@ -79,7 +98,7 @@ describe('TasksPage', () => {
   it('calls createTask API and refreshes list on valid submit', async () => {
     taskApi.listTasks
       .mockResolvedValueOnce({ data: [] })
-      .mockResolvedValueOnce({ data: [{ id: 3, description: 'Study', startTime: PAST_START, endTime: PAST_END, running: false }] })
+      .mockResolvedValueOnce({ data: [{ id: 3, description: 'Study', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }] })
     taskApi.createTask.mockResolvedValueOnce({ data: { id: 3 } })
 
     setup()
@@ -122,7 +141,7 @@ describe('TasksPage', () => {
 
   it('clicking Edit button shows pre-populated edit form', async () => {
     taskApi.listTasks.mockResolvedValueOnce({
-      data: [{ id: 5, description: 'Old desc', startTime: PAST_START, endTime: PAST_END, running: false }]
+      data: [{ id: 5, description: 'Old desc', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
     })
     setup()
     await waitFor(() => screen.getByTestId('edit-btn-5'))
@@ -134,7 +153,7 @@ describe('TasksPage', () => {
 
   it('cancel edit button hides edit form', async () => {
     taskApi.listTasks.mockResolvedValueOnce({
-      data: [{ id: 6, description: 'Task', startTime: PAST_START, endTime: PAST_END, running: false }]
+      data: [{ id: 6, description: 'Task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
     })
     setup()
     await waitFor(() => screen.getByTestId('edit-btn-6'))
@@ -147,7 +166,7 @@ describe('TasksPage', () => {
 
   it('shows client error when edit start >= end', async () => {
     taskApi.listTasks.mockResolvedValueOnce({
-      data: [{ id: 7, description: 'T', startTime: PAST_START, endTime: PAST_END, running: false }]
+      data: [{ id: 7, description: 'T', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
     })
     setup()
     await waitFor(() => screen.getByTestId('edit-btn-7'))
@@ -170,10 +189,10 @@ describe('TasksPage', () => {
   it('calls updateTask API and refreshes list on valid edit', async () => {
     taskApi.listTasks
       .mockResolvedValueOnce({
-        data: [{ id: 8, description: 'Original', startTime: PAST_START, endTime: PAST_END, running: false }]
+        data: [{ id: 8, description: 'Original', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
       })
       .mockResolvedValueOnce({
-        data: [{ id: 8, description: 'Updated', startTime: PAST_START, endTime: PAST_END, running: false }]
+        data: [{ id: 8, description: 'Updated', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
       })
     taskApi.updateTask.mockResolvedValueOnce({ data: { id: 8 } })
 
@@ -190,7 +209,7 @@ describe('TasksPage', () => {
 
   it('shows API error on failed update', async () => {
     taskApi.listTasks.mockResolvedValueOnce({
-      data: [{ id: 9, description: 'Task', startTime: PAST_START, endTime: PAST_END, running: false }]
+      data: [{ id: 9, description: 'Task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
     })
     taskApi.updateTask.mockRejectedValueOnce({
       response: { data: { message: 'Task not found.' } }
@@ -208,7 +227,7 @@ describe('TasksPage', () => {
 
   it('canceling delete confirmation leaves task intact', async () => {
     taskApi.listTasks.mockResolvedValueOnce({
-      data: [{ id: 10, description: 'Keep me', startTime: PAST_START, endTime: PAST_END, running: false }]
+      data: [{ id: 10, description: 'Keep me', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
     })
     window.confirm = vi.fn().mockReturnValue(false)
 
@@ -223,7 +242,7 @@ describe('TasksPage', () => {
   it('confirming delete calls deleteTask API and removes task from list', async () => {
     taskApi.listTasks
       .mockResolvedValueOnce({
-        data: [{ id: 11, description: 'Delete me', startTime: PAST_START, endTime: PAST_END, running: false }]
+        data: [{ id: 11, description: 'Delete me', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
       })
       .mockResolvedValueOnce({ data: [] })
     taskApi.deleteTask.mockResolvedValueOnce({})
@@ -235,5 +254,207 @@ describe('TasksPage', () => {
 
     await waitFor(() => expect(taskApi.deleteTask).toHaveBeenCalledWith(11))
     await waitFor(() => expect(screen.queryByText('Delete me')).not.toBeInTheDocument())
+  })
+
+  // --- project association (US-013) ---
+
+  it('shows project checkboxes in add task form when projects exist', async () => {
+    taskApi.listTasks.mockResolvedValueOnce({ data: [] })
+    projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
+
+    setup()
+    await waitFor(() => screen.getByTestId('add-task-btn'))
+    fireEvent.click(screen.getByTestId('add-task-btn'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('create-project-selector')).toBeInTheDocument()
+    )
+    expect(screen.getByTestId('create-project-checkbox-100')).toBeInTheDocument()
+    expect(screen.getByTestId('create-project-checkbox-101')).toBeInTheDocument()
+  })
+
+  it('shows subproject indented in tree within selector', async () => {
+    taskApi.listTasks.mockResolvedValueOnce({ data: [] })
+    projectApi.listProjects.mockResolvedValue({ data: PROJECT_WITH_CHILD })
+
+    setup()
+    await waitFor(() => screen.getByTestId('add-task-btn'))
+    fireEvent.click(screen.getByTestId('add-task-btn'))
+
+    await waitFor(() => screen.getByTestId('create-project-selector'))
+    expect(screen.getByTestId('create-project-checkbox-200')).toBeInTheDocument()
+    expect(screen.getByTestId('create-project-checkbox-201')).toBeInTheDocument()
+  })
+
+  it('create task with selected project calls createTask with projectIds', async () => {
+    taskApi.listTasks
+      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce({ data: [] })
+    taskApi.createTask.mockResolvedValueOnce({ data: { id: 20 } })
+    projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
+
+    setup()
+    await waitFor(() => screen.getByTestId('add-task-btn'))
+    fireEvent.click(screen.getByTestId('add-task-btn'))
+
+    await waitFor(() => screen.getByTestId('create-project-checkbox-100'))
+
+    const startVal = new Date(Date.now() - 7200000).toISOString().slice(0, 16)
+    const endVal   = new Date(Date.now() - 3600000).toISOString().slice(0, 16)
+    fireEvent.change(screen.getByTestId('task-start-input'), { target: { value: startVal } })
+    fireEvent.change(screen.getByTestId('task-end-input'),   { target: { value: endVal } })
+    fireEvent.click(screen.getByTestId('create-project-checkbox-100'))
+
+    fireEvent.click(screen.getByTestId('submit-task-btn'))
+
+    await waitFor(() =>
+      expect(taskApi.createTask).toHaveBeenCalledWith(null, expect.any(String), expect.any(String), [100])
+    )
+  })
+
+  it('create task with no project selected calls createTask with null projectIds', async () => {
+    taskApi.listTasks
+      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce({ data: [] })
+    taskApi.createTask.mockResolvedValueOnce({ data: { id: 21 } })
+    projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
+
+    setup()
+    await waitFor(() => screen.getByTestId('add-task-btn'))
+    fireEvent.click(screen.getByTestId('add-task-btn'))
+
+    const startVal = new Date(Date.now() - 7200000).toISOString().slice(0, 16)
+    const endVal   = new Date(Date.now() - 3600000).toISOString().slice(0, 16)
+    fireEvent.change(screen.getByTestId('task-start-input'), { target: { value: startVal } })
+    fireEvent.change(screen.getByTestId('task-end-input'),   { target: { value: endVal } })
+    fireEvent.click(screen.getByTestId('submit-task-btn'))
+
+    await waitFor(() =>
+      expect(taskApi.createTask).toHaveBeenCalledWith(null, expect.any(String), expect.any(String), null)
+    )
+  })
+
+  it('task row displays associated project names', async () => {
+    taskApi.listTasks.mockResolvedValueOnce({
+      data: [{
+        id: 30,
+        description: 'Study',
+        startTime: PAST_START,
+        endTime: PAST_END,
+        running: false,
+        projects: [{ id: 100, name: 'Thesis' }]
+      }]
+    })
+
+    setup()
+    await waitFor(() =>
+      expect(screen.getByTestId('task-projects-30')).toHaveTextContent('Thesis')
+    )
+  })
+
+  it('task row with multiple projects shows all names', async () => {
+    taskApi.listTasks.mockResolvedValueOnce({
+      data: [{
+        id: 31,
+        description: 'Work',
+        startTime: PAST_START,
+        endTime: PAST_END,
+        running: false,
+        projects: [{ id: 100, name: 'Thesis' }, { id: 101, name: 'Work' }]
+      }]
+    })
+
+    setup()
+    await waitFor(() => {
+      const el = screen.getByTestId('task-projects-31')
+      expect(el).toHaveTextContent('Thesis')
+      expect(el).toHaveTextContent('Work')
+    })
+  })
+
+  it('task row with no projects shows no project span', async () => {
+    taskApi.listTasks.mockResolvedValueOnce({
+      data: [{ id: 32, description: 'Solo', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
+    })
+
+    setup()
+    await waitFor(() => screen.getByTestId('task-item-32'))
+    expect(screen.queryByTestId('task-projects-32')).not.toBeInTheDocument()
+  })
+
+  it('edit form shows project checkboxes pre-populated from task.projects', async () => {
+    taskApi.listTasks.mockResolvedValueOnce({
+      data: [{
+        id: 40,
+        description: 'Study',
+        startTime: PAST_START,
+        endTime: PAST_END,
+        running: false,
+        projects: [{ id: 100, name: 'Thesis' }]
+      }]
+    })
+    projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
+
+    setup()
+    await waitFor(() => screen.getByTestId('edit-btn-40'))
+    fireEvent.click(screen.getByTestId('edit-btn-40'))
+
+    await waitFor(() => screen.getByTestId('edit-project-selector'))
+    expect(screen.getByTestId('edit-project-checkbox-100').checked).toBe(true)
+    expect(screen.getByTestId('edit-project-checkbox-101').checked).toBe(false)
+  })
+
+  it('update task passes selected projectIds to updateTask', async () => {
+    taskApi.listTasks
+      .mockResolvedValueOnce({
+        data: [{ id: 41, description: 'Task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
+      })
+      .mockResolvedValueOnce({ data: [] })
+    taskApi.updateTask.mockResolvedValueOnce({ data: { id: 41 } })
+    projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
+
+    setup()
+    await waitFor(() => screen.getByTestId('edit-btn-41'))
+    fireEvent.click(screen.getByTestId('edit-btn-41'))
+
+    await waitFor(() => screen.getByTestId('edit-project-selector'))
+    fireEvent.click(screen.getByTestId('edit-project-checkbox-101'))
+    fireEvent.click(screen.getByTestId('save-edit-btn'))
+
+    await waitFor(() =>
+      expect(taskApi.updateTask).toHaveBeenCalledWith(
+        41,
+        expect.anything(),
+        expect.any(String),
+        expect.any(String),
+        [101]
+      )
+    )
+  })
+
+  it('update task with no projects selected passes null projectIds', async () => {
+    taskApi.listTasks
+      .mockResolvedValueOnce({
+        data: [{ id: 42, description: 'Task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
+      })
+      .mockResolvedValueOnce({ data: [] })
+    taskApi.updateTask.mockResolvedValueOnce({ data: { id: 42 } })
+    projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
+
+    setup()
+    await waitFor(() => screen.getByTestId('edit-btn-42'))
+    fireEvent.click(screen.getByTestId('edit-btn-42'))
+
+    fireEvent.click(screen.getByTestId('save-edit-btn'))
+
+    await waitFor(() =>
+      expect(taskApi.updateTask).toHaveBeenCalledWith(
+        42,
+        expect.anything(),
+        expect.any(String),
+        expect.any(String),
+        null
+      )
+    )
   })
 })
