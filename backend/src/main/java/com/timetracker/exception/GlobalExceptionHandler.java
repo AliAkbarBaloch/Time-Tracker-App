@@ -107,4 +107,22 @@ public class GlobalExceptionHandler {
         body.put("message", "Access denied.");
         return body;
     }
+
+    @ExceptionHandler(ProjectNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Map<String, Object> handleProjectNotFound(ProjectNotFoundException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 404);
+        body.put("message", ex.getMessage());
+        return body;
+    }
+
+    @ExceptionHandler(CircularProjectHierarchyException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, Object> handleCircularHierarchy(CircularProjectHierarchyException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 400);
+        body.put("message", ex.getMessage());
+        return body;
+    }
 }
