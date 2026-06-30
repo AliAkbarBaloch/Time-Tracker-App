@@ -55,6 +55,13 @@ public class TaskController {
         return taskService.updateTask(principal.getUsername(), id, request);
     }
 
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void deleteTask(@AuthenticationPrincipal UserDetails principal,
+                           @PathVariable Long id) {
+        taskService.deleteTask(principal.getUsername(), id);
+    }
+
     @GetMapping("/active")
     public ResponseEntity<TaskResponse> getActiveTask(@AuthenticationPrincipal UserDetails principal) {
         return taskService.getActiveTask(principal.getUsername())

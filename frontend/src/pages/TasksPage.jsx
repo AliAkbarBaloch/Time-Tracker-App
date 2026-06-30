@@ -74,6 +74,16 @@ export default function TasksPage() {
 
   const cancelEdit = () => { setEditingId(null); setEditError('') }
 
+  const handleDelete = async (taskId) => {
+    if (!window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) return
+    try {
+      await taskApi.deleteTask(taskId)
+      fetchTasks()
+    } catch (err) {
+      alert(err.response?.data?.message || 'Failed to delete task.')
+    }
+  }
+
   const handleUpdate = async (e, taskId) => {
     e.preventDefault()
     setEditError('')
@@ -162,6 +172,8 @@ export default function TasksPage() {
                 <div className="task-actions">
                   <button className="btn btn-ghost btn-xs" onClick={() => startEdit(t)}
                     data-testid={`edit-btn-${t.id}`}>Edit</button>
+                  <button className="btn btn-danger btn-xs" onClick={() => handleDelete(t.id)}
+                    data-testid={`delete-btn-${t.id}`}>Delete</button>
                 </div>
               </>
             )}

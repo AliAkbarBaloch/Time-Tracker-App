@@ -237,4 +237,41 @@ class TaskServiceTest {
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         verify(taskRepository, never()).save(any());
     }
+
+    @Test
+    void deleteTask_validOwner_deletesTask() {
+        Task task = new Task();
+        task.setUser(user);
+        task.setStartTime(Instant.now().minusSeconds(3600));
+        task.setEndTime(Instant.now().minusSeconds(1800));
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+
+        taskService.deleteTask("alice@example.com", 1L);
+
+        verify(taskRepository).delete(task);
+    }
+
+    @Test
+    void deleteTask_taskNotFound_throwsTaskNotFoundException() {
+        when(taskRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> taskService.deleteTask("alice@example.com", 99L))
+                .isInstanceOf(TaskNotFoundException.class);
+        verify(taskRepository, never()).delete(any());
+    }
+
+    @Test
+    void deleteTask_wrongOwner_throwsAccessDeniedException() {
+        User other = new User();
+        other.setEmail("other@example.com");
+        Task task = new Task();
+        task.setUser(other);
+        task.setStartTime(Instant.now().minusSeconds(3600));
+        task.setEndTime(Instant.now().minusSeconds(1800));
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+
+        assertThatThrownBy(() -> taskService.deleteTask("alice@example.com", 1L))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(taskRepository, never()).delete(any());
+    }
 }
