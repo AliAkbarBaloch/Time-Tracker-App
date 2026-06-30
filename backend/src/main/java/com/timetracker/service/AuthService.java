@@ -1,15 +1,18 @@
 package com.timetracker.service;
 
 import com.timetracker.dto.auth.AuthResponse;
+import com.timetracker.dto.auth.ChangePasswordRequest;
 import com.timetracker.dto.auth.LoginRequest;
 import com.timetracker.dto.auth.RegisterRequest;
 import com.timetracker.entity.User;
 import com.timetracker.exception.EmailAlreadyExistsException;
+import com.timetracker.exception.WrongPasswordException;
 import com.timetracker.repository.UserRepository;
 import com.timetracker.security.JwtTokenProvider;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -54,5 +57,16 @@ public class AuthService {
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new IllegalStateException("Authenticated user not found"));
         return new AuthResponse(token, user.getEmail(), user.getDisplayName());
+    }
+
+    @Transactional
+    public void changePassword(String userEmail, ChangePasswordRequest request) {
+        User user = userRepository.findByEmail(userEmail)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userEmail));
+        if (!passwordEncoder.matches(request.currentPassword(), user.getPasswordHash())) {
+            throw new WrongPasswordException();
+        }
+        user.setPasswordHash(passwordEncoder.encode(request.newPassword()));
+        userRepository.save(user);
     }
 }

@@ -71,4 +71,13 @@ public class GlobalExceptionHandler {
         body.put("message", ex.getMessage());
         return body;
     }
+
+    @ExceptionHandler(WrongPasswordException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public Map<String, Object> handleWrongPassword(WrongPasswordException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 401);
+        body.put("message", ex.getMessage());
+        return body;
+    }
 }

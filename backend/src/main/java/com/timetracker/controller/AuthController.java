@@ -1,11 +1,14 @@
 package com.timetracker.controller;
 
 import com.timetracker.dto.auth.AuthResponse;
+import com.timetracker.dto.auth.ChangePasswordRequest;
 import com.timetracker.dto.auth.LoginRequest;
 import com.timetracker.dto.auth.RegisterRequest;
 import com.timetracker.service.AuthService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -33,5 +36,12 @@ public class AuthController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void logout() {
         // Stateless JWT: client discards the token; server has nothing to invalidate.
+    }
+
+    @PutMapping("/password")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void changePassword(@AuthenticationPrincipal UserDetails principal,
+                               @Valid @RequestBody ChangePasswordRequest request) {
+        authService.changePassword(principal.getUsername(), request);
     }
 }
