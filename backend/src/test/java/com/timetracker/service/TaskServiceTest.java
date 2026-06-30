@@ -394,4 +394,50 @@ class TaskServiceTest {
 
         assertThat(resp.projects()).isEmpty();
     }
+
+    // --- listTasks with date range ---
+
+    @Test
+    void listTasks_withFromAndTo_returnsFilteredTasks() {
+        Instant from = Instant.now().minusSeconds(86400);
+        Instant to   = Instant.now().plusSeconds(86400);
+
+        Task t = new Task(); t.setUser(user);
+        t.setStartTime(Instant.now().minusSeconds(3600));
+        t.setEndTime(Instant.now().minusSeconds(1800));
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(user, from, to))
+                .thenReturn(List.of(t));
+
+        List<TaskResponse> result = taskService.listTasks("alice@example.com", from, to);
+
+        assertThat(result).hasSize(1);
+        verify(taskRepository).findByUserAndStartTimeBetweenOrderByStartTimeAsc(user, from, to);
+        verify(taskRepository, never()).findByUserOrderByStartTimeDesc(any());
+    }
+
+    @Test
+    void listTasks_withNullRange_returnsAllTasks() {
+        Task t = new Task(); t.setUser(user);
+        t.setStartTime(Instant.now().minusSeconds(3600));
+        t.setEndTime(Instant.now().minusSeconds(1800));
+        when(taskRepository.findByUserOrderByStartTimeDesc(user)).thenReturn(List.of(t));
+
+        List<TaskResponse> result = taskService.listTasks("alice@example.com", null, null);
+
+        assertThat(result).hasSize(1);
+        verify(taskRepository).findByUserOrderByStartTimeDesc(user);
+        verify(taskRepository, never()).findByUserAndStartTimeBetweenOrderByStartTimeAsc(any(), any(), any());
+    }
+
+    @Test
+    void listTasks_withFromAndTo_noMatchingTasks_returnsEmpty() {
+        Instant from = Instant.now().minusSeconds(86400);
+        Instant to   = Instant.now().plusSeconds(86400);
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(user, from, to))
+                .thenReturn(List.of());
+
+        List<TaskResponse> result = taskService.listTasks("alice@example.com", from, to);
+
+        assertThat(result).isEmpty();
+    }
 }
