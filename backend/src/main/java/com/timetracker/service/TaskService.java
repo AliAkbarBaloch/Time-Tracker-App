@@ -130,6 +130,16 @@ public class TaskService {
                 .toList();
     }
 
+    public List<TaskResponse> listTasks(String userEmail, Instant from, Instant to) {
+        User user = loadUser(userEmail);
+        if (from != null && to != null) {
+            return taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(user, from, to)
+                    .stream().map(TaskResponse::from).toList();
+        }
+        return taskRepository.findByUserOrderByStartTimeDesc(user).stream()
+                .map(TaskResponse::from).toList();
+    }
+
     public Optional<TaskResponse> getActiveTask(String userEmail) {
         User user = loadUser(userEmail);
         return taskRepository.findByUserAndEndTimeIsNull(user)
