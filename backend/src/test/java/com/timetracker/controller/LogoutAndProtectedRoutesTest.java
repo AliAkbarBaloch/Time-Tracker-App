@@ -62,11 +62,9 @@ class LogoutAndProtectedRoutesTest {
 
     @Test
     void protectedEndpoint_withValidToken_isAccessible() throws Exception {
-        // /api/health is public but any protected path should be 401 without token.
-        // Use a non-existent but protected path to verify the security filter rejects it.
         mockMvc.perform(get("/api/projects")
                 .header("Authorization", "Bearer " + jwt))
-                .andExpect(status().isNotFound()); // filter passes; controller doesn't exist yet → 404
+                .andExpect(status().isOk());
     }
 
     @Test
