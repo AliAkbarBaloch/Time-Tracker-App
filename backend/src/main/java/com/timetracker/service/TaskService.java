@@ -3,11 +3,13 @@ package com.timetracker.service;
 import com.timetracker.dto.task.CreateTaskRequest;
 import com.timetracker.dto.task.StartTaskRequest;
 import com.timetracker.dto.task.TaskResponse;
+import com.timetracker.dto.task.UpdateTaskRequest;
 import com.timetracker.entity.Project;
 import com.timetracker.entity.Task;
 import com.timetracker.entity.User;
 import com.timetracker.exception.InvalidTimeRangeException;
 import com.timetracker.exception.NoActiveTimerException;
+import com.timetracker.exception.TaskNotFoundException;
 import com.timetracker.exception.TimerAlreadyRunningException;
 import com.timetracker.repository.ProjectRepository;
 import com.timetracker.repository.TaskRepository;
@@ -79,6 +81,35 @@ public class TaskService {
 
         Task task = new Task();
         task.setUser(user);
+        task.setDescription(request.description());
+        task.setStartTime(request.startTime());
+        task.setEndTime(request.endTime());
+        task.setProjects(projects);
+
+        return TaskResponse.from(taskRepository.save(task));
+    }
+
+    @Transactional
+    public TaskResponse updateTask(String userEmail, Long taskId, UpdateTaskRequest request) {
+        if (!request.startTime().isBefore(request.endTime())) {
+            throw new InvalidTimeRangeException("Start time must be before end time.");
+        }
+
+        User user = loadUser(userEmail);
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new TaskNotFoundException(taskId));
+
+        if (!task.getUser().equals(user)) {
+            throw new org.springframework.security.access.AccessDeniedException("Not your task.");
+        }
+
+        Set<Project> projects = new HashSet<>();
+        if (request.projectIds() != null) {
+            for (Long pid : request.projectIds()) {
+                projectRepository.findByIdAndUser(pid, user).ifPresent(projects::add);
+            }
+        }
+
         task.setDescription(request.description());
         task.setStartTime(request.startTime());
         task.setEndTime(request.endTime());
