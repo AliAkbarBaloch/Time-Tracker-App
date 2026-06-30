@@ -4,6 +4,7 @@ import com.timetracker.dto.task.StartTaskRequest;
 import com.timetracker.dto.task.TaskResponse;
 import com.timetracker.entity.Task;
 import com.timetracker.entity.User;
+import com.timetracker.exception.NoActiveTimerException;
 import com.timetracker.exception.TimerAlreadyRunningException;
 import com.timetracker.repository.TaskRepository;
 import com.timetracker.repository.UserRepository;
@@ -39,6 +40,15 @@ public class TaskService {
         task.setDescription(request != null ? request.description() : null);
 
         return TaskResponse.from(taskRepository.save(task));
+    }
+
+    @Transactional
+    public TaskResponse stopTask(String userEmail) {
+        User user = loadUser(userEmail);
+        Task running = taskRepository.findByUserAndEndTimeIsNull(user)
+                .orElseThrow(NoActiveTimerException::new);
+        running.setEndTime(Instant.now());
+        return TaskResponse.from(taskRepository.save(running));
     }
 
     public Optional<TaskResponse> getActiveTask(String userEmail) {

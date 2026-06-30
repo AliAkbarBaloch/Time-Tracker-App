@@ -8,14 +8,12 @@ export default function DashboardPage() {
   const [error, setError]             = useState('')
   const [loading, setLoading]         = useState(false)
 
-  // Fetch active task on mount
   useEffect(() => {
     taskApi.getActiveTask()
       .then(res => { if (res.status === 200) setActiveTask(res.data) })
       .catch(() => {})
   }, [])
 
-  // Tick elapsed time every second when a task is running
   useEffect(() => {
     if (!activeTask) { setElapsed('00:00:00'); return }
     const update = () => {
@@ -44,13 +42,25 @@ export default function DashboardPage() {
     }
   }, [taskDesc])
 
+  const handleStop = useCallback(async () => {
+    setError('')
+    setLoading(true)
+    try {
+      await taskApi.stopTask()
+      setActiveTask(null)
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to stop timer')
+    } finally {
+      setLoading(false)
+    }
+  }, [])
+
   return (
     <div className="page">
       <div className="page-header">
         <h2 className="page-title">Dashboard</h2>
       </div>
 
-      {/* Timer Widget */}
       <div className="timer-card">
         <div className="timer-section">
           {!activeTask && (
@@ -67,6 +77,14 @@ export default function DashboardPage() {
             <div className="timer-running">
               <span className="timer-description">{activeTask.description || 'Timer running'}</span>
               <span className="timer-display" data-testid="elapsed">{elapsed}</span>
+              <button
+                className="btn btn-danger btn-stop"
+                onClick={handleStop}
+                disabled={loading}
+                data-testid="stop-btn"
+              >
+                {loading ? 'Stopping…' : '■ Stop'}
+              </button>
             </div>
           ) : (
             <button
@@ -82,7 +100,6 @@ export default function DashboardPage() {
         {error && <p className="timer-error" role="alert">{error}</p>}
       </div>
 
-      {/* Summary Cards — static until US-007/008 */}
       <div className="summary-row">
         <div className="summary-card">
           <span className="summary-label">Today</span>

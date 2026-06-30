@@ -26,6 +26,11 @@ public class TaskController {
         return taskService.startTask(principal.getUsername(), request);
     }
 
+    @PostMapping("/stop")
+    public TaskResponse stopTask(@AuthenticationPrincipal UserDetails principal) {
+        return taskService.stopTask(principal.getUsername());
+    }
+
     @GetMapping("/active")
     public ResponseEntity<TaskResponse> getActiveTask(@AuthenticationPrincipal UserDetails principal) {
         return taskService.getActiveTask(principal.getUsername())

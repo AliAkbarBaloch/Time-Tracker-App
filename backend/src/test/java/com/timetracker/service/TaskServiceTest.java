@@ -4,6 +4,7 @@ import com.timetracker.dto.task.StartTaskRequest;
 import com.timetracker.dto.task.TaskResponse;
 import com.timetracker.entity.Task;
 import com.timetracker.entity.User;
+import com.timetracker.exception.NoActiveTimerException;
 import com.timetracker.exception.TimerAlreadyRunningException;
 import com.timetracker.repository.TaskRepository;
 import com.timetracker.repository.UserRepository;
@@ -96,5 +97,29 @@ class TaskServiceTest {
         Optional<TaskResponse> result = taskService.getActiveTask("alice@example.com");
 
         assertThat(result).isEmpty();
+    }
+
+    @Test
+    void stopTask_runningTask_setsEndTimeAndReturnsTask() {
+        Task running = new Task();
+        running.setUser(user);
+        running.setStartTime(Instant.now().minusSeconds(60));
+        when(taskRepository.findByUserAndEndTimeIsNull(user)).thenReturn(Optional.of(running));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        TaskResponse resp = taskService.stopTask("alice@example.com");
+
+        assertThat(resp.running()).isFalse();
+        assertThat(resp.endTime()).isNotNull();
+        verify(taskRepository).save(running);
+    }
+
+    @Test
+    void stopTask_noRunningTask_throwsNoActiveTimerException() {
+        when(taskRepository.findByUserAndEndTimeIsNull(user)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> taskService.stopTask("alice@example.com"))
+                .isInstanceOf(NoActiveTimerException.class);
+        verify(taskRepository, never()).save(any());
     }
 }
