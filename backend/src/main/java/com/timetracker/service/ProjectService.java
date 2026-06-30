@@ -62,7 +62,7 @@ public class ProjectService {
                 .orElseThrow(() -> new ProjectNotFoundException(projectId));
 
         boolean nameConflict = projectRepository.findByUser(user).stream()
-                .anyMatch(p -> !p.getId().equals(projectId) && p.getName().equalsIgnoreCase(request.name()));
+                .anyMatch(p -> !projectId.equals(p.getId()) && p.getName().equalsIgnoreCase(request.name()));
         if (nameConflict) {
             throw new ProjectNameAlreadyExistsException(request.name());
         }
