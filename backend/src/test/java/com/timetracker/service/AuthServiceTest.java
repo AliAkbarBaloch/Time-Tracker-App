@@ -1,6 +1,7 @@
 package com.timetracker.service;
 
 import com.timetracker.dto.auth.AuthResponse;
+import com.timetracker.dto.auth.LoginRequest;
 import com.timetracker.dto.auth.RegisterRequest;
 import com.timetracker.entity.User;
 import com.timetracker.exception.EmailAlreadyExistsException;
@@ -12,7 +13,12 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 import org.springframework.security.crypto.password.PasswordEncoder;
+
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
@@ -71,5 +77,33 @@ class AuthServiceTest {
 
         authService.register(new RegisterRequest("bob@example.com", "password123", "Bob"));
         verify(userRepository).save(any(User.class));
+    }
+
+    @Test
+    void login_validCredentials_returnsAuthResponse() {
+        Authentication auth = mock(Authentication.class);
+        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenReturn(auth);
+        when(jwtTokenProvider.generateToken(auth)).thenReturn("jwt-token");
+
+        User user = new User();
+        user.setEmail("alice@example.com");
+        user.setDisplayName("Alice");
+        user.setPasswordHash("hashed");
+        when(userRepository.findByEmail("alice@example.com")).thenReturn(Optional.of(user));
+
+        AuthResponse resp = authService.login(new LoginRequest("alice@example.com", "password123"));
+
+        assertThat(resp.token()).isEqualTo("jwt-token");
+        assertThat(resp.email()).isEqualTo("alice@example.com");
+        assertThat(resp.displayName()).isEqualTo("Alice");
+    }
+
+    @Test
+    void login_badCredentials_propagatesException() {
+        when(authenticationManager.authenticate(any()))
+                .thenThrow(new BadCredentialsException("Bad credentials"));
+
+        assertThatThrownBy(() -> authService.login(new LoginRequest("alice@example.com", "wrong")))
+                .isInstanceOf(BadCredentialsException.class);
     }
 }

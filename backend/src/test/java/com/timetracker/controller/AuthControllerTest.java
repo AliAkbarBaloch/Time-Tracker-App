@@ -1,6 +1,7 @@
 package com.timetracker.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.timetracker.dto.auth.LoginRequest;
 import com.timetracker.dto.auth.RegisterRequest;
 import com.timetracker.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -102,5 +103,60 @@ class AuthControllerTest {
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.password").doesNotExist())
                 .andExpect(jsonPath("$.passwordHash").doesNotExist());
+    }
+
+    // ── Login tests ──────────────────────────────────────────────────────────
+
+    @Test
+    void login_validCredentials_returns200WithToken() throws Exception {
+        // Register first
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                        new RegisterRequest("alice@example.com", "password123", "Alice"))))
+                .andExpect(status().isCreated());
+
+        LoginRequest login = new LoginRequest("alice@example.com", "password123");
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.token", not(emptyString())))
+                .andExpect(jsonPath("$.email", is("alice@example.com")))
+                .andExpect(jsonPath("$.displayName", is("Alice")));
+    }
+
+    @Test
+    void login_wrongPassword_returns401() throws Exception {
+        mockMvc.perform(post("/api/auth/register")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                        new RegisterRequest("alice@example.com", "password123", "Alice"))))
+                .andExpect(status().isCreated());
+
+        LoginRequest login = new LoginRequest("alice@example.com", "wrongpassword");
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.message", is("Invalid email or password")));
+    }
+
+    @Test
+    void login_unknownEmail_returns401() throws Exception {
+        LoginRequest login = new LoginRequest("nobody@example.com", "password123");
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void login_blankEmail_returns400() throws Exception {
+        LoginRequest login = new LoginRequest("", "password123");
+        mockMvc.perform(post("/api/auth/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(login)))
+                .andExpect(status().isBadRequest());
     }
 }

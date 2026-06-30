@@ -7,12 +7,13 @@ import * as authApi from '../api/authApi'
 vi.mock('../api/authApi')
 
 function TestComponent() {
-  const { user, isAuthenticated, register, logout } = useAuth()
+  const { user, isAuthenticated, register, login, logout } = useAuth()
   return (
     <div>
       <span data-testid="auth">{isAuthenticated ? 'yes' : 'no'}</span>
       <span data-testid="user">{user?.displayName ?? 'none'}</span>
       <button onClick={() => register('a@b.com', 'pass1234', 'Alice')}>reg</button>
+      <button onClick={() => login('a@b.com', 'pass1234')}>login</button>
       <button onClick={logout}>logout</button>
     </div>
   )
@@ -51,6 +52,19 @@ describe('AuthContext', () => {
     expect(screen.getByTestId('auth').textContent).toBe('yes')
     expect(screen.getByTestId('user').textContent).toBe('Alice')
     expect(localStorage.getItem('tt_token')).toBe('jwt-tok')
+  })
+
+  it('becomes authenticated after login and stores token', async () => {
+    authApi.login.mockResolvedValueOnce({
+      data: { token: 'login-tok', email: 'a@b.com', displayName: 'Alice' }
+    })
+    setup()
+    await act(async () => {
+      screen.getByRole('button', { name: 'login' }).click()
+    })
+    expect(screen.getByTestId('auth').textContent).toBe('yes')
+    expect(screen.getByTestId('user').textContent).toBe('Alice')
+    expect(localStorage.getItem('tt_token')).toBe('login-tok')
   })
 
   it('clears state and localStorage on logout', async () => {

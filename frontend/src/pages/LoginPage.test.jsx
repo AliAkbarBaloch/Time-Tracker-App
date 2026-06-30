@@ -81,4 +81,37 @@ describe('LoginPage', () => {
       expect(authApi.register).toHaveBeenCalledWith('alice@example.com', 'password123', 'Alice')
     )
   })
+
+  it('calls login API with correct payload on login submit', async () => {
+    authApi.login.mockResolvedValueOnce({
+      data: { token: 'tok', email: 'alice@example.com', displayName: 'Alice' }
+    })
+
+    renderLoginPage()
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'alice@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    // In login mode both the tab and submit are labelled "Log In" — click the last one (submit)
+    const loginBtns = screen.getAllByRole('button', { name: 'Log In' })
+    fireEvent.click(loginBtns[loginBtns.length - 1])
+
+    await waitFor(() =>
+      expect(authApi.login).toHaveBeenCalledWith('alice@example.com', 'password123')
+    )
+  })
+
+  it('shows error when login fails with bad credentials', async () => {
+    authApi.login.mockRejectedValueOnce({
+      response: { data: { status: 401, message: 'Invalid email or password' } }
+    })
+
+    renderLoginPage()
+    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'alice@example.com' } })
+    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'wrongpass' } })
+    const loginBtns = screen.getAllByRole('button', { name: 'Log In' })
+    fireEvent.click(loginBtns[loginBtns.length - 1])
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Invalid email or password')
+    )
+  })
 })
