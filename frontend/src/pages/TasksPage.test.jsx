@@ -205,4 +205,35 @@ describe('TasksPage', () => {
       expect(screen.getByRole('alert')).toHaveTextContent('Task not found.')
     )
   })
+
+  it('canceling delete confirmation leaves task intact', async () => {
+    taskApi.listTasks.mockResolvedValueOnce({
+      data: [{ id: 10, description: 'Keep me', startTime: PAST_START, endTime: PAST_END, running: false }]
+    })
+    window.confirm = vi.fn().mockReturnValue(false)
+
+    setup()
+    await waitFor(() => screen.getByTestId('delete-btn-10'))
+    fireEvent.click(screen.getByTestId('delete-btn-10'))
+
+    expect(taskApi.deleteTask).not.toHaveBeenCalled()
+    expect(screen.getByText('Keep me')).toBeInTheDocument()
+  })
+
+  it('confirming delete calls deleteTask API and removes task from list', async () => {
+    taskApi.listTasks
+      .mockResolvedValueOnce({
+        data: [{ id: 11, description: 'Delete me', startTime: PAST_START, endTime: PAST_END, running: false }]
+      })
+      .mockResolvedValueOnce({ data: [] })
+    taskApi.deleteTask.mockResolvedValueOnce({})
+    window.confirm = vi.fn().mockReturnValue(true)
+
+    setup()
+    await waitFor(() => screen.getByTestId('delete-btn-11'))
+    fireEvent.click(screen.getByTestId('delete-btn-11'))
+
+    await waitFor(() => expect(taskApi.deleteTask).toHaveBeenCalledWith(11))
+    await waitFor(() => expect(screen.queryByText('Delete me')).not.toBeInTheDocument())
+  })
 })
