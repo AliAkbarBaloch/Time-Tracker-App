@@ -19,6 +19,8 @@ function setup() {
 
 const NOW = new Date().toISOString()
 
+const PROJECT = { id: 1, name: 'Thesis', description: 'My thesis', subprojects: [], totalSeconds: 0, createdAt: NOW }
+
 describe('ProjectsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -169,5 +171,128 @@ describe('ProjectsPage', () => {
     await waitFor(() =>
       expect(screen.getByTestId('project-total-30')).toHaveTextContent('2h 0m')
     )
+  })
+
+  // --- Edit ---
+
+  it('clicking Edit shows pre-populated inline edit form', async () => {
+    projectApi.listProjects.mockResolvedValueOnce({ data: [PROJECT] })
+    setup()
+    await waitFor(() => screen.getByTestId('edit-project-btn-1'))
+    fireEvent.click(screen.getByTestId('edit-project-btn-1'))
+
+    expect(screen.getByTestId('edit-form-1')).toBeInTheDocument()
+    expect(screen.getByTestId('edit-project-name-input').value).toBe('Thesis')
+    expect(screen.getByTestId('edit-project-desc-input').value).toBe('My thesis')
+  })
+
+  it('cancel edit hides the edit form', async () => {
+    projectApi.listProjects.mockResolvedValueOnce({ data: [PROJECT] })
+    setup()
+    await waitFor(() => screen.getByTestId('edit-project-btn-1'))
+    fireEvent.click(screen.getByTestId('edit-project-btn-1'))
+    expect(screen.getByTestId('edit-form-1')).toBeInTheDocument()
+
+    fireEvent.click(screen.getByTestId('cancel-project-edit-btn'))
+    expect(screen.queryByTestId('edit-form-1')).not.toBeInTheDocument()
+  })
+
+  it('save edit calls updateProject and refreshes', async () => {
+    projectApi.listProjects
+      .mockResolvedValueOnce({ data: [PROJECT] })
+      .mockResolvedValueOnce({ data: [{ ...PROJECT, name: 'Updated' }] })
+    projectApi.updateProject.mockResolvedValueOnce({ data: { ...PROJECT, name: 'Updated' } })
+
+    setup()
+    await waitFor(() => screen.getByTestId('edit-project-btn-1'))
+    fireEvent.click(screen.getByTestId('edit-project-btn-1'))
+
+    fireEvent.change(screen.getByTestId('edit-project-name-input'), { target: { value: 'Updated' } })
+    fireEvent.click(screen.getByTestId('save-project-edit-btn'))
+
+    await waitFor(() => expect(projectApi.updateProject).toHaveBeenCalledWith(1, 'Updated', 'My thesis'))
+  })
+
+  it('shows error when updateProject returns duplicate name', async () => {
+    projectApi.listProjects.mockResolvedValueOnce({ data: [PROJECT] })
+    projectApi.updateProject.mockRejectedValueOnce({
+      response: { data: { message: 'A project named "Other" already exists.' } }
+    })
+
+    setup()
+    await waitFor(() => screen.getByTestId('edit-project-btn-1'))
+    fireEvent.click(screen.getByTestId('edit-project-btn-1'))
+    fireEvent.click(screen.getByTestId('save-project-edit-btn'))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('already exists')
+    )
+  })
+
+  // --- Delete ---
+
+  it('delete with no associations calls deleteProject and refreshes', async () => {
+    projectApi.listProjects
+      .mockResolvedValueOnce({ data: [PROJECT] })
+      .mockResolvedValueOnce({ data: [] })
+    projectApi.deleteProject.mockResolvedValueOnce({})
+
+    setup()
+    await waitFor(() => screen.getByTestId('delete-project-btn-1'))
+    fireEvent.click(screen.getByTestId('delete-project-btn-1'))
+
+    await waitFor(() => expect(projectApi.deleteProject).toHaveBeenCalledWith(1, false))
+    await waitFor(() => expect(screen.queryByTestId('project-name-1')).not.toBeInTheDocument())
+  })
+
+  it('delete with 409 shows warning dialog', async () => {
+    projectApi.listProjects.mockResolvedValueOnce({ data: [PROJECT] })
+    projectApi.deleteProject.mockRejectedValueOnce({
+      response: { status: 409, data: { message: 'Has tasks', taskCount: 2, subprojectCount: 0 } }
+    })
+
+    setup()
+    await waitFor(() => screen.getByTestId('delete-project-btn-1'))
+    fireEvent.click(screen.getByTestId('delete-project-btn-1'))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('delete-warning-dialog')).toBeInTheDocument()
+    )
+    expect(screen.getByText(/2/)).toBeInTheDocument()
+  })
+
+  it('cancel warning dialog leaves project intact', async () => {
+    projectApi.listProjects.mockResolvedValueOnce({ data: [PROJECT] })
+    projectApi.deleteProject.mockRejectedValueOnce({
+      response: { status: 409, data: { message: 'Has tasks', taskCount: 1, subprojectCount: 0 } }
+    })
+
+    setup()
+    await waitFor(() => screen.getByTestId('delete-project-btn-1'))
+    fireEvent.click(screen.getByTestId('delete-project-btn-1'))
+    await waitFor(() => screen.getByTestId('delete-warning-dialog'))
+
+    fireEvent.click(screen.getByTestId('cancel-force-delete-btn'))
+    expect(screen.queryByTestId('delete-warning-dialog')).not.toBeInTheDocument()
+    expect(projectApi.deleteProject).toHaveBeenCalledTimes(1)
+  })
+
+  it('confirm force delete calls deleteProject with force=true', async () => {
+    projectApi.listProjects
+      .mockResolvedValueOnce({ data: [PROJECT] })
+      .mockResolvedValueOnce({ data: [] })
+    projectApi.deleteProject
+      .mockRejectedValueOnce({
+        response: { status: 409, data: { message: 'Has tasks', taskCount: 1, subprojectCount: 0 } }
+      })
+      .mockResolvedValueOnce({})
+
+    setup()
+    await waitFor(() => screen.getByTestId('delete-project-btn-1'))
+    fireEvent.click(screen.getByTestId('delete-project-btn-1'))
+    await waitFor(() => screen.getByTestId('delete-warning-dialog'))
+
+    fireEvent.click(screen.getByTestId('confirm-force-delete-btn'))
+    await waitFor(() => expect(projectApi.deleteProject).toHaveBeenCalledWith(1, true))
   })
 })

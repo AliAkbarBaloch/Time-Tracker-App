@@ -125,4 +125,15 @@ public class GlobalExceptionHandler {
         body.put("message", ex.getMessage());
         return body;
     }
+
+    @ExceptionHandler(ProjectHasAssociationsException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Map<String, Object> handleProjectHasAssociations(ProjectHasAssociationsException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 409);
+        body.put("message", ex.getMessage());
+        body.put("taskCount", ex.getTaskCount());
+        body.put("subprojectCount", ex.getSubprojectCount());
+        return body;
+    }
 }

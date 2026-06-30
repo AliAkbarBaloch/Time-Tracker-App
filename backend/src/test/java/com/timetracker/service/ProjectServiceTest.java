@@ -2,9 +2,11 @@ package com.timetracker.service;
 
 import com.timetracker.dto.project.CreateProjectRequest;
 import com.timetracker.dto.project.ProjectResponse;
+import com.timetracker.dto.project.UpdateProjectRequest;
 import com.timetracker.entity.Project;
 import com.timetracker.entity.User;
 import com.timetracker.exception.CircularProjectHierarchyException;
+import com.timetracker.exception.ProjectHasAssociationsException;
 import com.timetracker.exception.ProjectNameAlreadyExistsException;
 import com.timetracker.exception.ProjectNotFoundException;
 import com.timetracker.repository.ProjectRepository;
@@ -179,5 +181,104 @@ class ProjectServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).subprojects()).hasSize(1);
         assertThat(result.get(0).subprojects().get(0).name()).isEqualTo("Child");
+    }
+
+    // --- updateProject ---
+
+    @Test
+    void updateProject_uniqueName_updatesAndReturns() {
+        Project project = new Project(); project.setId(1L); project.setName("Old"); project.setUser(user);
+        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(project));
+        when(projectRepository.findByUser(user)).thenReturn(List.of(project));
+        when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        ProjectResponse resp = projectService.updateProject("alice@example.com", 1L,
+                new UpdateProjectRequest("New Name", "New desc"));
+
+        assertThat(resp.name()).isEqualTo("New Name");
+        assertThat(resp.description()).isEqualTo("New desc");
+        verify(projectRepository).save(project);
+    }
+
+    @Test
+    void updateProject_duplicateName_throwsProjectNameAlreadyExistsException() {
+        Project project = new Project(); project.setId(1L); project.setName("Alpha"); project.setUser(user);
+        Project other   = new Project(); other.setId(2L);  other.setName("Beta");   other.setUser(user);
+        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(project));
+        when(projectRepository.findByUser(user)).thenReturn(List.of(project, other));
+
+        assertThatThrownBy(() -> projectService.updateProject("alice@example.com", 1L,
+                new UpdateProjectRequest("Beta", null)))
+                .isInstanceOf(ProjectNameAlreadyExistsException.class);
+        verify(projectRepository, never()).save(any());
+    }
+
+    @Test
+    void updateProject_sameNameAllowed_doesNotThrow() {
+        Project project = new Project(); project.setId(1L); project.setName("Alpha"); project.setUser(user);
+        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(project));
+        when(projectRepository.findByUser(user)).thenReturn(List.of(project));
+        when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        assertThatNoException().isThrownBy(() ->
+                projectService.updateProject("alice@example.com", 1L,
+                        new UpdateProjectRequest("Alpha", "updated desc")));
+    }
+
+    @Test
+    void updateProject_projectNotFound_throwsProjectNotFoundException() {
+        when(projectRepository.findByIdAndUser(99L, user)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> projectService.updateProject("alice@example.com", 99L,
+                new UpdateProjectRequest("X", null)))
+                .isInstanceOf(ProjectNotFoundException.class);
+    }
+
+    // --- deleteProject ---
+
+    @Test
+    void deleteProject_noAssociations_deletesProject() {
+        Project project = new Project(); project.setName("P"); project.setUser(user);
+        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(project));
+
+        projectService.deleteProject("alice@example.com", 1L, false);
+
+        verify(projectRepository).delete(project);
+    }
+
+    @Test
+    void deleteProject_withTasks_withoutForce_throwsProjectHasAssociationsException() {
+        Project project = new Project(); project.setName("P"); project.setUser(user);
+        com.timetracker.entity.Task task = new com.timetracker.entity.Task();
+        task.setUser(user);
+        project.getTasks().add(task);
+        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(project));
+
+        assertThatThrownBy(() -> projectService.deleteProject("alice@example.com", 1L, false))
+                .isInstanceOf(ProjectHasAssociationsException.class);
+        verify(projectRepository, never()).delete(any());
+    }
+
+    @Test
+    void deleteProject_withForce_disassociatesTasksAndDeletes() {
+        Project project = new Project(); project.setName("P"); project.setUser(user);
+        com.timetracker.entity.Task task = new com.timetracker.entity.Task();
+        task.setUser(user);
+        task.getProjects().add(project);
+        project.getTasks().add(task);
+        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(project));
+
+        projectService.deleteProject("alice@example.com", 1L, true);
+
+        assertThat(task.getProjects()).doesNotContain(project);
+        verify(projectRepository).delete(project);
+    }
+
+    @Test
+    void deleteProject_notFound_throwsProjectNotFoundException() {
+        when(projectRepository.findByIdAndUser(99L, user)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> projectService.deleteProject("alice@example.com", 99L, false))
+                .isInstanceOf(ProjectNotFoundException.class);
     }
 }
