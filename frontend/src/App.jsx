@@ -5,6 +5,7 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import ProjectsPage from './pages/ProjectsPage'
 import OverviewPage from './pages/OverviewPage'
+import SettingsPage from './pages/SettingsPage'
 import Layout from './components/Layout'
 import './App.css'
 
@@ -19,6 +20,7 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/overview" element={<OverviewPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>
       </AuthProvider>

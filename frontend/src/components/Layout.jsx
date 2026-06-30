@@ -30,6 +30,7 @@ export default function Layout() {
 
         <div className="topbar-user">
           <span className="user-avatar" title={user?.displayName}>{initials}</span>
+          <NavLink to="/settings" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Settings</NavLink>
           <button className="btn btn-ghost btn-sm" onClick={handleLogout}>Logout</button>
         </div>
       </header>
