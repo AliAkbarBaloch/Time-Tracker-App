@@ -1,13 +1,17 @@
 package com.timetracker.controller;
 
+import com.timetracker.dto.task.CreateTaskRequest;
 import com.timetracker.dto.task.StartTaskRequest;
 import com.timetracker.dto.task.TaskResponse;
 import com.timetracker.service.TaskService;
+import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 
 @RestController
 @RequestMapping("/api/tasks")
@@ -17,6 +21,18 @@ public class TaskController {
 
     public TaskController(TaskService taskService) {
         this.taskService = taskService;
+    }
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    public TaskResponse createTask(@AuthenticationPrincipal UserDetails principal,
+                                   @Valid @RequestBody CreateTaskRequest request) {
+        return taskService.createTask(principal.getUsername(), request);
+    }
+
+    @GetMapping
+    public List<TaskResponse> listTasks(@AuthenticationPrincipal UserDetails principal) {
+        return taskService.listTasks(principal.getUsername());
     }
 
     @PostMapping("/start")

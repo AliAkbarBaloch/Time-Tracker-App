@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage'
 import ProjectsPage from './pages/ProjectsPage'
 import OverviewPage from './pages/OverviewPage'
 import SettingsPage from './pages/SettingsPage'
+import TasksPage from './pages/TasksPage'
 import Layout from './components/Layout'
 import './App.css'
 
@@ -20,6 +21,7 @@ export default function App() {
             <Route path="/dashboard" element={<DashboardPage />} />
             <Route path="/projects" element={<ProjectsPage />} />
             <Route path="/overview" element={<OverviewPage />} />
+            <Route path="/tasks" element={<TasksPage />} />
             <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Routes>
