@@ -131,6 +131,18 @@ public class TaskService {
                 .map(TaskResponse::from);
     }
 
+    @Transactional
+    public void deleteTask(String userEmail, Long taskId) {
+        User user = loadUser(userEmail);
+        Task task = taskRepository.findById(taskId)
+                .orElseThrow(() -> new TaskNotFoundException(taskId));
+        if (!task.getUser().equals(user)) {
+            throw new org.springframework.security.access.AccessDeniedException("Not your task.");
+        }
+        task.getProjects().clear();
+        taskRepository.delete(task);
+    }
+
     private User loadUser(String email) {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
