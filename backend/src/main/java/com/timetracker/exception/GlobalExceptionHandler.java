@@ -44,4 +44,13 @@ public class GlobalExceptionHandler {
         body.put("message", "Invalid email or password");
         return body;
     }
+
+    @ExceptionHandler(TimerAlreadyRunningException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Map<String, Object> handleTimerAlreadyRunning(TimerAlreadyRunningException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 409);
+        body.put("message", ex.getMessage());
+        return body;
+    }
 }
