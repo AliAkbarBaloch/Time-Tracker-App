@@ -6,8 +6,10 @@ import com.timetracker.dto.task.TaskResponse;
 import com.timetracker.dto.task.UpdateTaskRequest;
 import com.timetracker.entity.Task;
 import com.timetracker.entity.User;
+import com.timetracker.entity.Project;
 import com.timetracker.exception.InvalidTimeRangeException;
 import com.timetracker.exception.NoActiveTimerException;
+import com.timetracker.exception.ProjectNotFoundException;
 import com.timetracker.exception.TaskNotFoundException;
 import com.timetracker.exception.TimerAlreadyRunningException;
 import com.timetracker.repository.ProjectRepository;
@@ -273,5 +275,123 @@ class TaskServiceTest {
         assertThatThrownBy(() -> taskService.deleteTask("alice@example.com", 1L))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
         verify(taskRepository, never()).delete(any());
+    }
+
+    // --- project association ---
+
+    @Test
+    void createTask_withProjectIds_associatesProjectsAndReturnsThemInResponse() {
+        Instant start = Instant.now().minusSeconds(3600);
+        Instant end   = Instant.now().minusSeconds(1800);
+
+        Project project = new Project();
+        project.setId(10L);
+        project.setName("Thesis");
+        project.setUser(user);
+
+        when(projectRepository.findByIdAndUser(10L, user)).thenReturn(Optional.of(project));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        TaskResponse resp = taskService.createTask("alice@example.com",
+                new CreateTaskRequest("Work", start, end, List.of(10L)));
+
+        assertThat(resp.projects()).hasSize(1);
+        assertThat(resp.projects().get(0).id()).isEqualTo(10L);
+        assertThat(resp.projects().get(0).name()).isEqualTo("Thesis");
+    }
+
+    @Test
+    void createTask_withInvalidProjectId_throwsProjectNotFoundException() {
+        Instant start = Instant.now().minusSeconds(3600);
+        Instant end   = Instant.now().minusSeconds(1800);
+
+        when(projectRepository.findByIdAndUser(99L, user)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> taskService.createTask("alice@example.com",
+                new CreateTaskRequest("Work", start, end, List.of(99L))))
+                .isInstanceOf(ProjectNotFoundException.class);
+        verify(taskRepository, never()).save(any());
+    }
+
+    @Test
+    void createTask_withNullProjectIds_returnsEmptyProjectList() {
+        Instant start = Instant.now().minusSeconds(3600);
+        Instant end   = Instant.now().minusSeconds(1800);
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        TaskResponse resp = taskService.createTask("alice@example.com",
+                new CreateTaskRequest("Work", start, end, null));
+
+        assertThat(resp.projects()).isEmpty();
+    }
+
+    @Test
+    void updateTask_withProjectIds_replacesProjectAssociations() {
+        Instant start = Instant.now().minusSeconds(3600);
+        Instant end   = Instant.now().minusSeconds(1800);
+
+        Project project = new Project();
+        project.setId(20L);
+        project.setName("Work");
+        project.setUser(user);
+
+        Task task = new Task();
+        task.setUser(user);
+        task.setStartTime(start);
+        task.setEndTime(end);
+
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+        when(projectRepository.findByIdAndUser(20L, user)).thenReturn(Optional.of(project));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        TaskResponse resp = taskService.updateTask("alice@example.com", 1L,
+                new UpdateTaskRequest("Updated", start, end, List.of(20L)));
+
+        assertThat(resp.projects()).hasSize(1);
+        assertThat(resp.projects().get(0).name()).isEqualTo("Work");
+    }
+
+    @Test
+    void updateTask_withInvalidProjectId_throwsProjectNotFoundException() {
+        Instant start = Instant.now().minusSeconds(3600);
+        Instant end   = Instant.now().minusSeconds(1800);
+
+        Task task = new Task();
+        task.setUser(user);
+        task.setStartTime(start);
+        task.setEndTime(end);
+
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+        when(projectRepository.findByIdAndUser(99L, user)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> taskService.updateTask("alice@example.com", 1L,
+                new UpdateTaskRequest("X", start, end, List.of(99L))))
+                .isInstanceOf(ProjectNotFoundException.class);
+        verify(taskRepository, never()).save(any());
+    }
+
+    @Test
+    void updateTask_clearProjects_returnsEmptyProjectList() {
+        Instant start = Instant.now().minusSeconds(3600);
+        Instant end   = Instant.now().minusSeconds(1800);
+
+        Project project = new Project();
+        project.setId(30L);
+        project.setName("Old");
+        project.setUser(user);
+
+        Task task = new Task();
+        task.setUser(user);
+        task.setStartTime(start);
+        task.setEndTime(end);
+        task.getProjects().add(project);
+
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        TaskResponse resp = taskService.updateTask("alice@example.com", 1L,
+                new UpdateTaskRequest("Updated", start, end, null));
+
+        assertThat(resp.projects()).isEmpty();
     }
 }
