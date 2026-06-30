@@ -80,4 +80,13 @@ public class GlobalExceptionHandler {
         body.put("message", ex.getMessage());
         return body;
     }
+
+    @ExceptionHandler(InvalidTimeRangeException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, Object> handleInvalidTimeRange(InvalidTimeRangeException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 400);
+        body.put("message", ex.getMessage());
+        return body;
+    }
 }
