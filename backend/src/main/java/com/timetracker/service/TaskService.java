@@ -1,11 +1,15 @@
 package com.timetracker.service;
 
+import com.timetracker.dto.task.CreateTaskRequest;
 import com.timetracker.dto.task.StartTaskRequest;
 import com.timetracker.dto.task.TaskResponse;
+import com.timetracker.entity.Project;
 import com.timetracker.entity.Task;
 import com.timetracker.entity.User;
+import com.timetracker.exception.InvalidTimeRangeException;
 import com.timetracker.exception.NoActiveTimerException;
 import com.timetracker.exception.TimerAlreadyRunningException;
+import com.timetracker.repository.ProjectRepository;
 import com.timetracker.repository.TaskRepository;
 import com.timetracker.repository.UserRepository;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -13,17 +17,24 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 public class TaskService {
 
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
+    private final ProjectRepository projectRepository;
 
-    public TaskService(TaskRepository taskRepository, UserRepository userRepository) {
+    public TaskService(TaskRepository taskRepository,
+                       UserRepository userRepository,
+                       ProjectRepository projectRepository) {
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
+        this.projectRepository = projectRepository;
     }
 
     @Transactional
@@ -49,6 +60,38 @@ public class TaskService {
                 .orElseThrow(NoActiveTimerException::new);
         running.setEndTime(Instant.now());
         return TaskResponse.from(taskRepository.save(running));
+    }
+
+    @Transactional
+    public TaskResponse createTask(String userEmail, CreateTaskRequest request) {
+        if (!request.startTime().isBefore(request.endTime())) {
+            throw new InvalidTimeRangeException("Start time must be before end time.");
+        }
+
+        User user = loadUser(userEmail);
+
+        Set<Project> projects = new HashSet<>();
+        if (request.projectIds() != null) {
+            for (Long pid : request.projectIds()) {
+                projectRepository.findByIdAndUser(pid, user).ifPresent(projects::add);
+            }
+        }
+
+        Task task = new Task();
+        task.setUser(user);
+        task.setDescription(request.description());
+        task.setStartTime(request.startTime());
+        task.setEndTime(request.endTime());
+        task.setProjects(projects);
+
+        return TaskResponse.from(taskRepository.save(task));
+    }
+
+    public List<TaskResponse> listTasks(String userEmail) {
+        User user = loadUser(userEmail);
+        return taskRepository.findByUserOrderByStartTimeDesc(user).stream()
+                .map(TaskResponse::from)
+                .toList();
     }
 
     public Optional<TaskResponse> getActiveTask(String userEmail) {
