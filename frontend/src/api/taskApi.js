@@ -23,3 +23,7 @@ export function createTask(description, startTime, endTime, projectIds = null) {
 export function updateTask(id, description, startTime, endTime, projectIds = null) {
   return api.put(`/tasks/${id}`, { description, startTime, endTime, projectIds })
 }
+
+export function deleteTask(id) {
+  return api.delete(`/tasks/${id}`)
+}
