@@ -3,10 +3,12 @@ package com.timetracker.service;
 import com.timetracker.dto.task.CreateTaskRequest;
 import com.timetracker.dto.task.StartTaskRequest;
 import com.timetracker.dto.task.TaskResponse;
+import com.timetracker.dto.task.UpdateTaskRequest;
 import com.timetracker.entity.Task;
 import com.timetracker.entity.User;
 import com.timetracker.exception.InvalidTimeRangeException;
 import com.timetracker.exception.NoActiveTimerException;
+import com.timetracker.exception.TaskNotFoundException;
 import com.timetracker.exception.TimerAlreadyRunningException;
 import com.timetracker.repository.ProjectRepository;
 import com.timetracker.repository.TaskRepository;
@@ -176,5 +178,63 @@ class TaskServiceTest {
 
         assertThat(result).hasSize(2);
         assertThat(result.get(0).startTime()).isEqualTo(t2);
+    }
+
+    @Test
+    void updateTask_validRequest_updatesAndReturns() {
+        Instant start = Instant.now().minusSeconds(3600);
+        Instant end   = Instant.now().minusSeconds(1800);
+        Task task = new Task();
+        task.setUser(user);
+        task.setStartTime(start);
+        task.setEndTime(end);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        TaskResponse resp = taskService.updateTask("alice@example.com", 1L,
+                new UpdateTaskRequest("Updated", start, end, null));
+
+        assertThat(resp.description()).isEqualTo("Updated");
+        verify(taskRepository).save(task);
+    }
+
+    @Test
+    void updateTask_taskNotFound_throwsTaskNotFoundException() {
+        Instant start = Instant.now().minusSeconds(3600);
+        Instant end   = Instant.now().minusSeconds(1800);
+        when(taskRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> taskService.updateTask("alice@example.com", 99L,
+                new UpdateTaskRequest("X", start, end, null)))
+                .isInstanceOf(TaskNotFoundException.class);
+    }
+
+    @Test
+    void updateTask_startAfterEnd_throwsInvalidTimeRangeException() {
+        Instant start = Instant.now();
+        Instant end   = start.minusSeconds(60);
+
+        assertThatThrownBy(() -> taskService.updateTask("alice@example.com", 1L,
+                new UpdateTaskRequest("X", start, end, null)))
+                .isInstanceOf(InvalidTimeRangeException.class);
+        verify(taskRepository, never()).save(any());
+    }
+
+    @Test
+    void updateTask_wrongOwner_throwsAccessDeniedException() {
+        Instant start = Instant.now().minusSeconds(3600);
+        Instant end   = Instant.now().minusSeconds(1800);
+        User other = new User();
+        other.setEmail("other@example.com");
+        Task task = new Task();
+        task.setUser(other);
+        task.setStartTime(start);
+        task.setEndTime(end);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+
+        assertThatThrownBy(() -> taskService.updateTask("alice@example.com", 1L,
+                new UpdateTaskRequest("X", start, end, null)))
+                .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
+        verify(taskRepository, never()).save(any());
     }
 }

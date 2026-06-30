@@ -3,6 +3,7 @@ package com.timetracker.controller;
 import com.timetracker.dto.task.CreateTaskRequest;
 import com.timetracker.dto.task.StartTaskRequest;
 import com.timetracker.dto.task.TaskResponse;
+import com.timetracker.dto.task.UpdateTaskRequest;
 import com.timetracker.service.TaskService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -45,6 +46,13 @@ public class TaskController {
     @PostMapping("/stop")
     public TaskResponse stopTask(@AuthenticationPrincipal UserDetails principal) {
         return taskService.stopTask(principal.getUsername());
+    }
+
+    @PutMapping("/{id}")
+    public TaskResponse updateTask(@AuthenticationPrincipal UserDetails principal,
+                                   @PathVariable Long id,
+                                   @Valid @RequestBody UpdateTaskRequest request) {
+        return taskService.updateTask(principal.getUsername(), id, request);
     }
 
     @GetMapping("/active")

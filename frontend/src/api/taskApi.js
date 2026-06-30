@@ -19,3 +19,7 @@ export function listTasks() {
 export function createTask(description, startTime, endTime, projectIds = null) {
   return api.post('/tasks', { description, startTime, endTime, projectIds })
 }
+
+export function updateTask(id, description, startTime, endTime, projectIds = null) {
+  return api.put(`/tasks/${id}`, { description, startTime, endTime, projectIds })
+}
