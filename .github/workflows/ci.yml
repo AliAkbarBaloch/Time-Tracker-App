@@ -1,0 +1,59 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ─── Backend: compile, lint, unit tests ──────────────────────────────────
+  backend:
+    name: Backend (Java 21 / Maven)
+    runs-on: self-hosted
+
+    steps:
+      # Docker runs as root, so files written in a previous run may be
+      # root-owned. Fix ownership before checkout tries to clean the workspace.
+      - name: Fix workspace permissions
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}":/workspace \
+            alpine sh -c "chown -R $(id -u):$(id -g) /workspace"
+        continue-on-error: true
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run tests inside Docker (eclipse-temurin:21-jdk)
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}/backend":/workspace \
+            -v "$HOME/.m2":/root/.m2 \
+            -w /workspace \
+            eclipse-temurin:21-jdk \
+            bash -c "chmod +x mvnw && ./mvnw --no-transfer-progress verify"
+
+  # ─── Frontend: lint, unit tests, build ───────────────────────────────────
+  frontend:
+    name: Frontend (Node 24 / Vite)
+    runs-on: self-hosted
+
+    steps:
+      - name: Fix workspace permissions
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}":/workspace \
+            alpine sh -c "chown -R $(id -u):$(id -g) /workspace"
+        continue-on-error: true
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Lint, test and build inside Docker (node:24-alpine)
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}/frontend":/workspace \
+            -w /workspace \
+            node:24-alpine \
+            sh -c "npm ci && npm run lint && npm run test && npm run build"
