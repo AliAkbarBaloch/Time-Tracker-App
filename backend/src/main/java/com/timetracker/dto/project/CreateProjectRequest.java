@@ -5,5 +5,6 @@ import jakarta.validation.constraints.Size;
 
 public record CreateProjectRequest(
         @NotBlank @Size(max = 100) String name,
-        @Size(max = 500) String description
+        @Size(max = 500) String description,
+        Long parentProjectId
 ) {}
