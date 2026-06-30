@@ -12,6 +12,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.List;
 
 @RestController
@@ -32,8 +33,12 @@ public class TaskController {
     }
 
     @GetMapping
-    public List<TaskResponse> listTasks(@AuthenticationPrincipal UserDetails principal) {
-        return taskService.listTasks(principal.getUsername());
+    public List<TaskResponse> listTasks(@AuthenticationPrincipal UserDetails principal,
+                                        @RequestParam(required = false) String from,
+                                        @RequestParam(required = false) String to) {
+        Instant fromInstant = from != null ? Instant.parse(from) : null;
+        Instant toInstant   = to   != null ? Instant.parse(to)   : null;
+        return taskService.listTasks(principal.getUsername(), fromInstant, toInstant);
     }
 
     @PostMapping("/start")
