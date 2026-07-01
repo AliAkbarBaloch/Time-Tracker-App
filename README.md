@@ -340,6 +340,16 @@ Tests connect to `http://localhost:3000` (frontend) and `http://localhost:8080` 
 | `us013-associate-tasks-projects.spec.ts` | US-013 | Task created with project shows project chip, removing association via edit clears chip, only own projects appear in selector |
 | `us014-daily-overview.spec.ts` | US-014 | Empty state shows 00:00:00 daily total, completed task increments daily total, running task visible with elapsed timer on dashboard |
 | `us015-weekly-overview.spec.ts` | US-015 | All 7 day columns visible (including empty), weekly total non-zero after adding task, prev-week navigation changes week heading, midnight-spanning task attributed to start-time day |
+| `us016-monthly-overview.spec.ts` | US-016 | Today's day cell exists in calendar layout, day cell total non-zero after adding task, prev-month-btn changes displayed month, monthly total non-zero when tasks exist |
+| `us017-project-summary.spec.ts` | US-017 | Rolled-up total includes subproject tree tasks, preset filter updates totals without reload, empty project shows 0:00:00 |
+| `us018-persistent-timer.spec.ts` | US-018 | Timer continues after page refresh, timer persists after navigating away and back, topbar-timer visible on all pages while running, second browser context sees running timer |
+| `us019-search-filter-tasks.spec.ts` | US-019 | Keyword search filters tasks case-insensitively, combining keyword + date range narrows results (AND logic), reset button restores full task list |
+| `us020-dashboard-summary.spec.ts` | US-020 | Empty-state for new user (00:00:00, top-projects-empty), today/week totals non-zero after task, running task with elapsed counter, top-project appears with linked task, GET /api/dashboard/summary < 1s |
+| `nfr001-security.spec.ts` | NFR-001 | Protected endpoints return 401 without JWT, invalid JWT → 401, User A cannot modify User B's tasks (403/404), SQL injection stored as literal text |
+| `nfr002-performance.spec.ts` | NFR-002 | Dashboard page loads < 1s, /api/dashboard/summary responds < 1s with all fields, frontend served as static HTML + JS bundle |
+| `nfr003-usability.spec.ts` | NFR-003 | Start timer in 1 click, add task form in 2 clicks, topbar-timer in viewport on all pages, field-level errors on empty form, layout intact at 1024/1280/1440px |
+| `nfr004-local-deployability.spec.ts` | NFR-004 | GET /api/health → 200, frontend SPA accessible, H2 console not exposed, API resolves to localhost, data persists across browser contexts |
+| `us021-data-persistence.spec.ts` | US-021 | Tasks/projects visible after logout+re-login, subproject hierarchy persists, task-project associations persist, User B cannot see User A's tasks |
 
 ### Frontend
 
