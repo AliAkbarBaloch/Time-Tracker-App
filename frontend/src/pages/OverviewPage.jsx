@@ -16,6 +16,8 @@ function getLocalDateStr(iso) {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 }
 
+// ─── Week helpers ───────────────────────────────────────────────────────────
+
 function getWeekDays(offset) {
   const now = new Date()
   const dow = now.getDay()
@@ -58,16 +60,78 @@ function formatTaskDuration(startTime, endTime) {
   return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m ${String(s).padStart(2, '0')}s`
 }
 
+// ─── Month helpers ──────────────────────────────────────────────────────────
+
+function getMonthInfo(offset) {
+  const now = new Date()
+  const first = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+  return {
+    year: first.getFullYear(),
+    month: first.getMonth(),
+    firstDay: first,
+    lastDay: new Date(first.getFullYear(), first.getMonth() + 1, 0),
+  }
+}
+
+function getCalendarCells(offset) {
+  const { year, month, firstDay, lastDay } = getMonthInfo(offset)
+  const firstDow = (firstDay.getDay() + 6) % 7  // Mon = 0
+  const lastDow  = (lastDay.getDay()  + 6) % 7
+  const cells = []
+  for (let i = 0; i < firstDow; i++) cells.push(null)
+  for (let d = 1; d <= lastDay.getDate(); d++) cells.push(new Date(year, month, d))
+  const trailing = lastDow === 6 ? 0 : 6 - lastDow
+  for (let i = 0; i < trailing; i++) cells.push(null)
+  return cells
+}
+
+function monthApiRange(offset) {
+  const { firstDay, year, month } = getMonthInfo(offset)
+  return {
+    from: firstDay.toISOString(),
+    to:   new Date(year, month + 1, 1).toISOString(),
+  }
+}
+
+function formatMonthLabel(offset) {
+  const { firstDay } = getMonthInfo(offset)
+  return firstDay.toLocaleString('default', { month: 'long', year: 'numeric' })
+}
+
+function buildDayDataMap(tasks) {
+  const map = {}
+  for (const t of tasks) {
+    const ds = getLocalDateStr(t.startTime)
+    if (!map[ds]) map[ds] = { tasks: [], totalSecs: 0 }
+    map[ds].tasks.push(t)
+    if (t.endTime) {
+      map[ds].totalSecs += Math.floor((new Date(t.endTime) - new Date(t.startTime)) / 1000)
+    }
+  }
+  return map
+}
+
+// ─── Component ──────────────────────────────────────────────────────────────
+
 export default function OverviewPage() {
   const navigate = useNavigate()
-  const [view, setView]             = useState('week')
-  const [weekOffset, setWeekOffset] = useState(0)
-  const [tasks, setTasks]           = useState([])
-  const [loading, setLoading]       = useState(false)
+  const [view, setView]               = useState('week')
+  const [weekOffset, setWeekOffset]   = useState(0)
+  const [monthOffset, setMonthOffset] = useState(0)
+  const [tasks, setTasks]             = useState([])
+  const [loading, setLoading]         = useState(false)
+  const [selectedDay, setSelectedDay] = useState(null)
 
+  // Week derived
   const weekDays      = getWeekDays(weekOffset)
   const weekData      = buildWeekData(weekDays, tasks)
   const weekTotalSecs = weekData.reduce((sum, d) => sum + d.totalSecs, 0)
+
+  // Month derived
+  const calendarCells  = getCalendarCells(monthOffset)
+  const dayDataMap     = buildDayDataMap(tasks)
+  const monthTotalSecs = Object.values(dayDataMap).reduce((sum, d) => sum + d.totalSecs, 0)
+  const selectedDayTasks = selectedDay ? (dayDataMap[selectedDay]?.tasks ?? []) : []
 
   const fetchWeekTasks = useCallback(() => {
     const days = getWeekDays(weekOffset)
@@ -79,9 +143,26 @@ export default function OverviewPage() {
       .finally(() => setLoading(false))
   }, [weekOffset])
 
+  const fetchMonthTasks = useCallback(() => {
+    const { from, to } = monthApiRange(monthOffset)
+    setLoading(true)
+    taskApi.listTasks(from, to)
+      .then(res => setTasks(res.data))
+      .catch(() => setTasks([]))
+      .finally(() => setLoading(false))
+  }, [monthOffset])
+
   useEffect(() => {
     if (view === 'week') fetchWeekTasks()
   }, [view, fetchWeekTasks])
+
+  useEffect(() => {
+    if (view === 'month') fetchMonthTasks()
+  }, [view, fetchMonthTasks])
+
+  useEffect(() => {
+    setSelectedDay(null)
+  }, [monthOffset])
 
   return (
     <div className="page">
@@ -96,6 +177,7 @@ export default function OverviewPage() {
             >{v === 'week' ? 'Week' : 'Month'}</button>
           ))}
         </div>
+
         {view === 'week' && (
           <div className="nav-arrows">
             <button className="btn btn-ghost btn-sm"
@@ -109,8 +191,23 @@ export default function OverviewPage() {
               data-testid="next-week-btn">Next ›</button>
           </div>
         )}
+
+        {view === 'month' && (
+          <div className="nav-arrows">
+            <button className="btn btn-ghost btn-sm"
+              onClick={() => setMonthOffset(o => o - 1)}
+              data-testid="prev-month-btn">‹ Prev</button>
+            <span className="nav-label" data-testid="month-label">
+              {formatMonthLabel(monthOffset)}
+            </span>
+            <button className="btn btn-ghost btn-sm"
+              onClick={() => setMonthOffset(o => o + 1)}
+              data-testid="next-month-btn">Next ›</button>
+          </div>
+        )}
       </div>
 
+      {/* ── Week view ── */}
       {view === 'week' && (
         <>
           {loading && <p className="empty-state" data-testid="week-loading">Loading…</p>}
@@ -160,10 +257,78 @@ export default function OverviewPage() {
         </>
       )}
 
+      {/* ── Month view ── */}
       {view === 'month' && (
-        <p className="empty-state" data-testid="month-placeholder">
-          Monthly view — coming in the next update.
-        </p>
+        <>
+          {loading && <p className="empty-state" data-testid="month-loading">Loading…</p>}
+
+          <div className="section">
+            <div className="section-header">
+              <h3>Month Total</h3>
+              <span className="section-total" data-testid="month-total">
+                {formatSeconds(monthTotalSecs)}
+              </span>
+            </div>
+          </div>
+
+          <div className="month-grid" data-testid="month-view">
+            {DAY_NAMES.map(n => (
+              <div key={n} className="month-header-cell">{n}</div>
+            ))}
+            {calendarCells.map((date, i) => {
+              if (!date) {
+                return <div key={`empty-${i}`} className="month-cell month-cell--empty" data-testid={`month-empty-${i}`} />
+              }
+              const ds = getLocalDateStr(date.toISOString())
+              const dayData = dayDataMap[ds]
+              const isSelected = selectedDay === ds
+              return (
+                <div key={ds}
+                  className={`month-cell${isSelected ? ' month-cell--selected' : ''}${dayData ? ' month-cell--has-tasks' : ' month-cell--no-tasks'}`}
+                  data-testid={`month-day-${ds}`}
+                  onClick={() => setSelectedDay(isSelected ? null : ds)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => e.key === 'Enter' && setSelectedDay(isSelected ? null : ds)}
+                >
+                  <span className="month-day-num">{date.getDate()}</span>
+                  <span className="month-cell-time" data-testid={`month-day-total-${ds}`}>
+                    {dayData ? formatSeconds(dayData.totalSecs) : '—'}
+                  </span>
+                </div>
+              )
+            })}
+          </div>
+
+          {selectedDay && (
+            <div className="selected-day-panel" data-testid="selected-day-panel">
+              <h4 className="selected-day-title" data-testid="selected-day-title">
+                {new Date(selectedDay + 'T12:00:00').toLocaleDateString('default', {
+                  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
+                })}
+              </h4>
+              {selectedDayTasks.length === 0 ? (
+                <p className="empty-state" data-testid="selected-day-empty">No tasks this day.</p>
+              ) : (
+                <ul className="selected-day-tasks" data-testid="selected-day-tasks">
+                  {selectedDayTasks.map(t => (
+                    <li key={t.id}
+                      className="week-task-item"
+                      data-testid={`selected-day-task-${t.id}`}
+                      onClick={() => navigate('/tasks')}
+                      role="button"
+                      tabIndex={0}
+                      onKeyDown={e => e.key === 'Enter' && navigate('/tasks')}
+                    >
+                      <span className="week-task-desc">{t.description || '(no description)'}</span>
+                      <span className="week-task-dur">{formatTaskDuration(t.startTime, t.endTime)}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
+        </>
       )}
     </div>
   )

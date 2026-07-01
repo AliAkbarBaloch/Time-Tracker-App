@@ -15,11 +15,11 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Organize with projects** — create projects (and nested subprojects) and link any task to one or more projects. Each project automatically tracks its total time, including time from subprojects.
 - **Daily overview** — the Dashboard shows today's tasks and a live running total so you always know how much you have worked today.
 - **Weekly overview** — the Overview page shows all seven days of the selected week in a grid, with per-day totals, a week total, and prev/next navigation to browse past or future weeks.
+- **Monthly overview** — the Overview page's Month tab shows a full calendar grid of the selected month. Each day cell displays its tracked total; clicking a day opens a panel listing that day's tasks with durations. Prev/next navigation and a monthly total are included.
 - **Change password** — update your account password securely at any time from the Settings page.
 
 **What is expected (remaining stories):**
 
-- Monthly task overview with a calendar grid
 - Per-project time summary with a date-range picker
 - Export of time data to CSV or PDF
 
@@ -168,7 +168,7 @@ npx vitest run
 Expected output:
 ```
 Test Files  8 passed (8)
-     Tests  100 passed (100)
+     Tests  122 passed (122)
 ```
 
 ### Step 7 — Start the frontend dev server
@@ -258,7 +258,7 @@ npx vitest run
 | `SettingsPage.test.jsx` | 3 | Change password form, error display |
 | `TasksPage.test.jsx` | 27 | Create, edit, delete tasks; project multi-select on create/edit; project display in task row |
 | `ProjectsPage.test.jsx` | 18 | Create, edit, delete projects; tree view; collapse; force delete dialog |
-| `OverviewPage.test.jsx` | 26 | Week view columns, day/week totals, prev/next navigation, task grouping by day, task click, month placeholder |
+| `OverviewPage.test.jsx` | 48 | Week view (day/week totals, nav, task grouping, click); month view (calendar cells, day totals, month total, selected-day panel, nav, loading) |
 
 ---
 
