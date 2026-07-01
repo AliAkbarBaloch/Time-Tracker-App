@@ -80,6 +80,44 @@
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
+            <!-- ── Mutation testing (PITest) ── -->
+            <plugin>
+                <groupId>org.pitest</groupId>
+                <artifactId>pitest-maven</artifactId>
+                <version>1.17.1</version>
+                <dependencies>
+                    <!-- JUnit 5 support for PITest -->
+                    <dependency>
+                        <groupId>org.pitest</groupId>
+                        <artifactId>pitest-junit5-plugin</artifactId>
+                        <version>1.2.1</version>
+                    </dependency>
+                </dependencies>
+                <configuration>
+                    <!-- Mutate only service classes — they contain the business logic -->
+                    <targetClasses>
+                        <param>com.timetracker.service.*</param>
+                    </targetClasses>
+                    <!-- Run only the fast service unit tests (Mockito-based, no Spring context) -->
+                    <targetTests>
+                        <param>com.timetracker.service.*</param>
+                    </targetTests>
+                    <!-- Standard DEFAULTS mutator set -->
+                    <mutators>
+                        <mutator>DEFAULTS</mutator>
+                    </mutators>
+                    <!-- Enforce 80% test strength: % of COVERED mutations killed by unit tests -->
+                    <testStrengthThreshold>80</testStrengthThreshold>
+                    <!-- Consistent output location for CI -->
+                    <timestampedReports>false</timestampedReports>
+                    <outputFormats>
+                        <outputFormat>HTML</outputFormat>
+                        <outputFormat>XML</outputFormat>
+                    </outputFormats>
+                    <!-- Fail the build if coverage threshold not met -->
+                    <failWhenNoMutations>true</failWhenNoMutations>
+                </configuration>
+            </plugin>
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
