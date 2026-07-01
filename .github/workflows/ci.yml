@@ -66,3 +66,73 @@ jobs:
             -w /workspace \
             node:24-alpine \
             sh -c "npm ci && npm run lint && npm run test:coverage && npm run build"
+
+  # ─── System tests: full-stack E2E with Playwright ────────────────────────
+  system-tests:
+    name: System Tests (Playwright)
+    runs-on: self-hosted
+    needs: [backend, frontend]
+
+    steps:
+      - name: Fix workspace permissions
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}":/workspace \
+            alpine sh -c "chown -R $(id -u):$(id -g) /workspace"
+        continue-on-error: true
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Start full stack with Docker Compose
+        run: |
+          docker compose up -d --build
+          echo "Waiting for backend health..."
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/api/health; then
+              echo "Backend is healthy"
+              break
+            fi
+            echo "Attempt $i/30 — waiting 5s..."
+            sleep 5
+          done
+          echo "Waiting for frontend..."
+          for i in $(seq 1 12); do
+            if curl -sf http://localhost:3000; then
+              echo "Frontend is up"
+              break
+            fi
+            sleep 5
+          done
+
+      - name: Install Playwright dependencies
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}/e2e":/workspace \
+            -w /workspace \
+            node:24-alpine \
+            sh -c "npm ci"
+
+      - name: Run Playwright system tests
+        run: |
+          docker run --rm \
+            --network host \
+            -v "${{ github.workspace }}/e2e":/workspace \
+            -w /workspace \
+            -e CI=true \
+            -e BASE_URL=http://localhost:3000 \
+            -e API_BASE=http://localhost:8080 \
+            mcr.microsoft.com/playwright:v1.49.0-noble \
+            sh -c "npm ci && npx playwright test"
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          retention-days: 7
+
+      - name: Tear down Docker Compose stack
+        if: always()
+        run: docker compose down -v

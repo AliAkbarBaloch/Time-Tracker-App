@@ -1,0 +1,58 @@
+<?xml version="1.0"?>
+<!DOCTYPE module PUBLIC
+        "-//Checkstyle//DTD Checkstyle Configuration 1.3//EN"
+        "https://checkstyle.org/dtds/configuration_1_3.dtd">
+<module name="Checker">
+    <property name="severity" value="error"/>
+    <property name="fileExtensions" value="java"/>
+
+    <!-- No tab characters anywhere in source files -->
+    <module name="FileTabCharacter"/>
+
+    <module name="TreeWalker">
+
+        <!-- ── Naming conventions ──────────────────────────────────────────── -->
+
+        <!-- Package names: all lowercase, dot-separated -->
+        <module name="PackageName">
+            <property name="format" value="^[a-z]+(\.[a-z][a-z0-9]*)*$"/>
+        </module>
+
+        <!-- Type names: UpperCamelCase -->
+        <module name="TypeName">
+            <property name="format" value="^[A-Z][a-zA-Z0-9]*$"/>
+        </module>
+
+        <!-- Method names: lowerCamelCase; underscores allowed for test methods -->
+        <module name="MethodName">
+            <property name="format" value="^[a-z][a-zA-Z0-9_]*$"/>
+        </module>
+
+        <!-- Instance variables: lowerCamelCase -->
+        <module name="MemberName">
+            <property name="format" value="^[a-z][a-zA-Z0-9]*$"/>
+        </module>
+
+        <!-- Parameters: lowerCamelCase -->
+        <module name="ParameterName">
+            <property name="format" value="^[a-z][a-zA-Z0-9]*$"/>
+        </module>
+
+        <!-- Local variables: lowerCamelCase -->
+        <module name="LocalVariableName">
+            <property name="format" value="^[a-z][a-zA-Z0-9]*$"/>
+        </module>
+
+        <!-- Constants (static final): UPPER_SNAKE_CASE -->
+        <module name="ConstantName">
+            <property name="format" value="^[A-Z][A-Z0-9]*(_[A-Z0-9]+)*$"/>
+        </module>
+
+    </module>
+
+    <!-- Allow up to 250 characters per line (existing code reaches ~217 chars) -->
+    <module name="LineLength">
+        <property name="max" value="250"/>
+    </module>
+
+</module>

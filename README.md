@@ -44,10 +44,13 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 | Frontend | React 19, Vite 6, React Router 7, Axios |
 | Auth | Stateless JWT (jjwt 0.12.6) + BCrypt password hashing |
 | Testing (backend) | JUnit 5, Mockito, Spring MockMvc (integration tests hit a real H2 instance) |
+| Linting (backend) | Checkstyle 3.6.0 — no-tabs, Java naming conventions, max 250 chars/line, runs on `mvn verify` |
 | Coverage (backend) | JaCoCo 0.8.12 — 90% line coverage enforced on `mvn verify` |
 | Mutation testing | PITest 1.17.1 + pitest-junit5-plugin 1.2.1 — 80% test-strength threshold (service unit tests) |
 | Testing (frontend) | Vitest, @testing-library/react, @vitest/coverage-v8 — 90% line/statement coverage enforced |
-| CI | GitHub Actions — lint + unit + integration + system tests, JaCoCo coverage, PITest mutation tests |
+| Linting (frontend) | oxlint (React + oxc plugins) — runs on every CI push |
+| System tests | Playwright 1.49 (TypeScript) — E2E tests per user story against the full docker-compose stack |
+| CI | GitHub Actions — lint + unit + integration + system tests (Playwright), JaCoCo coverage, PITest mutation tests |
 
 ---
 
@@ -68,6 +71,11 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 │       └── test/java/com/timetracker/
 │           ├── controller/           # Integration tests (MockMvc + real H2)
 │           └── service/              # Unit tests (Mockito)
+├── e2e/                              # Playwright system tests (TypeScript)
+│   ├── helpers/                      # auth.ts — API-based login helper (injects JWT into localStorage)
+│   ├── tests/                        # one .spec.ts file per user story
+│   ├── playwright.config.ts          # baseURL, retries, reporters, Chromium project
+│   └── package.json                  # @playwright/test 1.49 dependency
 └── frontend/                         # React + Vite SPA
     └── src/
         ├── api/                      # authApi.js, taskApi.js, projectApi.js, analyticsApi.js (Axios)
@@ -293,6 +301,35 @@ PITest targets all `com.timetracker.service.*` classes and runs against the Mock
 | `ProjectBudgetTest` | 9 | US-026 Project Budgets: create with budgetHours, null budget allowed, ON_TRACK status (<80%), WARNING status (80–99%), OVER_BUDGET status (≥100%), update budget, null clears budget, shared project summary includes budget, listProjects includes budgetHours |
 | `TaskTemplateTest` | 11 | US-027 Task Templates: create with all fields, no-description/no-project create, list returns only own templates, update name+desc+projects, delete returns 204, start-from-template creates running task with description+projects, start while running 409, cross-user isolation (PUT/DELETE/start on other's template → 404), multi-project template in list, 401 without auth, 400 blank name |
 | `AnalyticsControllerTest` | 10 | US-028 Productivity Analytics: heatmap correct day + total seconds, multiple tasks same day aggregated, empty year returns empty days list, running timer excluded from heatmap, heatmap data scoped to authenticated user, heatmap 401 without auth, weekly pattern returns 7 entries MON–SUN, weekly pattern computes correct average for recent task, weekly pattern 401 without auth, weekly pattern data scoped to authenticated user |
+
+### Backend — Checkstyle linter
+
+```bash
+cd backend
+./mvnw checkstyle:check
+```
+
+Checks no-tab characters, standard Java naming conventions (UpperCamelCase types, lowerCamelCase methods/fields, UPPER_SNAKE_CASE constants), and a 250-character line limit. Zero violations. Also runs automatically as part of `./mvnw verify`.
+
+### System tests (Playwright E2E)
+
+Requires the full application to be running (either locally or via Docker Compose):
+
+```bash
+# Start the stack
+docker compose up -d
+
+# Run Playwright tests
+cd e2e
+npm ci
+npx playwright test
+```
+
+Tests connect to `http://localhost:3000` (frontend) and `http://localhost:8080` (API for auth setup). Each test file covers the acceptance criteria of one user story.
+
+| Test file | User story | What it covers |
+|---|---|---|
+| `us001-registration.spec.ts` | US-001 | Happy path (→ /dashboard), duplicate email error, empty form validation, password mismatch, short password |
 
 ### Frontend
 
