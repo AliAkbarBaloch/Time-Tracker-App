@@ -55,10 +55,19 @@ test.describe('NFR-003 — Usability', () => {
 
   // AC2: forms show field-level error messages when validation fails
   test('registration form shows field-level errors for invalid inputs', async ({ page }) => {
-    await page.goto('/');
-    // Submit empty form — should show validation errors under fields
+    await page.goto('/login');
+    // Switch to the Register tab
     await page.getByRole('button', { name: /register/i }).click();
-    const errors = page.locator('[role="alert"], .field-error, .error-text');
+    // Touch each field to activate React's dirty state, then clear it
+    for (const id of ['#displayName', '#email', '#password']) {
+      await page.locator(id).fill('x');
+      await page.locator(id).fill('');
+    }
+    await page.getByTestId('confirm-password-input').fill('x');
+    await page.getByTestId('confirm-password-input').fill('');
+    // Submit with empty fields — field-level errors should appear
+    await page.getByRole('button', { name: /create account/i }).click();
+    const errors = page.locator('[data-testid^="error-"]');
     await expect(errors.first()).toBeVisible({ timeout: 5_000 });
   });
 

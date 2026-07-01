@@ -37,12 +37,13 @@ test.describe('NFR-002 — Performance', () => {
     const before = Date.now();
     const resp = await ctx.get('/api/dashboard/summary');
     const responseTime = Date.now() - before;
+    // Buffer JSON BEFORE disposing — disposing frees the response buffer
+    const body = await resp.json();
     await ctx.dispose();
 
     expect(resp.status()).toBe(200);
     expect(responseTime).toBeLessThan(1000);
 
-    const body = await resp.json();
     // Response must contain all aggregated fields in one payload
     expect(body).toHaveProperty('todaySeconds');
     expect(body).toHaveProperty('weekSeconds');
