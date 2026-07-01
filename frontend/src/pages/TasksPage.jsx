@@ -132,7 +132,8 @@ export default function TasksPage() {
       fetchTasks()
       fetchProjects()
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create task.')
+      const data = err.response?.data
+      setError(data?.message || Object.values(data?.errors || {}).join(', ') || 'Failed to create task.')
     } finally {
       setLoading(false)
     }
@@ -187,7 +188,8 @@ export default function TasksPage() {
       fetchTasks()
       fetchProjects()
     } catch (err) {
-      setEditError(err.response?.data?.message || 'Failed to update task.')
+      const data = err.response?.data
+      setEditError(data?.message || Object.values(data?.errors || {}).join(', ') || 'Failed to update task.')
     } finally {
       setEditLoading(false)
     }

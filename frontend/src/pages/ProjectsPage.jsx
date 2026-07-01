@@ -128,7 +128,8 @@ export default function ProjectsPage() {
       setShowForm(false)
       fetchProjects()
     } catch (err) {
-      setError(err.response?.data?.message || 'Failed to create project')
+      const data = err.response?.data
+      setError(data?.message || Object.values(data?.errors || {}).join(', ') || 'Failed to create project')
     } finally {
       setLoading(false)
     }
@@ -151,7 +152,8 @@ export default function ProjectsPage() {
       setEditingId(null)
       fetchProjects()
     } catch (err) {
-      setEditError(err.response?.data?.message || 'Failed to update project.')
+      const data = err.response?.data
+      setEditError(data?.message || Object.values(data?.errors || {}).join(', ') || 'Failed to update project.')
     } finally {
       setEditLoading(false)
     }

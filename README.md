@@ -22,6 +22,7 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Change password** — update your account password securely at any time from the Settings page.
 - **Data persistence** — all tasks, projects, subprojects, and user accounts are stored in a file-based H2 database (`jdbc:h2:file:./data/timetracker`). Data survives browser close, server restart, and logout/re-login. Schema is auto-created by Hibernate DDL-auto on first boot — no manual SQL steps needed.
 - **Security** — passwords hashed with BCrypt (cost 10), stateless JWT Bearer auth on every protected endpoint, Bean Validation on all request DTOs, ownership checks prevent cross-user data access, JPA parameterised queries protect against SQL injection.
+- **Usability (NFR-003)** — start/stop timer in one click from the Dashboard, add task/project in ≤ 2 clicks, running timer always visible in the top navigation bar on every page, field-level validation errors shown inline under the relevant input (not concatenated into a single banner), responsive layout at ≥ 1024 px.
 
 **What is expected (remaining stories):**
 
@@ -121,7 +122,7 @@ What this does:
 
 Expected output at the end:
 ```
-Tests run: 232, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 248, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -172,7 +173,7 @@ npx vitest run
 Expected output:
 ```
 Test Files  10 passed (10)
-     Tests  174 passed (174)
+     Tests  186 passed (186)
 ```
 
 ### Step 7 — Start the frontend dev server
@@ -253,6 +254,7 @@ cd backend
 | `DashboardServiceTest` | 9 | Dashboard service unit — empty state, today/week aggregation, running task, top 5 limit, subtree time, user not found |
 | `SecurityNfrTest` | 33 | NFR-001 Security: BCrypt hash format/salting, JWT 401 on all protected endpoints, tampered token, public endpoints, cross-user isolation (403/404 for tasks/projects), Bean Validation 400 (blank/invalid fields), SQL injection inputs handled safely |
 | `DataPersistenceTest` | 11 | US-021 Data Persistence: tasks/projects survive logout+re-login, running timer accessible after re-auth, subproject hierarchy persists, task-project join persists, multi-task retrieval, cross-user isolation after re-login, schema auto-created on first boot |
+| `UsabilityNfrTest` | 16 | NFR-003 Usability: field-level 400 errors have human-readable messages (register/login/createTask/createProject), 401/409 include `message`, start/stop timer each require exactly 1 API call, GET /tasks/active returns running task for topbar, 204 returned (not an error) when no timer is running |
 
 ### Frontend
 
@@ -263,11 +265,11 @@ npx vitest run
 
 | Test file | Count | What it covers |
 |---|---|---|
-| `LoginPage.test.jsx` | 5 | Register, login, tabs, error states |
+| `LoginPage.test.jsx` | 12 | Register, login, tabs, error states; field-level inline errors under each input (email, password, displayName); clears on tab switch; general banner for non-validation errors |
 | `DashboardPage.test.jsx` | 19 | Timer start/stop, active task display, summary cards (today/week), top projects list, running task info, refresh after timer actions |
 | `SettingsPage.test.jsx` | 3 | Change password form, error display |
-| `TasksPage.test.jsx` | 27 | Create, edit, delete tasks; project multi-select on create/edit; project display in task row |
-| `ProjectsPage.test.jsx` | 18 | Create, edit, delete projects; tree view; collapse; force delete dialog |
+| `TasksPage.test.jsx` | 30 | Create, edit, delete tasks; project multi-select on create/edit; project display in task row; field-level error extraction from 400 responses; Add Task button reachable in 1 click |
+| `ProjectsPage.test.jsx` | 21 | Create, edit, delete projects; tree view; collapse; force delete dialog; field-level error extraction from 400 responses; New Project button reachable in 1 click |
 | `OverviewPage.test.jsx` | 48 | Week view (day/week totals, nav, task grouping, click); month view (calendar cells, day totals, month total, selected-day panel, nav, loading) |
 | `ProjectDetailPage.test.jsx` | 27 | Date-range presets, custom range form, project name/desc/total, subproject totals, task list, running task, error states, back navigation |
 | `Layout.test.jsx` | 14 | Topbar timer visible/hidden, elapsed from startTime, timer on all pages, API called once on mount |
