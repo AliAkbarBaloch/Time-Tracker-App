@@ -7,7 +7,10 @@ import java.util.HashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "tasks")
+@Table(name = "tasks", indexes = {
+    @Index(name = "idx_tasks_user_start", columnList = "user_id, start_time"),
+    @Index(name = "idx_tasks_user_endtime", columnList = "user_id, end_time")
+})
 public class Task {
 
     @Id

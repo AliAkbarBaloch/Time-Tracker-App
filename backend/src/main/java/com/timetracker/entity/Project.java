@@ -11,7 +11,9 @@ import java.util.List;
 import java.util.Set;
 
 @Entity
-@Table(name = "projects")
+@Table(name = "projects", indexes = {
+    @Index(name = "idx_projects_user_parent", columnList = "user_id, parent_project_id")
+})
 public class Project {
 
     @Id
