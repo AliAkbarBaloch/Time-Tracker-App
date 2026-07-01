@@ -6,9 +6,13 @@ import { AuthProvider } from '../context/AuthContext'
 import { TimerProvider } from '../context/TimerContext'
 import * as taskApi from '../api/taskApi'
 import * as dashboardApi from '../api/dashboardApi'
+import * as templateApi from '../api/templateApi'
+import * as projectApi from '../api/projectApi'
 
 vi.mock('../api/taskApi')
 vi.mock('../api/dashboardApi')
+vi.mock('../api/templateApi')
+vi.mock('../api/projectApi')
 
 const EMPTY_SUMMARY = { todaySeconds: 0, weekSeconds: 0, runningTask: null, topProjects: [] }
 
@@ -29,6 +33,8 @@ describe('DashboardPage', () => {
     vi.clearAllMocks()
     localStorage.clear()
     dashboardApi.getDashboardSummary.mockResolvedValue({ data: EMPTY_SUMMARY })
+    templateApi.listTemplates.mockResolvedValue({ data: [] })
+    projectApi.listProjects.mockResolvedValue({ data: [] })
   })
 
   // ── Timer controls ────────────────────────────────────────
@@ -267,5 +273,146 @@ describe('DashboardPage', () => {
     await waitFor(() => screen.getByTestId('stop-btn'))
     fireEvent.click(screen.getByTestId('stop-btn'))
     await waitFor(() => expect(dashboardApi.getDashboardSummary).toHaveBeenCalledTimes(2))
+  })
+})
+
+// ── US-027: Task Templates ─────────────────────────────────────────────────────
+
+describe('DashboardPage — Task Templates (US-027)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()
+    localStorage.clear()
+    dashboardApi.getDashboardSummary.mockResolvedValue({ data: EMPTY_SUMMARY })
+    projectApi.listProjects.mockResolvedValue({ data: [] })
+    taskApi.getActiveTask.mockResolvedValue({ status: 204, data: null })
+  })
+
+  it('shows templates section and empty state when no templates', async () => {
+    templateApi.listTemplates.mockResolvedValue({ data: [] })
+    setup()
+    await waitFor(() => screen.getByTestId('templates-section'))
+    expect(screen.getByTestId('templates-empty')).toBeInTheDocument()
+  })
+
+  it('renders template cards with name, description and project chips', async () => {
+    templateApi.listTemplates.mockResolvedValue({
+      data: [{
+        id: 1, name: 'Daily Stand-Up', description: 'Morning sync',
+        projects: [{ id: 5, name: 'Thesis' }], createdAt: new Date().toISOString()
+      }]
+    })
+    setup()
+    await waitFor(() => screen.getByTestId('template-card-1'))
+    expect(screen.getByTestId('template-name-1')).toHaveTextContent('Daily Stand-Up')
+    expect(screen.getByTestId('template-desc-1')).toHaveTextContent('Morning sync')
+    expect(screen.getByTestId('template-projects-1')).toHaveTextContent('Thesis')
+  })
+
+  it('Start button calls startTemplate API and refreshes summary', async () => {
+    templateApi.listTemplates.mockResolvedValue({
+      data: [{ id: 2, name: 'Code Review', description: null, projects: [], createdAt: new Date().toISOString() }]
+    })
+    templateApi.startTemplate.mockResolvedValueOnce({
+      data: { id: 10, description: null, startTime: new Date().toISOString(), endTime: null, running: true, projects: [] }
+    })
+    dashboardApi.getDashboardSummary.mockResolvedValue({ data: EMPTY_SUMMARY })
+
+    setup()
+    await waitFor(() => screen.getByTestId('template-start-btn-2'))
+    fireEvent.click(screen.getByTestId('template-start-btn-2'))
+
+    await waitFor(() => expect(templateApi.startTemplate).toHaveBeenCalledWith(2))
+    await waitFor(() => expect(dashboardApi.getDashboardSummary).toHaveBeenCalledTimes(2))
+  })
+
+  it('New Template button toggles create form', async () => {
+    templateApi.listTemplates.mockResolvedValue({ data: [] })
+    setup()
+    await waitFor(() => screen.getByTestId('new-template-btn'))
+
+    expect(screen.queryByTestId('template-form')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('new-template-btn'))
+    expect(screen.getByTestId('template-form')).toBeInTheDocument()
+    expect(screen.getByTestId('template-name-input')).toBeInTheDocument()
+    expect(screen.getByTestId('template-desc-input')).toBeInTheDocument()
+  })
+
+  it('submitting create form calls createTemplate and refreshes list', async () => {
+    templateApi.listTemplates.mockResolvedValue({ data: [] })
+    templateApi.createTemplate.mockResolvedValueOnce({
+      data: { id: 3, name: 'New Tpl', description: null, projects: [], createdAt: new Date().toISOString() }
+    })
+
+    setup()
+    await waitFor(() => screen.getByTestId('new-template-btn'))
+    fireEvent.click(screen.getByTestId('new-template-btn'))
+    fireEvent.change(screen.getByTestId('template-name-input'), { target: { value: 'New Tpl' } })
+    fireEvent.submit(screen.getByTestId('template-form'))
+
+    await waitFor(() =>
+      expect(templateApi.createTemplate).toHaveBeenCalledWith('New Tpl', null, [])
+    )
+    await waitFor(() => expect(templateApi.listTemplates).toHaveBeenCalledTimes(2))
+  })
+
+  it('Edit button opens inline edit form pre-filled with template data', async () => {
+    templateApi.listTemplates.mockResolvedValue({
+      data: [{ id: 4, name: 'Old Name', description: 'Old desc', projects: [], createdAt: new Date().toISOString() }]
+    })
+    setup()
+    await waitFor(() => screen.getByTestId('template-edit-btn-4'))
+    fireEvent.click(screen.getByTestId('template-edit-btn-4'))
+    expect(screen.getByTestId('template-edit-form-4')).toBeInTheDocument()
+    expect(screen.getByTestId('template-edit-name-4').value).toBe('Old Name')
+    expect(screen.getByTestId('template-edit-desc-4').value).toBe('Old desc')
+  })
+
+  it('saving edit form calls updateTemplate and refreshes list', async () => {
+    templateApi.listTemplates.mockResolvedValue({
+      data: [{ id: 5, name: 'Old', description: null, projects: [], createdAt: new Date().toISOString() }]
+    })
+    templateApi.updateTemplate.mockResolvedValueOnce({
+      data: { id: 5, name: 'New', description: null, projects: [], createdAt: new Date().toISOString() }
+    })
+
+    setup()
+    await waitFor(() => screen.getByTestId('template-edit-btn-5'))
+    fireEvent.click(screen.getByTestId('template-edit-btn-5'))
+    fireEvent.change(screen.getByTestId('template-edit-name-5'), { target: { value: 'New' } })
+    fireEvent.submit(screen.getByTestId('template-edit-form-5'))
+
+    await waitFor(() =>
+      expect(templateApi.updateTemplate).toHaveBeenCalledWith(5, 'New', null, [])
+    )
+  })
+
+  it('Delete button shows confirm dialog, confirming calls deleteTemplate', async () => {
+    templateApi.listTemplates.mockResolvedValue({
+      data: [{ id: 6, name: 'ToDelete', description: null, projects: [], createdAt: new Date().toISOString() }]
+    })
+    templateApi.deleteTemplate.mockResolvedValueOnce({})
+
+    setup()
+    await waitFor(() => screen.getByTestId('template-delete-btn-6'))
+    fireEvent.click(screen.getByTestId('template-delete-btn-6'))
+
+    expect(screen.getByTestId('template-delete-dialog-6')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('template-delete-confirm-btn-6'))
+
+    await waitFor(() => expect(templateApi.deleteTemplate).toHaveBeenCalledWith(6))
+  })
+
+  it('shows project checkboxes in create form when projects exist', async () => {
+    templateApi.listTemplates.mockResolvedValue({ data: [] })
+    projectApi.listProjects.mockResolvedValue({
+      data: [{ id: 7, name: 'MyProject', subprojects: [], totalSeconds: 0, createdAt: new Date().toISOString() }]
+    })
+
+    setup()
+    await waitFor(() => screen.getByTestId('new-template-btn'))
+    fireEvent.click(screen.getByTestId('new-template-btn'))
+
+    await waitFor(() => screen.getByTestId('template-project-selector'))
+    expect(screen.getByTestId('template-project-checkbox-7')).toBeInTheDocument()
   })
 })
