@@ -27,10 +27,10 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Performance (NFR-002)** — dashboard summary data is fetched in a single aggregated `GET /api/dashboard/summary` call (no waterfall). Task lists include embedded project data in the same response body — no follow-up calls needed. Database indexes on `tasks(user_id, start_time)`, `tasks(user_id, end_time)`, and `projects(user_id, parent_project_id)` cover the hot query paths. All task-fetching repository methods use `LEFT JOIN FETCH t.projects` to eliminate the N+1 query problem when loading task–project associations.
 - **Project sharing (US-022)** — project owners can invite registered users by email (`POST /api/projects/{id}/members`). Invitees see the shared project immediately in their project list with a "👥 Shared" badge. Members can associate their own tasks with shared projects. The project detail page shows all members with their roles (OWNER/MEMBER) and an invite form for the owner. Only the owner can edit, delete, or manage membership. Time aggregation in the project summary automatically includes tasks from all members. The `project_members` table is back-filled on startup for pre-existing projects via `MembershipSeeder`.
 - **Task overview for shared projects (US-023)** — the project summary response now includes a `contributions` array showing each member's total seconds. Each task entry carries `userId`/`userName` so the frontend can attribute work to its owner. An optional `?userId={id}` query param on both `GET /api/projects/{id}/summary` and `GET /api/tasks` filters results to a single member (both caller and target must be project members; non-member userId returns 403). The project detail page shows a "Contributors" card and a user-filter dropdown for shared projects; task rows display the owner's display name when the project is shared.
+- **Export project tasks (US-024)** — an "Export" button on the project detail page opens a modal where you choose the file format (CSV or JSON) and optionally restrict the export to a specific calendar month. Clicking "Download" calls `GET /api/projects/{id}/export?format=csv|json` and triggers a browser file download via a Blob URL (the JWT is never embedded in the URL). Tasks are collected recursively from the full project subtree so sub-project activity is always included. The CSV columns are `task_id, description, start_time, end_time, duration_seconds, projects, user`; the `projects` column shows the full hierarchy path (e.g. `"Thesis > Literature Review"`). The JSON response wraps the task array in `{ "project": "...", "exportedAt": "...", "tasks": [...] }`. Non-members receive 404. Both `?from/to` ISO params and `?year/month` convenience params are supported for date filtering.
 
 **What is expected (remaining stories):**
 
-- Export of time data to CSV or JSON
 - Time zone preferences
 
 ---
@@ -127,7 +127,7 @@ What this does:
 
 Expected output at the end:
 ```
-Tests run: 303, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 317, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -182,7 +182,7 @@ npx vitest run
 Expected output:
 ```
 Test Files  10 passed (10)
-     Tests  206 passed (206)
+     Tests  215 passed (215)
 ```
 
 ### Step 7 — Start the frontend dev server
@@ -268,6 +268,7 @@ cd backend
 | `PerformanceNfrTest` | 11 | NFR-002 Performance: DB indexes verified in INFORMATION_SCHEMA (tasks user+start, tasks user+endtime, projects user+parent, task_projects join columns), dashboard single-call returns all fields (today/week totals + running task + top projects), task list embeds project data per task (no follow-up calls), date-range list embeds projects, active task embeds projects |
 | `ProjectSharingTest` | 17 | US-022 Project Sharing: invite returns 201 + MemberResponse, invitee sees project with shared=true, own project has shared=false, unknown email 404, duplicate 409, member associates task, non-member 404 on summary, remove member + loses access, owner self-remove 400, member edit/delete blocked 404, members list returns all fields, member can list members, non-member listMembers 404, time aggregation across users, invalid email 400, blank email 400 |
 | `SharedProjectSummaryTest` | 12 | US-023 Task Overview: contributions array with per-user totals, tasks include userId/userName, ?userId= filter scopes tasks + total, contributions always full for dropdown, all-users default shows combined total, non-member 404, non-member userId 403, combined total = sum of contributions, member can access, task list userId filter, non-member userId 403, userId without projectId 403 |
+| `ProjectExportTest` | 14 | US-024 Export: CSV attachment header + filename, CSV header row, task data in row, project name in projects column, JSON attachment header, JSON top-level structure, JSON task fields complete, subproject tasks included, hierarchy path "Root > Sub", year+month filter, empty date range returns header-only CSV, running timer without project excluded, non-member 404, no-auth 401 |
 
 ### Frontend
 
@@ -284,7 +285,7 @@ npx vitest run
 | `TasksPage.test.jsx` | 30 | Create, edit, delete tasks; project multi-select on create/edit; project display in task row; field-level error extraction from 400 responses; Add Task button reachable in 1 click |
 | `ProjectsPage.test.jsx` | 23 | Create, edit, delete projects; tree view; collapse; force delete dialog; field-level error extraction from 400 responses; New Project button reachable in 1 click; shared badge shown for shared=true projects; no badge for owned projects |
 | `OverviewPage.test.jsx` | 48 | Week view (day/week totals, nav, task grouping, click); month view (calendar cells, day totals, month total, selected-day panel, nav, loading) |
-| `ProjectDetailPage.test.jsx` | 42 | Date-range presets, custom range form, project name/desc/total, subproject totals, task list, running task, error states, back navigation; members section rendered; member list shows name+email+role; invite form visible to owner only; invite API called with correct email; invite error shown; remove button only for MEMBER rows; removeMember API called; member count in header; contributors card for shared projects; no contributors card for solo; user-filter dropdown shown; dropdown change re-fetches with userId; task owner name on shared rows; no owner name for solo |
+| `ProjectDetailPage.test.jsx` | 51 | Date-range presets, custom range form, project name/desc/total, subproject totals, task list, running task, error states, back navigation; members section rendered; member list shows name+email+role; invite form visible to owner only; invite API called with correct email; invite error shown; remove button only for MEMBER rows; removeMember API called; member count in header; contributors card for shared projects; no contributors card for solo; user-filter dropdown shown; dropdown change re-fetches with userId; task owner name on shared rows; no owner name for solo; Export button renders; modal opens/closes; format radios (CSV/JSON); scope radios (All Time/Specific Month); year+month inputs appear for month scope; Download calls exportProject API and triggers blob download; JSON format passes correct param; month scope passes year+month params; error shown when export fails |
 | `Layout.test.jsx` | 14 | Topbar timer visible/hidden, elapsed from startTime, timer on all pages, API called once on mount |
 | `TasksPage.test.jsx (filter)` | 10 | Filter panel rendered, search debounce, project filter, date range, no-results message, reset |
 
@@ -361,6 +362,7 @@ Task response shape:
 | GET | `/api/projects/{id}/members` | — | 200 `Member[]` | Lists all members with role; accessible to any member |
 | POST | `/api/projects/{id}/members` | `{email}` | 201 `Member` | Invite by email (OWNER only); 404 if unknown, 409 if duplicate |
 | DELETE | `/api/projects/{id}/members/{userId}` | — | 204 | Remove member (OWNER only); 400 if owner tries to remove themselves |
+| GET | `/api/projects/{id}/export` | — | 200 (file download) | Download tasks as CSV or JSON. Params: `?format=csv\|json` (default csv), `?from=<ISO>&to=<ISO>` (date range), `?year=<int>&month=<int>` (calendar month). Content-Disposition: attachment. Non-members receive 404. |
 
 Project response shape:
 ```json
