@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import DashboardPage from './DashboardPage'
 import { AuthProvider } from '../context/AuthContext'
+import { TimerProvider } from '../context/TimerContext'
 import * as taskApi from '../api/taskApi'
 
 vi.mock('../api/taskApi')
@@ -14,7 +15,9 @@ function setup() {
   return render(
     <MemoryRouter>
       <AuthProvider>
-        <DashboardPage />
+        <TimerProvider>
+          <DashboardPage />
+        </TimerProvider>
       </AuthProvider>
     </MemoryRouter>
   )

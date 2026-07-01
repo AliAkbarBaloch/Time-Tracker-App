@@ -1,9 +1,11 @@
 import { Outlet, NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useTimer } from '../context/TimerContext'
 
 export default function Layout() {
   const { user, logout } = useAuth()
   const navigate = useNavigate()
+  const { activeTask, elapsed } = useTimer()
 
   async function handleLogout() {
     await logout()
@@ -21,6 +23,16 @@ export default function Layout() {
           <span className="brand-icon">⏱</span>
           <span className="brand-name">TimeTracker</span>
         </div>
+
+        {activeTask && (
+          <div className="topbar-timer running" data-testid="topbar-timer">
+            <span className="timer-dot" />
+            <span className="topbar-timer-desc" data-testid="topbar-timer-desc">
+              {activeTask.description || 'Timer running'}
+            </span>
+            <span className="timer-elapsed" data-testid="topbar-elapsed">{elapsed}</span>
+          </div>
+        )}
 
         <nav className="topbar-nav">
           <NavLink to="/dashboard" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Dashboard</NavLink>
