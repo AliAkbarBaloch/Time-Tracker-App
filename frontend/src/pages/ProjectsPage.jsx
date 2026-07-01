@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import * as projectApi from '../api/projectApi'
 
 function formatDuration(totalSeconds) {
@@ -20,7 +21,7 @@ function flattenProjects(projects, depth = 0) {
 }
 
 function ProjectTree({ projects, depth = 0, editingId, editName, editDesc, editError, editLoading,
-  onStartEdit, onEditName, onEditDesc, onSaveEdit, onCancelEdit, onDelete }) {
+  onStartEdit, onEditName, onEditDesc, onSaveEdit, onCancelEdit, onDelete, onView }) {
   const [collapsed, setCollapsed] = useState({})
   const toggle = id => setCollapsed(c => ({ ...c, [id]: !c[id] }))
 
@@ -60,7 +61,8 @@ function ProjectTree({ projects, depth = 0, editingId, editName, editDesc, editE
                   {collapsed[p.id] ? '▶' : '▼'}
                 </button>
               )}
-              <span className="project-name" data-testid={`project-name-${p.id}`}>{p.name}</span>
+              <button className="btn-link project-name" onClick={() => onView(p.id)}
+                data-testid={`project-name-${p.id}`}>{p.name}</button>
               {p.description && <span className="project-description">{p.description}</span>}
               <span className="project-total" data-testid={`project-total-${p.id}`}>
                 {formatDuration(p.totalSeconds)}
@@ -78,7 +80,8 @@ function ProjectTree({ projects, depth = 0, editingId, editName, editDesc, editE
               editingId={editingId} editName={editName} editDesc={editDesc}
               editError={editError} editLoading={editLoading}
               onStartEdit={onStartEdit} onEditName={onEditName} onEditDesc={onEditDesc}
-              onSaveEdit={onSaveEdit} onCancelEdit={onCancelEdit} onDelete={onDelete} />
+              onSaveEdit={onSaveEdit} onCancelEdit={onCancelEdit} onDelete={onDelete}
+              onView={onView} />
           )}
         </li>
       ))}
@@ -87,6 +90,7 @@ function ProjectTree({ projects, depth = 0, editingId, editName, editDesc, editE
 }
 
 export default function ProjectsPage() {
+  const navigate = useNavigate()
   const [projects, setProjects]               = useState([])
   const [showForm, setShowForm]               = useState(false)
   const [name, setName]                       = useState('')
@@ -228,7 +232,8 @@ export default function ProjectsPage() {
             editingId={editingId} editName={editName} editDesc={editDesc}
             editError={editError} editLoading={editLoading}
             onStartEdit={startEdit} onEditName={setEditName} onEditDesc={setEditDesc}
-            onSaveEdit={saveEdit} onCancelEdit={cancelEdit} onDelete={handleDelete} />
+            onSaveEdit={saveEdit} onCancelEdit={cancelEdit} onDelete={handleDelete}
+            onView={id => navigate(`/projects/${id}`)} />
         )}
       </div>
     </div>
