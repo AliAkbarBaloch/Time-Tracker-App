@@ -2,6 +2,7 @@ package com.timetracker.service;
 
 import com.timetracker.dto.project.CreateProjectRequest;
 import com.timetracker.dto.project.ProjectResponse;
+import com.timetracker.dto.project.ProjectSummaryResponse;
 import com.timetracker.dto.project.UpdateProjectRequest;
 import com.timetracker.entity.Project;
 import com.timetracker.entity.Task;
@@ -16,8 +17,12 @@ import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 @Service
 public class ProjectService {
@@ -113,6 +118,71 @@ public class ProjectService {
             }
             cursor = cursor.getParent();
         }
+    }
+
+    @Transactional(readOnly = true)
+    public ProjectSummaryResponse getProjectSummary(String userEmail, Long projectId,
+                                                     Instant from, Instant to) {
+        User user = loadUser(userEmail);
+        Project project = projectRepository.findByIdAndUser(projectId, user)
+                .orElseThrow(() -> new ProjectNotFoundException(projectId));
+
+        // Rolled-up total for the entire subtree, deduplicated across all descendants
+        Set<Long> globalSeen = new HashSet<>();
+        long totalSeconds = calcSubtreeSeconds(project, from, to, globalSeen);
+
+        // Collect all unique tasks across the entire subtree, sorted by startTime
+        Set<Long> taskSeen = new HashSet<>();
+        List<ProjectSummaryResponse.TaskSummary> allTasks = new ArrayList<>();
+        collectSubtreeTasks(project, from, to, taskSeen, allTasks);
+        allTasks.sort(Comparator.comparing(ProjectSummaryResponse.TaskSummary::startTime));
+
+        // Individual total per direct subproject (each uses its own seen set)
+        List<ProjectSummaryResponse.SubprojectSummary> subSummaries = project.getSubprojects()
+                .stream()
+                .map(sub -> {
+                    Set<Long> subSeen = new HashSet<>();
+                    long subTotal = calcSubtreeSeconds(sub, from, to, subSeen);
+                    return new ProjectSummaryResponse.SubprojectSummary(sub.getId(), sub.getName(), subTotal);
+                })
+                .toList();
+
+        Long parentId = project.getParent() != null ? project.getParent().getId() : null;
+        return new ProjectSummaryResponse(project.getId(), project.getName(),
+                project.getDescription(), parentId, totalSeconds, subSummaries, allTasks);
+    }
+
+    private long calcSubtreeSeconds(Project project, Instant from, Instant to, Set<Long> seen) {
+        long total = 0;
+        for (Task task : project.getTasks()) {
+            if (isInRange(task, from, to) && seen.add(task.getId()) && task.getEndTime() != null) {
+                total += task.getEndTime().getEpochSecond() - task.getStartTime().getEpochSecond();
+            }
+        }
+        for (Project sub : project.getSubprojects()) {
+            total += calcSubtreeSeconds(sub, from, to, seen);
+        }
+        return total;
+    }
+
+    private void collectSubtreeTasks(Project project, Instant from, Instant to,
+                                      Set<Long> seen, List<ProjectSummaryResponse.TaskSummary> tasks) {
+        for (Task task : project.getTasks()) {
+            if (isInRange(task, from, to) && seen.add(task.getId())) {
+                tasks.add(new ProjectSummaryResponse.TaskSummary(
+                        task.getId(), task.getDescription(),
+                        task.getStartTime(), task.getEndTime(), task.isRunning()));
+            }
+        }
+        for (Project sub : project.getSubprojects()) {
+            collectSubtreeTasks(sub, from, to, seen, tasks);
+        }
+    }
+
+    private boolean isInRange(Task task, Instant from, Instant to) {
+        if (from != null && task.getStartTime().isBefore(from)) return false;
+        if (to != null && !task.getStartTime().isBefore(to)) return false;
+        return true;
     }
 
     private User loadUser(String email) {
