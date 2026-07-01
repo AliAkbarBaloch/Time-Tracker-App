@@ -144,6 +144,26 @@ export default function DashboardPage() {
               <li key={p.id} className="top-project-item" data-testid={`top-project-${p.id}`}>
                 <span className="top-project-name">{p.name}</span>
                 <span className="top-project-time">{fmtHours(p.weekSeconds)}</span>
+                {/* US-026: budget bar for projects with a budget set */}
+                {p.budgetHours && (
+                  <div className="budget-bar-wrap" data-testid={`dashboard-budget-bar-${p.id}`}>
+                    <div className="budget-bar-track">
+                      <div
+                        className="budget-bar-fill"
+                        style={{
+                          width: `${Math.min(p.budgetPercent ?? 0, 100)}%`,
+                          background:
+                            p.budgetStatus === 'OVER_BUDGET' ? '#ef4444'
+                            : p.budgetStatus === 'WARNING'   ? '#f97316'
+                            : '#22c55e',
+                        }}
+                      />
+                    </div>
+                    <span className="budget-bar-label" data-testid={`dashboard-budget-label-${p.id}`}>
+                      {(p.usedHours ?? 0).toFixed(1)}h / {p.budgetHours}h
+                    </span>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

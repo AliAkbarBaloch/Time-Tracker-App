@@ -219,6 +219,33 @@ export default function ProjectDetailPage() {
                 {summary.description}
               </span>
             )}
+            {/* US-026: Budget progress bar in project detail header */}
+            {summary.budgetHours && (
+              <div className="detail-budget-wrap" data-testid="detail-budget-bar">
+                <div className="budget-bar-track" style={{ width: '220px' }}>
+                  <div
+                    className="budget-bar-fill"
+                    style={{
+                      width: `${Math.min((summary.budgetPercent ?? 0), 100)}%`,
+                      background:
+                        summary.budgetStatus === 'OVER_BUDGET' ? '#ef4444'
+                        : summary.budgetStatus === 'WARNING'   ? '#f97316'
+                        : '#22c55e',
+                    }}
+                  />
+                </div>
+                <span className="budget-bar-label" data-testid="detail-budget-label">
+                  {(summary.usedHours ?? 0).toFixed(1)}h / {summary.budgetHours}h
+                  {' '}({(summary.budgetPercent ?? 0).toFixed(0)}%)
+                  {summary.budgetStatus === 'OVER_BUDGET' && (
+                    <span className="budget-badge-over"> Over budget</span>
+                  )}
+                  {summary.budgetStatus === 'WARNING' && (
+                    <span className="budget-badge-warn"> Approaching limit</span>
+                  )}
+                </span>
+              </div>
+            )}
           </>
         )}
         {/* US-024: Export button — opens the format/scope modal */}

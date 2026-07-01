@@ -21,7 +21,8 @@ public record ProjectResponse(
         List<ProjectResponse> subprojects,
         long totalSeconds,
         Instant createdAt,
-        boolean shared   // true when current user is a MEMBER, not the OWNER
+        boolean shared,      // true when current user is a MEMBER, not the OWNER
+        Double budgetHours   // null when no budget is set (US-026)
 ) {
 
     /** Convenience factory for owned projects (shared = false). */
@@ -56,7 +57,8 @@ public record ProjectResponse(
                 subs,
                 total,
                 project.getCreatedAt(),
-                shared
+                shared,
+                project.getBudgetHours()
         );
     }
 

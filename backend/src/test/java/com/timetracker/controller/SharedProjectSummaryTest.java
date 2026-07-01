@@ -68,7 +68,7 @@ class SharedProjectSummaryTest {
                 .header("Authorization", "Bearer " + aliceJwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("SharedProject", "collab project", null))))
+                        new CreateProjectRequest("SharedProject", "collab project", null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         projectId = objectMapper.readTree(pr.getResponse().getContentAsString()).get("id").asLong();

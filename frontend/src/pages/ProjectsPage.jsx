@@ -20,8 +20,36 @@ function flattenProjects(projects, depth = 0) {
   return result
 }
 
-function ProjectTree({ projects, depth = 0, editingId, editName, editDesc, editError, editLoading,
-  onStartEdit, onEditName, onEditDesc, onSaveEdit, onCancelEdit, onDelete, onView }) {
+/** Colour-coded budget progress bar (US-026). Only renders when budgetHours is set. */
+function BudgetBar({ projectId, budgetHours, totalSeconds }) {
+  if (!budgetHours || budgetHours <= 0) return null
+  const usedHours = totalSeconds / 3600
+  const pct = (usedHours / budgetHours) * 100
+  const status = pct >= 100 ? 'OVER_BUDGET' : pct >= 80 ? 'WARNING' : 'ON_TRACK'
+  const color = status === 'OVER_BUDGET' ? '#ef4444' : status === 'WARNING' ? '#f97316' : '#22c55e'
+  const displayPct = Math.min(pct, 100)
+  return (
+    <div className="budget-bar-wrap" data-testid={`budget-bar-${projectId}`}>
+      <div className="budget-bar-track">
+        <div
+          className="budget-bar-fill"
+          data-testid={`budget-bar-fill-${projectId}`}
+          style={{ width: `${displayPct}%`, background: color }}
+        />
+      </div>
+      <span className="budget-bar-label" data-testid={`budget-bar-label-${projectId}`}>
+        {pct.toFixed(0)}% of {budgetHours}h
+        {status === 'OVER_BUDGET' && (
+          <span className="budget-badge-over" data-testid={`budget-over-badge-${projectId}`}> Over budget</span>
+        )}
+      </span>
+    </div>
+  )
+}
+
+function ProjectTree({ projects, depth = 0, editingId, editName, editDesc, editBudget,
+  editError, editLoading, onStartEdit, onEditName, onEditDesc, onEditBudget,
+  onSaveEdit, onCancelEdit, onDelete, onView }) {
   const [collapsed, setCollapsed] = useState({})
   const toggle = id => setCollapsed(c => ({ ...c, [id]: !c[id] }))
 
@@ -42,6 +70,10 @@ function ProjectTree({ projects, depth = 0, editingId, editName, editDesc, editE
                 onChange={e => onEditDesc(e.target.value)} disabled={editLoading}
                 placeholder="Description (optional)"
                 data-testid="edit-project-desc-input" />
+              <input className="timer-input" type="number" value={editBudget}
+                onChange={e => onEditBudget(e.target.value)} disabled={editLoading}
+                placeholder="Time Budget (hours, optional)" min="0.1" step="0.5"
+                data-testid="edit-budget-hours-input" />
               {editError && <p className="timer-error" role="alert">{editError}</p>}
               <div className="task-actions">
                 <button type="submit" className="btn btn-primary btn-xs" disabled={editLoading}
@@ -63,7 +95,6 @@ function ProjectTree({ projects, depth = 0, editingId, editName, editDesc, editE
               )}
               <button className="btn-link project-name" onClick={() => onView(p.id)}
                 data-testid={`project-name-${p.id}`}>{p.name}</button>
-              {/* Shared badge visible to invited members (US-022) */}
               {p.shared && (
                 <span className="shared-badge" data-testid={`shared-badge-${p.id}`} title="Shared with you">
                   👥 Shared
@@ -79,15 +110,18 @@ function ProjectTree({ projects, depth = 0, editingId, editName, editDesc, editE
                 <button className="btn btn-danger btn-xs" onClick={() => onDelete(p.id, false)}
                   data-testid={`delete-project-btn-${p.id}`}>Delete</button>
               </div>
+              {p.budgetHours && (
+                <BudgetBar projectId={p.id} budgetHours={p.budgetHours} totalSeconds={p.totalSeconds} />
+              )}
             </div>
           )}
           {p.subprojects && p.subprojects.length > 0 && !collapsed[p.id] && (
             <ProjectTree projects={p.subprojects} depth={depth + 1}
               editingId={editingId} editName={editName} editDesc={editDesc}
-              editError={editError} editLoading={editLoading}
+              editBudget={editBudget} editError={editError} editLoading={editLoading}
               onStartEdit={onStartEdit} onEditName={onEditName} onEditDesc={onEditDesc}
-              onSaveEdit={onSaveEdit} onCancelEdit={onCancelEdit} onDelete={onDelete}
-              onView={onView} />
+              onEditBudget={onEditBudget} onSaveEdit={onSaveEdit} onCancelEdit={onCancelEdit}
+              onDelete={onDelete} onView={onView} />
           )}
         </li>
       ))}
@@ -102,6 +136,7 @@ export default function ProjectsPage() {
   const [name, setName]                       = useState('')
   const [description, setDescription]         = useState('')
   const [parentProjectId, setParentProjectId] = useState('')
+  const [budgetHours, setBudgetHours]         = useState('')
   const [loading, setLoading]                 = useState(false)
   const [error, setError]                     = useState('')
 
@@ -109,11 +144,12 @@ export default function ProjectsPage() {
   const [editingId, setEditingId]     = useState(null)
   const [editName, setEditName]       = useState('')
   const [editDesc, setEditDesc]       = useState('')
+  const [editBudget, setEditBudget]   = useState('')
   const [editError, setEditError]     = useState('')
   const [editLoading, setEditLoading] = useState(false)
 
   // delete warning state
-  const [deleteWarning, setDeleteWarning] = useState(null) // { id, taskCount, subprojectCount }
+  const [deleteWarning, setDeleteWarning] = useState(null)
 
   const fetchProjects = useCallback(() => {
     projectApi.listProjects()
@@ -128,9 +164,10 @@ export default function ProjectsPage() {
     setError('')
     setLoading(true)
     try {
+      const budget = budgetHours ? parseFloat(budgetHours) : null
       await projectApi.createProject(name, description || null,
-        parentProjectId ? Number(parentProjectId) : null)
-      setName(''); setDescription(''); setParentProjectId('')
+        parentProjectId ? Number(parentProjectId) : null, budget)
+      setName(''); setDescription(''); setParentProjectId(''); setBudgetHours('')
       setShowForm(false)
       fetchProjects()
     } catch (err) {
@@ -145,6 +182,7 @@ export default function ProjectsPage() {
     setEditingId(project.id)
     setEditName(project.name)
     setEditDesc(project.description || '')
+    setEditBudget(project.budgetHours != null ? String(project.budgetHours) : '')
     setEditError('')
   }
 
@@ -154,7 +192,8 @@ export default function ProjectsPage() {
     setEditError('')
     setEditLoading(true)
     try {
-      await projectApi.updateProject(id, editName, editDesc || null)
+      const budget = editBudget !== '' ? parseFloat(editBudget) : null
+      await projectApi.updateProject(id, editName, editDesc || null, budget)
       setEditingId(null)
       fetchProjects()
     } catch (err) {
@@ -209,6 +248,10 @@ export default function ProjectsPage() {
               <option key={p.id} value={p.id}>{'— '.repeat(p.depth)}{p.name}</option>
             ))}
           </select>
+          <input className="timer-input" type="number" placeholder="Time Budget (hours, optional)"
+            value={budgetHours} onChange={e => setBudgetHours(e.target.value)}
+            min="0.1" step="0.5" disabled={loading}
+            data-testid="budget-hours-input" />
           <button type="submit" className="btn btn-primary" disabled={loading || !name.trim()}
             data-testid="create-project-btn">
             {loading ? 'Creating…' : 'Create Project'}
@@ -238,10 +281,10 @@ export default function ProjectsPage() {
         {projects.length > 0 && (
           <ProjectTree projects={projects}
             editingId={editingId} editName={editName} editDesc={editDesc}
-            editError={editError} editLoading={editLoading}
+            editBudget={editBudget} editError={editError} editLoading={editLoading}
             onStartEdit={startEdit} onEditName={setEditName} onEditDesc={setEditDesc}
-            onSaveEdit={saveEdit} onCancelEdit={cancelEdit} onDelete={handleDelete}
-            onView={id => navigate(`/projects/${id}`)} />
+            onEditBudget={setEditBudget} onSaveEdit={saveEdit} onCancelEdit={cancelEdit}
+            onDelete={handleDelete} onView={id => navigate(`/projects/${id}`)} />
         )}
       </div>
     </div>

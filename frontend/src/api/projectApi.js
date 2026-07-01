@@ -4,12 +4,12 @@ export function listProjects() {
   return api.get('/projects')
 }
 
-export function createProject(name, description = null, parentProjectId = null) {
-  return api.post('/projects', { name, description, parentProjectId })
+export function createProject(name, description = null, parentProjectId = null, budgetHours = null) {
+  return api.post('/projects', { name, description, parentProjectId, budgetHours })
 }
 
-export function updateProject(id, name, description = null) {
-  return api.put(`/projects/${id}`, { name, description })
+export function updateProject(id, name, description = null, budgetHours = null) {
+  return api.put(`/projects/${id}`, { name, description, budgetHours })
 }
 
 export function deleteProject(id, force = false) {

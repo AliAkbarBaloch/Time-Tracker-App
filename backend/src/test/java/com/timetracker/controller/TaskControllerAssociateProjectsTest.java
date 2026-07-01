@@ -75,7 +75,7 @@ class TaskControllerAssociateProjectsTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Thesis", "My thesis", null))))
+                        new CreateProjectRequest("Thesis", "My thesis", null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         projectId = objectMapper.readTree(proj.getResponse().getContentAsString()).get("id").asLong();

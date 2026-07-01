@@ -77,7 +77,7 @@ class ProjectControllerEditDeleteTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Original", "desc", null))))
+                        new CreateProjectRequest("Original", "desc", null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         projectId = objectMapper.readTree(proj.getResponse().getContentAsString()).get("id").asLong();
@@ -90,7 +90,7 @@ class ProjectControllerEditDeleteTest {
         mockMvc.perform(put("/api/projects/" + projectId)
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Renamed", "new desc"))))
+                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Renamed", "new desc", null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name", is("Renamed")))
                 .andExpect(jsonPath("$.description", is("new desc")));
@@ -101,13 +101,13 @@ class ProjectControllerEditDeleteTest {
         mockMvc.perform(post("/api/projects")
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new CreateProjectRequest("Other", null, null))))
+                .content(objectMapper.writeValueAsString(new CreateProjectRequest("Other", null, null, null))))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(put("/api/projects/" + projectId)
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Other", null))))
+                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Other", null, null))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message", containsString("already exists")));
     }
@@ -117,7 +117,7 @@ class ProjectControllerEditDeleteTest {
         mockMvc.perform(put("/api/projects/" + projectId)
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Original", "updated desc"))))
+                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Original", "updated desc", null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name", is("Original")));
     }
@@ -127,7 +127,7 @@ class ProjectControllerEditDeleteTest {
         mockMvc.perform(put("/api/projects/" + projectId)
                 .header("Authorization", "Bearer " + otherJwt)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Stolen", null))))
+                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Stolen", null, null))))
                 .andExpect(status().isNotFound());
     }
 
@@ -135,7 +135,7 @@ class ProjectControllerEditDeleteTest {
     void updateProject_withoutToken_returns401() throws Exception {
         mockMvc.perform(put("/api/projects/" + projectId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("X", null))))
+                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("X", null, null))))
                 .andExpect(status().isUnauthorized());
     }
 
@@ -192,7 +192,7 @@ class ProjectControllerEditDeleteTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Child", null, projectId))))
+                        new CreateProjectRequest("Child", null, projectId, null))))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(delete("/api/projects/" + projectId)

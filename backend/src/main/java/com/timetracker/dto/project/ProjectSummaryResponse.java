@@ -12,6 +12,12 @@ import java.util.List;
  *  - contributions provides a per-user breakdown (userId, displayName,
  *    totalSeconds) that powers the Contributors card and the user-filter
  *    dropdown on the project detail page.
+ *
+ * Extended for US-026 (Time Budgets):
+ *  - budgetHours: optional budget in hours (null = no budget)
+ *  - usedHours: total tracked hours (derived from totalSeconds)
+ *  - budgetPercent: usedHours / budgetHours * 100 (null when no budget)
+ *  - budgetStatus: ON_TRACK / WARNING / OVER_BUDGET (null when no budget)
  */
 public record ProjectSummaryResponse(
         Long id,
@@ -21,7 +27,11 @@ public record ProjectSummaryResponse(
         long totalSeconds,
         List<SubprojectSummary> subprojects,
         List<TaskSummary> tasks,
-        List<UserContribution> contributions   // per-user breakdown (US-023)
+        List<UserContribution> contributions,  // per-user breakdown (US-023)
+        Double budgetHours,                    // US-026: null when no budget
+        Double usedHours,                      // US-026: totalSeconds / 3600
+        Double budgetPercent,                  // US-026: null when no budget
+        String budgetStatus                    // US-026: ON_TRACK / WARNING / OVER_BUDGET / null
 ) {
     public record SubprojectSummary(Long id, String name, long totalSeconds) {}
 

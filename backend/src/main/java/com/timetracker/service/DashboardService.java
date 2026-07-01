@@ -76,7 +76,16 @@ public class DashboardService {
                 .map(p -> {
                     Set<Long> seen = new HashSet<>();
                     long secs = calcSubtreeSeconds(p, weekTasks, seen);
-                    return new DashboardSummaryResponse.TopProject(p.getId(), p.getName(), secs);
+                    // All-time total for budget progress bar (US-026)
+                    Set<Long> allSeen = new HashSet<>();
+                    long allSecs = calcSubtreeTotalSeconds(p, allSeen);
+                    Double budgetHours  = p.getBudgetHours();
+                    Double usedHours    = budgetHours != null ? allSecs / 3600.0 : null;
+                    Double budgetPercent = (budgetHours != null && budgetHours > 0)
+                            ? (allSecs / 3600.0 / budgetHours * 100.0) : null;
+                    String budgetStatus = ProjectService.computeBudgetStatus(budgetHours, usedHours);
+                    return new DashboardSummaryResponse.TopProject(
+                            p.getId(), p.getName(), secs, budgetHours, usedHours, budgetPercent, budgetStatus);
                 })
                 .filter(tp -> tp.weekSeconds() > 0)
                 .sorted(Comparator.comparingLong(DashboardSummaryResponse.TopProject::weekSeconds).reversed())
@@ -88,12 +97,25 @@ public class DashboardService {
 
     private long calcSubtreeSeconds(Project project, List<Task> weekTasks, Set<Long> seen) {
         Set<Long> subtreeIds = collectSubtreeProjectIds(project);
-        long total = weekTasks.stream()
+        return weekTasks.stream()
                 .filter(t -> t.getEndTime() != null
                         && t.getProjects().stream().anyMatch(p -> subtreeIds.contains(p.getId()))
                         && seen.add(t.getId()))
                 .mapToLong(t -> t.getEndTime().getEpochSecond() - t.getStartTime().getEpochSecond())
                 .sum();
+    }
+
+    /** All-time total seconds across the project subtree (used for budget progress, US-026). */
+    private long calcSubtreeTotalSeconds(Project project, Set<Long> seen) {
+        long total = 0;
+        for (Task t : project.getTasks()) {
+            if (t.getEndTime() != null && seen.add(t.getId())) {
+                total += t.getEndTime().getEpochSecond() - t.getStartTime().getEpochSecond();
+            }
+        }
+        for (Project sub : project.getSubprojects()) {
+            total += calcSubtreeTotalSeconds(sub, seen);
+        }
         return total;
     }
 

@@ -72,7 +72,7 @@ describe('ProjectsPage', () => {
     fireEvent.change(screen.getByTestId('project-name-input'), { target: { value: 'NewProject' } })
     fireEvent.click(screen.getByTestId('create-project-btn'))
 
-    await waitFor(() => expect(projectApi.createProject).toHaveBeenCalledWith('NewProject', null, null))
+    await waitFor(() => expect(projectApi.createProject).toHaveBeenCalledWith('NewProject', null, null, null))
     await waitFor(() => expect(screen.getByTestId('project-name-1')).toBeInTheDocument())
   })
 
@@ -92,7 +92,7 @@ describe('ProjectsPage', () => {
     fireEvent.change(screen.getByTestId('parent-project-select'), { target: { value: '5' } })
     fireEvent.click(screen.getByTestId('create-project-btn'))
 
-    await waitFor(() => expect(projectApi.createProject).toHaveBeenCalledWith('Child', null, 5))
+    await waitFor(() => expect(projectApi.createProject).toHaveBeenCalledWith('Child', null, 5, null))
   })
 
   it('shows subprojects nested in tree', async () => {
@@ -210,7 +210,7 @@ describe('ProjectsPage', () => {
     fireEvent.change(screen.getByTestId('edit-project-name-input'), { target: { value: 'Updated' } })
     fireEvent.click(screen.getByTestId('save-project-edit-btn'))
 
-    await waitFor(() => expect(projectApi.updateProject).toHaveBeenCalledWith(1, 'Updated', 'My thesis'))
+    await waitFor(() => expect(projectApi.updateProject).toHaveBeenCalledWith(1, 'Updated', 'My thesis', null))
   })
 
   it('shows error when updateProject returns duplicate name', async () => {
@@ -360,5 +360,96 @@ describe('ProjectsPage', () => {
     setup()
     await waitFor(() => expect(screen.getByTestId('project-name-6')).toBeInTheDocument())
     expect(screen.queryByTestId('shared-badge-6')).not.toBeInTheDocument()
+  })
+
+})
+
+// ── US-026: Budget progress bar (separate describe to get clean mock state) ──
+
+describe('ProjectsPage — Budget (US-026)', () => {
+  beforeEach(() => {
+    vi.resetAllMocks()  // clears mockResolvedValueOnce queues between tests
+    localStorage.clear()
+  })
+
+  it('budget field renders in create form', async () => {
+    projectApi.listProjects.mockResolvedValue({ data: [] })
+    setup()
+    await waitFor(() => screen.getByTestId('new-project-btn'))
+    fireEvent.click(screen.getByTestId('new-project-btn'))
+    expect(screen.getByTestId('budget-hours-input')).toBeInTheDocument()
+  })
+
+  it('creates project with budgetHours when budget field is filled', async () => {
+    projectApi.listProjects.mockResolvedValue({ data: [] })
+    projectApi.createProject.mockResolvedValueOnce({ data: { id: 7, name: 'BudgetProject' } })
+
+    setup()
+    await waitFor(() => screen.getByTestId('new-project-btn'))
+    fireEvent.click(screen.getByTestId('new-project-btn'))
+
+    fireEvent.change(screen.getByTestId('project-name-input'), { target: { value: 'BudgetProject' } })
+    fireEvent.change(screen.getByTestId('budget-hours-input'), { target: { value: '10' } })
+    fireEvent.submit(screen.getByTestId('project-form'))
+
+    await waitFor(() =>
+      expect(projectApi.createProject).toHaveBeenCalledWith('BudgetProject', null, null, 10)
+    )
+  })
+
+  it('shows budget bar with green colour for ON_TRACK project (< 80%)', async () => {
+    const p = {
+      id: 10, name: 'BudgetP', description: null, subprojects: [], createdAt: new Date().toISOString(),
+      totalSeconds: 1800, budgetHours: 10, shared: false,
+    }
+    projectApi.listProjects.mockResolvedValue({ data: [p] })
+    setup()
+
+    await waitFor(() => screen.getByTestId('budget-bar-10'))
+    expect(screen.getByTestId('budget-bar-fill-10')).toHaveStyle({ background: '#22c55e' })
+    expect(screen.getByTestId('budget-bar-label-10')).toHaveTextContent('5%')
+  })
+
+  it('shows budget bar with orange colour for WARNING project (80–99%)', async () => {
+    const p = {
+      id: 11, name: 'WarnP', description: null, subprojects: [], createdAt: new Date().toISOString(),
+      totalSeconds: 9 * 3600, budgetHours: 10, shared: false,
+    }
+    projectApi.listProjects.mockResolvedValue({ data: [p] })
+    setup()
+
+    await waitFor(() => screen.getByTestId('budget-bar-11'))
+    expect(screen.getByTestId('budget-bar-fill-11')).toHaveStyle({ background: '#f97316' })
+    expect(screen.getByTestId('budget-bar-label-11')).toHaveTextContent('90%')
+  })
+
+  it('shows budget bar with red colour and over-budget badge for OVER_BUDGET project', async () => {
+    const p = {
+      id: 12, name: 'OverP', description: null, subprojects: [], createdAt: new Date().toISOString(),
+      totalSeconds: 12 * 3600, budgetHours: 10, shared: false,
+    }
+    projectApi.listProjects.mockResolvedValue({ data: [p] })
+    setup()
+
+    await waitFor(() => screen.getByTestId('budget-bar-12'))
+    expect(screen.getByTestId('budget-bar-fill-12')).toHaveStyle({ background: '#ef4444' })
+    expect(screen.getByTestId('budget-over-badge-12')).toBeInTheDocument()
+  })
+
+  it('does not show budget bar when project has no budget', async () => {
+    const p = { id: 1, name: 'NoBudget', description: null, subprojects: [], totalSeconds: 0, createdAt: new Date().toISOString() }
+    projectApi.listProjects.mockResolvedValue({ data: [p] })
+    setup()
+    await waitFor(() => screen.getByTestId('project-name-1'))
+    expect(screen.queryByTestId('budget-bar-1')).not.toBeInTheDocument()
+  })
+
+  it('edit form pre-fills budget hours from existing project', async () => {
+    const p = { id: 20, name: 'Thesis', description: 'My thesis', subprojects: [], totalSeconds: 0, createdAt: new Date().toISOString(), budgetHours: 8 }
+    projectApi.listProjects.mockResolvedValue({ data: [p] })
+    setup()
+    await waitFor(() => screen.getByTestId('edit-project-btn-20'))
+    fireEvent.click(screen.getByTestId('edit-project-btn-20'))
+    expect(screen.getByTestId('edit-budget-hours-input').value).toBe('8')
   })
 })
