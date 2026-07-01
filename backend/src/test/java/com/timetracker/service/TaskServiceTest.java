@@ -440,4 +440,77 @@ class TaskServiceTest {
 
         assertThat(result).isEmpty();
     }
+
+    // --- listTasks with search keyword ---
+
+    @Test
+    void listTasks_searchKeyword_returnsOnlyMatching() {
+        Task match = new Task(); match.setUser(user); match.setDescription("Read research paper");
+        match.setStartTime(Instant.now().minusSeconds(3600)); match.setEndTime(Instant.now().minusSeconds(1800));
+        Task noMatch = new Task(); noMatch.setUser(user); noMatch.setDescription("Write code");
+        noMatch.setStartTime(Instant.now().minusSeconds(7200)); noMatch.setEndTime(Instant.now().minusSeconds(5400));
+
+        when(taskRepository.findByUserOrderByStartTimeDesc(user)).thenReturn(List.of(match, noMatch));
+
+        List<TaskResponse> result = taskService.listTasks("alice@example.com", null, null, "research", null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).description()).isEqualTo("Read research paper");
+    }
+
+    @Test
+    void listTasks_searchKeyword_caseInsensitive() {
+        Task t = new Task(); t.setUser(user); t.setDescription("Read Research Paper");
+        t.setStartTime(Instant.now().minusSeconds(3600)); t.setEndTime(Instant.now().minusSeconds(1800));
+        when(taskRepository.findByUserOrderByStartTimeDesc(user)).thenReturn(List.of(t));
+
+        List<TaskResponse> result = taskService.listTasks("alice@example.com", null, null, "RESEARCH", null);
+
+        assertThat(result).hasSize(1);
+    }
+
+    @Test
+    void listTasks_searchKeyword_noMatch_returnsEmpty() {
+        Task t = new Task(); t.setUser(user); t.setDescription("Write code");
+        t.setStartTime(Instant.now().minusSeconds(3600)); t.setEndTime(Instant.now().minusSeconds(1800));
+        when(taskRepository.findByUserOrderByStartTimeDesc(user)).thenReturn(List.of(t));
+
+        List<TaskResponse> result = taskService.listTasks("alice@example.com", null, null, "nonexistent", null);
+
+        assertThat(result).isEmpty();
+    }
+
+    // --- listTasks with projectId filter ---
+
+    @Test
+    void listTasks_projectIdFilter_returnsOnlyProjectTasks() {
+        Project project = new Project(); project.setId(10L); project.setUser(user); project.setName("Thesis");
+
+        Task inProject = new Task(); inProject.setUser(user); inProject.setDescription("Thesis task");
+        inProject.setStartTime(Instant.now().minusSeconds(3600));
+        inProject.setEndTime(Instant.now().minusSeconds(1800));
+        inProject.getProjects().add(project);
+
+        Task notInProject = new Task(); notInProject.setUser(user); notInProject.setDescription("Other task");
+        notInProject.setStartTime(Instant.now().minusSeconds(7200));
+        notInProject.setEndTime(Instant.now().minusSeconds(5400));
+
+        when(taskRepository.findByUserOrderByStartTimeDesc(user)).thenReturn(List.of(inProject, notInProject));
+        when(projectRepository.findByIdAndUser(10L, user)).thenReturn(Optional.of(project));
+
+        List<TaskResponse> result = taskService.listTasks("alice@example.com", null, null, null, 10L);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).description()).isEqualTo("Thesis task");
+    }
+
+    @Test
+    void listTasks_projectIdFilter_projectNotFound_throws() {
+        when(taskRepository.findByUserOrderByStartTimeDesc(user)).thenReturn(List.of());
+        when(projectRepository.findByIdAndUser(99L, user)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() ->
+                taskService.listTasks("alice@example.com", null, null, null, 99L))
+                .isInstanceOf(ProjectNotFoundException.class);
+    }
 }
