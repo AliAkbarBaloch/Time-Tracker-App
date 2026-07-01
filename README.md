@@ -49,7 +49,7 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 | Mutation testing | PITest 1.17.1 + pitest-junit5-plugin 1.2.1 — 80% test-strength threshold (service unit tests) |
 | Testing (frontend) | Vitest, @testing-library/react, @vitest/coverage-v8 — 90% line/statement coverage enforced |
 | Linting (frontend) | oxlint (React + oxc plugins) — runs on every CI push |
-| System tests | Playwright 1.49 (TypeScript) — E2E tests per user story against the full docker-compose stack |
+| System tests | Playwright 1.61.1 (TypeScript) — E2E tests per user story against the full docker-compose stack |
 | CI | GitHub Actions — lint + unit + integration + system tests (Playwright), JaCoCo coverage, PITest mutation tests |
 
 ---
