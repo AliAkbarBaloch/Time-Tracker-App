@@ -17,6 +17,15 @@ function renderLoginPage() {
   )
 }
 
+/** Fill all register form fields including confirm password */
+function fillRegisterForm({ displayName = 'Alice', email = 'alice@example.com', password = 'password123', confirmPassword = 'password123' } = {}) {
+  fireEvent.click(screen.getByRole('button', { name: 'Register' }))
+  fireEvent.change(screen.getByLabelText('Display Name'), { target: { value: displayName } })
+  fireEvent.change(screen.getByLabelText('Email'), { target: { value: email } })
+  fireEvent.change(screen.getByLabelText('Password'), { target: { value: password } })
+  fireEvent.change(screen.getByTestId('confirm-password-input'), { target: { value: confirmPassword } })
+}
+
 describe('LoginPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
@@ -36,15 +45,15 @@ describe('LoginPage', () => {
 
   it('shows Log In and Register tabs', () => {
     renderLoginPage()
-    // Both the tab and the submit button are labelled "Log In" in login mode
     expect(screen.getAllByRole('button', { name: 'Log In' }).length).toBeGreaterThanOrEqual(1)
     expect(screen.getByRole('button', { name: 'Register' })).toBeInTheDocument()
   })
 
-  it('switches to Register mode and shows Display Name field', () => {
+  it('switches to Register mode and shows Display Name and Confirm Password fields', () => {
     renderLoginPage()
     fireEvent.click(screen.getByRole('button', { name: 'Register' }))
     expect(screen.getByLabelText('Display Name')).toBeInTheDocument()
+    expect(screen.getByLabelText('Confirm Password')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Create Account' })).toBeInTheDocument()
   })
 
@@ -54,10 +63,7 @@ describe('LoginPage', () => {
     })
 
     renderLoginPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
-    fireEvent.change(screen.getByLabelText('Display Name'), { target: { value: 'Alice' } })
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'alice@example.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fillRegisterForm()
     fireEvent.click(screen.getByRole('button', { name: 'Create Account' }))
 
     await waitFor(() =>
@@ -71,10 +77,7 @@ describe('LoginPage', () => {
     })
 
     renderLoginPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
-    fireEvent.change(screen.getByLabelText('Display Name'), { target: { value: 'Alice' } })
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'alice@example.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fillRegisterForm()
     fireEvent.click(screen.getByRole('button', { name: 'Create Account' }))
 
     await waitFor(() =>
@@ -90,7 +93,6 @@ describe('LoginPage', () => {
     renderLoginPage()
     fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'alice@example.com' } })
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
-    // In login mode both the tab and submit are labelled "Log In" — click the last one (submit)
     const loginBtns = screen.getAllByRole('button', { name: 'Log In' })
     fireEvent.click(loginBtns[loginBtns.length - 1])
 
@@ -115,6 +117,45 @@ describe('LoginPage', () => {
     )
   })
 
+  // ── US-001: Client-side password validation ───────────────────────────────
+
+  it('shows password field error without API call when password is shorter than 8 characters', async () => {
+    renderLoginPage()
+    fillRegisterForm({ password: 'short', confirmPassword: 'short' })
+    fireEvent.click(screen.getByRole('button', { name: 'Create Account' }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('error-password')).toHaveTextContent('at least 8 characters')
+    )
+    expect(authApi.register).not.toHaveBeenCalled()
+  })
+
+  it('shows confirm password error without API call when passwords do not match', async () => {
+    renderLoginPage()
+    fillRegisterForm({ password: 'password123', confirmPassword: 'different99' })
+    fireEvent.click(screen.getByRole('button', { name: 'Create Account' }))
+
+    await waitFor(() =>
+      expect(screen.getByTestId('error-confirmPassword')).toHaveTextContent('do not match')
+    )
+    expect(authApi.register).not.toHaveBeenCalled()
+  })
+
+  it('clears confirm password field when switching to login tab and back', () => {
+    renderLoginPage()
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
+    fireEvent.change(screen.getByTestId('confirm-password-input'), { target: { value: 'secret' } })
+
+    // Switch to login — confirm field disappears
+    const loginBtns = screen.getAllByRole('button', { name: 'Log In' })
+    fireEvent.click(loginBtns[0])
+    expect(screen.queryByTestId('confirm-password-input')).not.toBeInTheDocument()
+
+    // Switch back — confirm field is empty
+    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
+    expect(screen.getByTestId('confirm-password-input')).toHaveValue('')
+  })
+
   // ── NFR-003 Usability: field-level inline error display ───────────────────
 
   it('shows inline email field error when backend returns errors.email', async () => {
@@ -123,16 +164,12 @@ describe('LoginPage', () => {
     })
 
     renderLoginPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
-    fireEvent.change(screen.getByLabelText('Display Name'), { target: { value: 'Alice' } })
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'alice@example.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fillRegisterForm()
     fireEvent.click(screen.getByRole('button', { name: 'Create Account' }))
 
     await waitFor(() =>
       expect(screen.getByTestId('error-email')).toHaveTextContent('Email already registered')
     )
-    // General error banner should NOT show
     expect(screen.queryByText('Something went wrong')).not.toBeInTheDocument()
   })
 
@@ -142,10 +179,7 @@ describe('LoginPage', () => {
     })
 
     renderLoginPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
-    fireEvent.change(screen.getByLabelText('Display Name'), { target: { value: 'Alice' } })
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'alice@example.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fillRegisterForm()
     fireEvent.click(screen.getByRole('button', { name: 'Create Account' }))
 
     await waitFor(() =>
@@ -159,10 +193,7 @@ describe('LoginPage', () => {
     })
 
     renderLoginPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
-    fireEvent.change(screen.getByLabelText('Display Name'), { target: { value: 'Alice' } })
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'alice@example.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fillRegisterForm()
     fireEvent.click(screen.getByRole('button', { name: 'Create Account' }))
 
     await waitFor(() =>
@@ -176,10 +207,7 @@ describe('LoginPage', () => {
     })
 
     renderLoginPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
-    fireEvent.change(screen.getByLabelText('Display Name'), { target: { value: 'Alice' } })
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'alice@example.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fillRegisterForm()
     fireEvent.click(screen.getByRole('button', { name: 'Create Account' }))
 
     await waitFor(() => {
@@ -194,15 +222,11 @@ describe('LoginPage', () => {
     })
 
     renderLoginPage()
-    fireEvent.click(screen.getByRole('button', { name: 'Register' }))
-    fireEvent.change(screen.getByLabelText('Display Name'), { target: { value: 'Alice' } })
-    fireEvent.change(screen.getByLabelText('Email'), { target: { value: 'alice@example.com' } })
-    fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password123' } })
+    fillRegisterForm()
     fireEvent.click(screen.getByRole('button', { name: 'Create Account' }))
 
     await waitFor(() => expect(screen.getByTestId('error-email')).toBeInTheDocument())
 
-    // Switch to login tab — field errors should clear
     const loginBtns = screen.getAllByRole('button', { name: 'Log In' })
     fireEvent.click(loginBtns[0])
     expect(screen.queryByTestId('error-email')).not.toBeInTheDocument()
