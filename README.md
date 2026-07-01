@@ -2,7 +2,26 @@
 
 # TimeTracker
 
-A full-stack time tracking web application for individuals (students, freelancers, researchers) to track time spent on projects, lectures, and activities.
+## Project Description
+
+TimeTracker is a full-stack web application that lets individuals — students, freelancers, and researchers — track exactly how much time they spend on projects and activities.
+
+**What it does:**
+
+- **Register and log in** — create a personal account secured with JWT authentication and BCrypt-hashed passwords.
+- **Start and stop a live timer** — one click starts a running timer; one click stops it and records the duration. Only one timer can run at a time.
+- **Add tasks manually** — log past work by entering a description, start time, and end time directly.
+- **Edit and delete tasks** — correct mistakes or remove entries at any time.
+- **Organize with projects** — create projects (and nested subprojects) and link any task to one or more projects. Each project automatically tracks its total time, including time from subprojects.
+- **Daily overview** — the Dashboard shows today's tasks and a live running total so you always know how much you have worked today.
+- **Weekly overview** — the Overview page shows all seven days of the selected week in a grid, with per-day totals, a week total, and prev/next navigation to browse past or future weeks.
+- **Change password** — update your account password securely at any time from the Settings page.
+
+**What is expected (remaining stories):**
+
+- Monthly task overview with a calendar grid
+- Per-project time summary with a date-range picker
+- Export of time data to CSV or PDF
 
 ---
 
@@ -11,10 +30,10 @@ A full-stack time tracking web application for individuals (students, freelancer
 | Layer | Technology |
 |---|---|
 | Backend | Java 21 (compiled) / Java 25 Temurin (runtime), Spring Boot 3.4.1, Spring Security 6, Spring Data JPA |
-| Database | H2 (in-memory for tests, file-based for dev) — no external DB required |
+| Database | H2 — in-memory for tests, file-based for development (no external database required) |
 | Frontend | React 19, Vite 6, React Router 7, Axios |
 | Auth | Stateless JWT (jjwt 0.12.6) + BCrypt password hashing |
-| Testing (backend) | JUnit 5, Mockito, Spring MockMvc |
+| Testing (backend) | JUnit 5, Mockito, Spring MockMvc (integration tests hit a real H2 instance) |
 | Testing (frontend) | Vitest, @testing-library/react |
 | CI | GitHub Actions — lint + unit + integration + system tests, Jacoco line coverage |
 
@@ -41,149 +60,157 @@ A full-stack time tracking web application for individuals (students, freelancer
     └── src/
         ├── api/                      # authApi.js, taskApi.js, projectApi.js (Axios)
         ├── context/                  # AuthContext (JWT storage + auth state)
-        ├── pages/                    # LoginPage, DashboardPage, TasksPage, ProjectsPage, SettingsPage
+        ├── pages/                    # LoginPage, DashboardPage, TasksPage, ProjectsPage, OverviewPage, SettingsPage
         └── components/               # Layout (topbar + navigation), ProtectedRoute
 ```
 
 ---
 
-## Implemented User Stories
-
-| # | Story | Status |
-|---|---|---|
-| US-001 | User Registration | Done |
-| US-002 | User Login | Done |
-| US-003 | User Logout | Done |
-| US-004 | Change Password | Done |
-| US-005 | Start Timer | Done |
-| US-006 | Stop Timer | Done |
-| US-007 | Add a Task Manually | Done |
-| US-008 | Edit a Task | Done |
-| US-009 | Delete a Task | Done |
-| US-010 | Create a Project | Done |
-| US-011 | Create a Subproject (Project Hierarchy) | Done |
-| US-012 | Edit and Delete a Project | Done |
-| US-013 | Associate Tasks with Projects | Done |
-| US-014 | View Daily Task Overview (Dashboard) | Done |
-| US-015 | View Weekly Task Overview | Done |
-
-### What each story delivers
-
-**US-001 – User Registration**  
-`POST /api/auth/register` — accepts email, password, displayName. Validates uniqueness. Password stored as BCrypt hash. Returns 201 Created.
-
-**US-002 – User Login**  
-`POST /api/auth/login` — validates credentials, returns a signed JWT valid for 24 hours.
-
-**US-003 – User Logout**  
-Frontend clears the JWT from localStorage. All protected API endpoints require `Authorization: Bearer <token>`.
-
-**US-004 – Change Password**  
-`POST /api/auth/change-password` — verifies current password, sets new BCrypt hash. Returns 204 No Content.
-
-**US-005 – Start Timer**  
-`POST /api/tasks/start` — starts a running task (no end time). Only one timer can run at a time; returns 409 if one is already active.
-
-**US-006 – Stop Timer**  
-`POST /api/tasks/stop` — sets `endTime = now` on the running task. Returns 404 if no timer is active.
-
-**US-007 – Add a Task Manually**  
-`POST /api/tasks` — creates a completed task with explicit `startTime`, `endTime`, optional description, and optional `projectIds`.
-
-**US-008 – Edit a Task**  
-`PUT /api/tasks/{id}` — updates description, start/end times, and project associations. Returns 403 if the task belongs to another user.
-
-**US-009 – Delete a Task**  
-`DELETE /api/tasks/{id}` — permanently removes the task. Clears join-table entries first to avoid FK violations.
-
-**US-010 – Create a Project**  
-`POST /api/projects` — creates a project with name (unique per user, case-insensitive) and optional description.
-
-**US-011 – Create a Subproject (Project Hierarchy)**  
-`POST /api/projects` with `parentProjectId` — creates a child project. `GET /api/projects` returns the full tree with recursive `totalSeconds` (deduplicating tasks counted in multiple projects).
-
-**US-012 – Edit and Delete a Project**  
-`PUT /api/projects/{id}` — rename/re-describe a project.  
-`DELETE /api/projects/{id}` — if the project has tasks or subprojects, returns 409 with counts. Pass `?force=true` to disassociate all tasks and recursively delete subprojects.
-
-**US-013 – Associate Tasks with Projects**  
-Create and edit forms show a tree-indented multi-select checkbox list of the user's projects. Selecting a project on create (`POST /api/tasks`) or update (`PUT /api/tasks/{id}`) stores associations in the `task_projects` join table. `GET /api/tasks` now returns `projects: [{id, name}]` in each task response. Project `totalSeconds` updates immediately when associations change.
-
-**US-014 – View Daily Task Overview (Dashboard)**  
-The Dashboard now shows a "Today" section below the timer. It calls `GET /api/tasks?from=<midnight>&to=<next-midnight>` to fetch only today's tasks. Each task row shows its description, start time, duration, and associated projects. A live daily total (HH:MM:SS) updates every second while a task is running. The task list refreshes automatically after starting or stopping a timer.  
-Backend: `GET /api/tasks` gained optional `from`/`to` ISO-8601 query params; the service dispatches to `findByUserAndStartTimeBetweenOrderByStartTimeAsc` when both are present.
-
-**US-015 – View Weekly Task Overview**  
-The Overview page shows the current week (Monday–Sunday) as a 7-column grid. Each column displays the day name, date, per-day total, and a list of tasks for that day. A "Week Total" footer sums all days. Prev/Next buttons navigate between weeks by re-fetching from the same `GET /api/tasks?from=&to=` endpoint. Tasks are attributed to a day by the local date of their `startTime`. Clicking any task navigates to the Tasks page. The Month tab shows a placeholder for the upcoming monthly view.
-
----
-
 ## Prerequisites
 
-| Tool | Version |
-|---|---|
-| Java | 21 or 25 (Temurin recommended) |
-| Maven | 3.9+ (or use the `./mvnw` wrapper) |
-| Node.js | 20+ |
-| npm | 10+ |
+Make sure the following tools are installed before you begin.
 
-> **sdkman users**: the repo has a `.sdkmanrc` file at the root — run `sdk env` inside the repo to switch to the pinned Java version automatically.
+| Tool | Minimum Version | How to check |
+|---|---|---|
+| Java | 21 | `java -version` |
+| Maven | 3.9 | `mvn -version` |
+| Node.js | 20 | `node -version` |
+| npm | 10 | `npm -version` |
+| Git | any | `git --version` |
+
+> **Recommended:** use [sdkman](https://sdkman.io/) to manage Java versions. The repo ships a `.sdkmanrc` file — run `sdk env` inside the repo root to switch to the pinned Java 25 Temurin build automatically.
 
 ---
 
-## Running Locally (Development)
+## Step-by-Step Setup and Run Guide
 
-### 1. Clone the repository
+Follow these steps in order. Each step assumes you are starting from a fresh clone.
+
+### Step 1 — Clone the repository
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/se2p-classrooms/final-project-AliAkbarBaloch.git
 cd final-project-AliAkbarBaloch
 ```
 
-### 2. Start the backend
+### Step 2 — (Optional) Set the Java version with sdkman
+
+If you have sdkman installed:
+
+```bash
+sdk env
+```
+
+This reads `.sdkmanrc` and switches to Java 25.0.3 Temurin automatically. Skip this step if you already have Java 21+ in your `PATH`.
+
+### Step 3 — Install backend dependencies and run backend tests
 
 ```bash
 cd backend
+./mvnw test
+```
+
+What this does:
+- Downloads all Maven dependencies on first run (may take 1–2 minutes)
+- Compiles the source code
+- Runs all 139 unit and integration tests against an in-memory H2 database
+
+Expected output at the end:
+```
+Tests run: 139, Failures: 0, Errors: 0, Skipped: 0
+BUILD SUCCESS
+```
+
+If you see `BUILD FAILURE`, check that your Java version is 21 or higher (`java -version`).
+
+### Step 4 — Start the backend server
+
+Still inside the `backend/` directory:
+
+```bash
 ./mvnw spring-boot:run
 ```
 
-The backend starts on **http://localhost:8080**.
+The server starts on **http://localhost:8080**.
 
-- H2 console: http://localhost:8080/h2-console  
-  JDBC URL: `jdbc:h2:file:./data/timetracker`, username `SA`, no password
+You should see a line like:
+```
+Started TimeTrackerApplication in X.XXX seconds
+```
 
-> If your shell's default Java is not 21+, set it explicitly:
-> ```bash
-> JAVA_HOME="$(/usr/libexec/java_home -v 21)" ./mvnw spring-boot:run
-> ```
-> Or with sdkman: `sdk use java 25.0.3-tem && ./mvnw spring-boot:run`
+Leave this terminal open. The backend must stay running while you use the app.
 
-### 3. Start the frontend
+> **H2 console** (optional, for inspecting the database):
+> Open http://localhost:8080/h2-console in your browser.
+> - JDBC URL: `jdbc:h2:file:./data/timetracker`
+> - Username: `SA`
+> - Password: *(leave blank)*
 
-Open a second terminal:
+### Step 5 — Install frontend dependencies
+
+Open a **new terminal** (keep the backend terminal running), then:
 
 ```bash
 cd frontend
 npm install
+```
+
+This installs all Node.js packages listed in `package.json` (React, Vite, Axios, testing libraries, etc.). It may take 30–60 seconds on first run.
+
+### Step 6 — Run frontend tests
+
+While still in the `frontend/` directory:
+
+```bash
+npx vitest run
+```
+
+Expected output:
+```
+Test Files  8 passed (8)
+     Tests  100 passed (100)
+```
+
+### Step 7 — Start the frontend dev server
+
+```bash
 npm run dev
 ```
 
-The frontend starts on **http://localhost:3000**.  
-All `/api/*` requests are proxied to the backend at port 8080 (configured in `vite.config.js`).
+The frontend starts on **http://localhost:3000**.
 
-### 4. Open the app
+You should see:
+```
+  VITE vX.X.X  ready in XXX ms
+  ➜  Local:   http://localhost:3000/
+```
 
-Navigate to **http://localhost:3000** in your browser. Register a new account and start tracking time.
+All `/api/*` requests from the browser are automatically proxied to the backend at port 8080 (configured in `vite.config.js`), so you do not need to configure CORS or separate ports manually.
+
+### Step 8 — Open the app and test it
+
+1. Open **http://localhost:3000** in your browser.
+2. Click **Register** and create a new account (email + password + display name).
+3. You are logged in automatically. From here you can:
+   - Press **Start** on the Dashboard to begin a timer.
+   - Press **Stop** to finish the timer. The task appears in the "Today" section immediately.
+   - Open **Tasks** in the navigation to add tasks manually, edit, or delete them.
+   - Open **Projects** to create projects and subprojects, then link tasks to them via the checkbox list in the task form.
+   - Open **Overview** to see your weekly breakdown. Use the prev/next arrows to navigate weeks.
+   - Open **Settings** to change your password.
 
 ---
 
-## Running with Docker Compose (recommended for production-like setup)
+## Running with Docker Compose
+
+If you prefer a containerised setup (no local Java or Node.js required):
 
 ```bash
 docker compose up --build
-# Backend:  http://localhost:8080
-# Frontend: http://localhost:3000
 ```
+
+- Backend: http://localhost:8080
+- Frontend: http://localhost:3000
 
 Data is persisted in a Docker volume (`timetracker-data`) across container restarts.
 
@@ -191,26 +218,14 @@ Data is persisted in a Docker volume (`timetracker-data`) across container resta
 
 ## Running Tests
 
-### Backend tests
+### Backend
 
 ```bash
 cd backend
 ./mvnw test
 ```
 
-This runs all unit tests (Mockito) and integration tests (MockMvc + in-memory H2 with `@ActiveProfiles("test")`).
-
-Expected output:
-```
-Tests run: 139, Failures: 0, Errors: 0, Skipped: 0
-BUILD SUCCESS
-```
-
-> With sdkman: `source ~/.sdkman/bin/sdkman-init.sh && sdk use java 25.0.3-tem && ./mvnw test`
-
-**Test structure:**
-
-| File | Tests | What it covers |
+| Test class | Count | What it covers |
 |---|---|---|
 | `AuthControllerTest` | 10 | Register + login happy paths, duplicate email, wrong password |
 | `ChangePasswordTest` | 5 | Change password valid, wrong current, unauthenticated |
@@ -229,23 +244,14 @@ BUILD SUCCESS
 | `TaskServiceTest` | 27 | All task service operations including project association and date filtering (unit) |
 | `ProjectServiceTest` | 18 | All project service operations (unit) |
 
-### Frontend tests
+### Frontend
 
 ```bash
 cd frontend
-npm test
-# or to run once without watch mode:
 npx vitest run
 ```
 
-Expected output:
-```
-Tests  100 passed (100)
-```
-
-**Test structure:**
-
-| File | Tests | What it covers |
+| Test file | Count | What it covers |
 |---|---|---|
 | `LoginPage.test.jsx` | 5 | Register, login, tabs, error states |
 | `DashboardPage.test.jsx` | 16 | Timer start/stop, active task display, today section, daily total, running task highlight |
@@ -258,27 +264,31 @@ Tests  100 passed (100)
 
 ## API Reference
 
-All endpoints (except register and login) require `Authorization: Bearer <JWT>`.
+All endpoints except `/api/auth/register` and `/api/auth/login` require the header:
+
+```
+Authorization: Bearer <your-JWT-token>
+```
 
 ### Auth
 
-| Method | Path | Body | Response | Description |
+| Method | Path | Request body | Response | Notes |
 |---|---|---|---|---|
-| POST | `/api/auth/register` | `{email, password, displayName}` | 201 | Create account |
-| POST | `/api/auth/login` | `{email, password}` | 200 `{token}` | Get JWT |
-| POST | `/api/auth/change-password` | `{currentPassword, newPassword}` | 204 | Change password |
+| POST | `/api/auth/register` | `{email, password, displayName}` | 201 | Creates account; returns JWT |
+| POST | `/api/auth/login` | `{email, password}` | 200 `{token}` | Returns JWT |
+| POST | `/api/auth/change-password` | `{currentPassword, newPassword}` | 204 | — |
 
 ### Tasks
 
-| Method | Path | Body | Response | Description |
+| Method | Path | Request body | Response | Notes |
 |---|---|---|---|---|
-| GET | `/api/tasks` | — | 200 `Task[]` | List tasks (add `?from=<ISO>&to=<ISO>` for date-range filter) |
-| POST | `/api/tasks/start` | `{description?}` | 201 | Start a running timer |
-| POST | `/api/tasks/stop` | — | 200 | Stop the running timer |
-| GET | `/api/tasks/active` | — | 200 or 204 | Get the active timer |
-| POST | `/api/tasks` | `{description?, startTime, endTime, projectIds?}` | 201 | Add task manually |
+| GET | `/api/tasks` | — | 200 `Task[]` | Add `?from=<ISO>&to=<ISO>` for date range |
+| GET | `/api/tasks/active` | — | 200 or 204 | 204 = no active timer |
+| POST | `/api/tasks/start` | `{description?}` | 201 | Returns the new running task |
+| POST | `/api/tasks/stop` | — | 200 | Returns the stopped task |
+| POST | `/api/tasks` | `{description?, startTime, endTime, projectIds?}` | 201 | Manual task |
 | PUT | `/api/tasks/{id}` | `{description?, startTime, endTime, projectIds?}` | 200 | Edit task |
-| DELETE | `/api/tasks/{id}` | — | 204 | Delete task |
+| DELETE | `/api/tasks/{id}` | — | 204 | — |
 
 Task response shape:
 ```json
@@ -294,12 +304,12 @@ Task response shape:
 
 ### Projects
 
-| Method | Path | Body | Response | Description |
+| Method | Path | Request body | Response | Notes |
 |---|---|---|---|---|
-| GET | `/api/projects` | — | 200 `Project[]` | List root projects (with nested subprojects) |
-| POST | `/api/projects` | `{name, description?, parentProjectId?}` | 201 | Create project |
-| PUT | `/api/projects/{id}` | `{name, description?}` | 200 | Edit project |
-| DELETE | `/api/projects/{id}?force=false` | — | 204 or 409 | Delete project; 409 if associations exist |
+| GET | `/api/projects` | — | 200 `Project[]` | Returns root projects with nested subprojects |
+| POST | `/api/projects` | `{name, description?, parentProjectId?}` | 201 | Creates project or subproject |
+| PUT | `/api/projects/{id}` | `{name, description?}` | 200 | Rename / re-describe |
+| DELETE | `/api/projects/{id}` | — | 204 or 409 | 409 if associations exist; add `?force=true` to override |
 
 Project response shape:
 ```json
@@ -309,7 +319,7 @@ Project response shape:
   "description": "My master's thesis",
   "parentId": null,
   "subprojects": [
-    {"id": 6, "name": "Literature Review", "subprojects": [], "totalSeconds": 3600, ...}
+    {"id": 6, "name": "Literature Review", "subprojects": [], "totalSeconds": 3600, "createdAt": "..."}
   ],
   "totalSeconds": 7200,
   "createdAt": "2026-06-01T09:00:00Z"
@@ -320,9 +330,9 @@ Project response shape:
 
 ## Key Design Decisions
 
-- **Stateless JWT auth** — no server-side sessions; the token is stored in `localStorage` and sent as a Bearer header on every request.
-- **H2 file-based DB in dev** — data persists across restarts without any setup. The `test` profile uses an in-memory H2 instance that is wiped between test classes via `@BeforeEach` repository clears.
-- **`@ManyToMany` task–project join table** (`task_projects`) — tasks can belong to multiple projects. Cascades are handled manually (e.g., `task.getProjects().clear()` before delete) to avoid FK violations.
-- **Recursive `totalSeconds` with deduplication** — when a task is associated with both a parent and child project, its duration is counted only once toward the parent's total using a `Set<Long>` of seen task IDs passed down the recursion.
-- **Force-delete pattern** — deleting a project with associations returns 409 + counts. The frontend shows a warning dialog; the user confirms to call `DELETE ?force=true` which disassociates tasks and removes subprojects.
-- **Project tree in task form** — the project selector uses a flattened traversal of the project tree with depth-based indentation, rendered as checkboxes. Multi-select allows a task to be linked to multiple projects simultaneously.
+- **Stateless JWT auth** — no server-side sessions; the token lives in `localStorage` and is sent as a Bearer header on every request.
+- **H2 file-based DB in dev** — data persists across restarts with zero external setup. The `test` profile switches to an in-memory H2 instance that is wiped between test classes.
+- **`@ManyToMany` task–project join table** (`task_projects`) — tasks can belong to multiple projects. Cascades are handled manually (e.g. clearing the join before delete) to avoid FK violations.
+- **Recursive `totalSeconds` with deduplication** — if a task is linked to both a parent and child project, its duration is counted only once toward the parent's total using a `Set<Long>` of seen task IDs passed down the recursion.
+- **Force-delete pattern** — deleting a project with associations returns 409 with counts. The frontend shows a confirmation dialog; confirming calls `DELETE ?force=true` which disassociates tasks and recursively removes subprojects.
+- **Date-range filtering on task list** — `GET /api/tasks?from=<ISO>&to=<ISO>` reuses the existing `findByUserAndStartTimeBetweenOrderByStartTimeAsc` repository method. Daily and weekly views both call this same endpoint with appropriate bounds.
