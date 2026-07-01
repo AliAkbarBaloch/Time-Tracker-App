@@ -30,6 +30,7 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Export project tasks (US-024)** — an "Export" button on the project detail page opens a modal where you choose the file format (CSV or JSON) and optionally restrict the export to a specific calendar month. Clicking "Download" calls `GET /api/projects/{id}/export?format=csv|json` and triggers a browser file download via a Blob URL (the JWT is never embedded in the URL). Tasks are collected recursively from the full project subtree so sub-project activity is always included. The CSV columns are `task_id, description, start_time, end_time, duration_seconds, projects, user`; the `projects` column shows the full hierarchy path (e.g. `"Thesis > Literature Review"`). The JSON response wraps the task array in `{ "project": "...", "exportedAt": "...", "tasks": [...] }`. Non-members receive 404. Both `?from/to` ISO params and `?year/month` convenience params are supported for date filtering.
 - **User preferred time zone (US-025)** — every user has a `timezone` field (default `"UTC"`) stored in the database. The timezone is returned in both the register and login responses, stored in `AuthContext`, and persisted in `localStorage`. A new "Preferred Time Zone" section in the Settings page lets users choose from a curated list of common IANA timezone identifiers and saves the choice via `PUT /api/users/profile`. All task times throughout the app (task list, project detail, weekly/monthly overview, new-task form defaults) are displayed in the user's preferred timezone using the browser's built-in `Intl.DateTimeFormat` API — no external libraries needed. Stored times remain UTC at all times; only the display layer changes. `GET /api/users/profile` returns the full user profile including `timezone`; `PUT /api/users/profile` validates the timezone string with `ZoneId.of()` and returns HTTP 400 with an informative message if the value is not a valid IANA identifier.
 - **Task templates (US-027)** — users can save frequently-used task configurations as templates (name, optional description, optional project associations). A "Task Templates" section on the Dashboard shows all personal templates as cards with a name, description preview, and project chips. Clicking **▶ Start** on a template creates a running task pre-filled with the template's description and project associations — the topbar timer appears immediately. Templates can be created via a "New Template" form (with project multi-select), edited inline (pencil button), and deleted (with a confirmation dialog). Templates are strictly private — users can only access their own. `POST /api/task-templates/{id}/start` returns 409 if a timer is already running. All CRUD operations are available via `GET/POST /api/task-templates` and `PUT/DELETE /api/task-templates/{id}`.
+- **Productivity analytics (US-028)** — a dedicated "Analytics" page (accessible from the top navigation) shows two visualisations derived from the user's tracked history. The **Activity Heatmap** renders a GitHub-style 52–53-week grid (7 rows × N columns, Monday-first). Each cell represents one calendar day and is colour-coded in four levels based on the day's share of the year's maximum: grey (#ebedf0) for zero, light green (#9be9a8) for < 25 %, medium green (#40c463) for 25–50 %, dark green (#30a14e) for 50–75 %, and darkest green (#216e39) at the top tier. Hovering a cell shows a tooltip with the date and formatted duration. A year selector at the top-right lets users browse any year (± 3 from current). Day boundaries are calculated in the user's preferred timezone (integrated with US-025). The **Day-of-Week Pattern** bar chart shows the average tracked seconds per weekday (MON–SUN) over the last 12 weeks. Bar heights are proportional to the day with the most average time; each bar shows the formatted average below it. Only completed tasks (tasks with both `startTime` and `endTime`) are included in both visualisations; running timers are excluded. Data is always scoped to the authenticated user. API: `GET /api/analytics/heatmap?year=<int>` and `GET /api/analytics/weekly-pattern?weeks=<int>` (defaults: current year, 12 weeks).
 - **Project time budgets (US-026)** — each project can optionally have a `budgetHours` value (a positive decimal, e.g. `40.0`) set at create or edit time. When a budget is set, the project detail page and the projects list both display a colour-coded progress bar: green (ON_TRACK, < 80% used), orange (WARNING, 80–99% used), and red (OVER_BUDGET, ≥ 100% used) with an "Over budget" badge. The Dashboard's top-projects list also shows the budget bar and used/total hour labels. Budget tracking aggregates all-time hours across the full project subtree and all members (not just the current user). The `budgetStatus` field (`ON_TRACK`, `WARNING`, or `OVER_BUDGET`) and `budgetPercent` are computed server-side and included in both `ProjectSummaryResponse` and the dashboard's `TopProject` entries. A null budget means no restriction is enforced.
 
 ---
@@ -67,9 +68,9 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 │           └── service/              # Unit tests (Mockito)
 └── frontend/                         # React + Vite SPA
     └── src/
-        ├── api/                      # authApi.js, taskApi.js, projectApi.js (Axios)
+        ├── api/                      # authApi.js, taskApi.js, projectApi.js, analyticsApi.js (Axios)
         ├── context/                  # AuthContext (JWT storage + auth state + timezone), TimerContext (shared active task state)
-        ├── pages/                    # LoginPage, DashboardPage, TasksPage, ProjectsPage, ProjectDetailPage, OverviewPage, SettingsPage
+        ├── pages/                    # LoginPage, DashboardPage, TasksPage, ProjectsPage, ProjectDetailPage, OverviewPage, SettingsPage, AnalyticsPage
         ├── utils/                    # dateUtils.js — timezone-aware Intl API helpers (US-025)
         └── components/               # Layout (topbar + navigation), ProtectedRoute
 ```
@@ -127,7 +128,7 @@ What this does:
 
 Expected output at the end:
 ```
-Tests run: 350, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 360, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -181,8 +182,8 @@ npx vitest run
 
 Expected output:
 ```
-Test Files  11 passed (11)
-     Tests  264 passed (264)
+Test Files  12 passed (12)
+     Tests  275 passed (275)
 ```
 
 ### Step 7 — Start the frontend dev server
@@ -212,6 +213,7 @@ All `/api/*` requests from the browser are automatically proxied to the backend 
    - Open **Projects** to create projects and subprojects, then link tasks to them via the checkbox list in the task form. Click any project name to open its detail page with time totals and a date-range picker.
    - Open **Overview** to see your weekly breakdown. Use the prev/next arrows to navigate weeks.
    - Open **Settings** to change your preferred time zone (choose from common IANA zones; all task times across the app update immediately) or to change your password.
+   - Open **Analytics** in the navigation to see your productivity heatmap (GitHub-style activity grid colour-coded by tracked time) and day-of-week pattern chart. Use the year selector to browse historical years.
 
 ---
 
@@ -272,6 +274,7 @@ cd backend
 | `UserProfileTest` | 13 | US-025 Time Zones: GET profile returns all fields, default UTC timezone, 401 without auth, PUT valid IANA timezone, PUT persists timezone, invalid timezone 400, bogus timezone 400, displayName-only update, both fields update, login response includes timezone, register response defaults to UTC, timezone change does not affect createdAt, PUT 401 without auth |
 | `ProjectBudgetTest` | 9 | US-026 Project Budgets: create with budgetHours, null budget allowed, ON_TRACK status (<80%), WARNING status (80–99%), OVER_BUDGET status (≥100%), update budget, null clears budget, shared project summary includes budget, listProjects includes budgetHours |
 | `TaskTemplateTest` | 11 | US-027 Task Templates: create with all fields, no-description/no-project create, list returns only own templates, update name+desc+projects, delete returns 204, start-from-template creates running task with description+projects, start while running 409, cross-user isolation (PUT/DELETE/start on other's template → 404), multi-project template in list, 401 without auth, 400 blank name |
+| `AnalyticsControllerTest` | 10 | US-028 Productivity Analytics: heatmap correct day + total seconds, multiple tasks same day aggregated, empty year returns empty days list, running timer excluded from heatmap, heatmap data scoped to authenticated user, heatmap 401 without auth, weekly pattern returns 7 entries MON–SUN, weekly pattern computes correct average for recent task, weekly pattern 401 without auth, weekly pattern data scoped to authenticated user |
 
 ### Frontend
 
@@ -292,6 +295,7 @@ npx vitest run
 | `ProjectDetailPage.test.jsx` | 51 | Date-range presets, custom range form, project name/desc/total, subproject totals, task list, running task, error states, back navigation; members section rendered; member list shows name+email+role; invite form visible to owner only; invite API called with correct email; invite error shown; remove button only for MEMBER rows; removeMember API called; member count in header; contributors card for shared projects; no contributors card for solo; user-filter dropdown shown; dropdown change re-fetches with userId; task owner name on shared rows; no owner name for solo; Export button renders; modal opens/closes; format radios (CSV/JSON); scope radios (All Time/Specific Month); year+month inputs appear for month scope; Download calls exportProject API and triggers blob download; JSON format passes correct param; month scope passes year+month params; error shown when export fails |
 | `Layout.test.jsx` | 14 | Topbar timer visible/hidden, elapsed from startTime, timer on all pages, API called once on mount |
 | `TasksPage.test.jsx (filter)` | 10 | Filter panel rendered, search debounce, project filter, date range, no-results message, reset |
+| `AnalyticsPage.test.jsx` | 11 | Analytics page renders, heatmap grid present, heatmap cells for days with data, year selector shows current year, year change triggers re-fetch, weekly pattern chart renders, 7 day-of-week bars MON–SUN, non-zero bar height for active days, heatmap legend rendered, correct cell color for high activity, tooltip title attribute on cells |
 
 ---
 
@@ -393,6 +397,40 @@ Template response shape:
 }
 ```
 
+### Analytics (US-028)
+
+| Method | Path | Query params | Response | Notes |
+|---|---|---|---|---|
+| GET | `/api/analytics/heatmap` | `?year=<int>` (default: current year) | 200 `HeatmapResponse` | Returns total tracked seconds per calendar day for the given year (only days with > 0 seconds included); day boundaries use the user's preferred timezone |
+| GET | `/api/analytics/weekly-pattern` | `?weeks=<int>` (default: 12) | 200 `WeeklyPatternResponse` | Returns average tracked seconds per day of week (MON–SUN) over the last N weeks |
+
+Heatmap response shape:
+```json
+{
+  "year": 2026,
+  "days": [
+    { "date": "2026-03-10", "totalSeconds": 7200 },
+    { "date": "2026-03-11", "totalSeconds": 3600 }
+  ]
+}
+```
+
+Weekly pattern response shape:
+```json
+{
+  "weeks": 12,
+  "byDayOfWeek": [
+    { "day": "MON", "avgSeconds": 5400.0 },
+    { "day": "TUE", "avgSeconds": 3600.0 },
+    { "day": "WED", "avgSeconds": 7200.0 },
+    { "day": "THU", "avgSeconds": 4800.0 },
+    { "day": "FRI", "avgSeconds": 2700.0 },
+    { "day": "SAT", "avgSeconds": 900.0 },
+    { "day": "SUN", "avgSeconds": 0.0 }
+  ]
+}
+```
+
 ### Projects
 
 | Method | Path | Request body | Response | Notes |
@@ -461,3 +499,4 @@ Member response shape:
 - **Task templates (US-027)** — `TaskTemplate` is a separate JPA entity (`task_templates` table) owned by a `User` with a `@ManyToMany` to `Project` via a `template_projects` join table. `startFromTemplate` delegates to `TaskService.startTask(userEmail, request, projectIds)` — an overloaded method added to `TaskService` so that `startTask` called from `TaskController` (no projects) and from templates (with projects) share the same 409-if-running logic without duplication. Ownership is enforced via `findByIdAndUser` — callers from other users get a 404 (not a 403) to avoid leaking template existence. Project associations on a template are resolved with `findByIdAndMember` so users can only link projects they are members of (preventing association with arbitrary project IDs). Deleting a template clears its project join-table entries before the delete to avoid FK constraint violations.
 - **Project time budgets (US-026)** — `budgetHours` is a nullable `Double` column on the `Project` entity. `ProjectService.computeBudgetStatus(budgetHours, usedHours)` is a `static` helper so both `ProjectService.getProjectSummary` and `DashboardService` can compute budget status without a circular dependency. Budget percentage is capped at 100% for the visual progress bar (the label still shows the true percentage). The three status values (`ON_TRACK`, `WARNING`, `OVER_BUDGET`) are thresholded at 80% and 100% and used by the frontend to select the bar colour and optional "Over budget" badge. Budget usage is always an all-time aggregate of the full project subtree across all members (i.e. it is independent of the date-range filter on the summary).
 - **Per-user contribution breakdown (US-023)** — `ProjectSummaryResponse` now carries a `contributions` list (per-user totals) and `userId`/`userName` on every `TaskSummary` entry. `getProjectSummary` collects all task entities from the subtree via `collectSubtreeTaskEntities` (deduplication by task id), groups them by `Task.user` for contributions, and optionally filters `tasks` + `totalSeconds` when `?userId=` is present. The `contributions` array is always the full per-user breakdown regardless of the user filter, so the frontend dropdown remains functional. `AccessDeniedException` (403) is thrown when the `userId` param belongs to a non-member. The same `userId` filter on `GET /api/tasks` validates that both the caller and the target user are project members using `projectRepository.findByIdAndMember(projectId, targetUser)` — no new repository dependency needed in `TaskService`.
+- **Productivity analytics (US-028)** — `AnalyticsService` uses `findByUserAndStartTimeBetweenOrderByStartTimeAsc` (the same repository method used by daily/weekly views) for both heatmap and weekly-pattern queries, reusing the existing index on `(user_id, start_time)` with no new indexes needed. Heatmap year boundaries are computed as `ZonedDateTime.of(year, 1, 1, 0, 0, 0, 0, zone).toInstant()` using the user's IANA timezone (US-025), so users in e.g. `America/New_York` see the correct day split. Running tasks (endTime = null) and zero-second tasks are excluded. The weekly-pattern range is a rolling window: `Instant.now().minus(weeks * 7, ChronoUnit.DAYS)` — it always covers the most recent N full weeks regardless of the current day. Average is computed as `total / weeks` (not `total / distinct-days-with-data`), giving a true per-week average. Frontend heatmap: `buildHeatmapCells` creates a flat cell array padded to complete weeks using `(Jan1.getDay() + 6) % 7` (converts JS Sunday=0 to Monday=0), then rendered via a CSS `grid-template-rows: repeat(7, 14px); grid-auto-flow: column` grid — this naturally produces week columns from a flat row-major array.
