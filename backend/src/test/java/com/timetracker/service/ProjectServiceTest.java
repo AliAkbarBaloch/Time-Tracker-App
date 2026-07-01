@@ -2,8 +2,10 @@ package com.timetracker.service;
 
 import com.timetracker.dto.project.CreateProjectRequest;
 import com.timetracker.dto.project.ProjectResponse;
+import com.timetracker.dto.project.ProjectSummaryResponse;
 import com.timetracker.dto.project.UpdateProjectRequest;
 import com.timetracker.entity.Project;
+import com.timetracker.entity.Task;
 import com.timetracker.entity.User;
 import com.timetracker.exception.CircularProjectHierarchyException;
 import com.timetracker.exception.ProjectHasAssociationsException;
@@ -18,6 +20,7 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -279,6 +282,120 @@ class ProjectServiceTest {
         when(projectRepository.findByIdAndUser(99L, user)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> projectService.deleteProject("alice@example.com", 99L, false))
+                .isInstanceOf(ProjectNotFoundException.class);
+    }
+
+    // --- getProjectSummary ---
+
+    private Task makeTask(Long id, Instant start, Instant end) {
+        Task t = new Task();
+        t.setStartTime(start);
+        t.setEndTime(end);
+        t.setUser(user);
+        try {
+            var f = Task.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(t, id);
+        } catch (Exception ignored) {}
+        return t;
+    }
+
+    @Test
+    void getProjectSummary_withTasks_returnsTotalAndTaskList() {
+        Project project = new Project(); project.setId(1L); project.setName("P"); project.setUser(user);
+        Instant start = Instant.parse("2026-06-01T10:00:00Z");
+        Instant end   = Instant.parse("2026-06-01T11:00:00Z");
+        Task task = makeTask(10L, start, end);
+        task.setDescription("Work");
+        project.getTasks().add(task);
+
+        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(project));
+
+        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null);
+
+        assertThat(result.totalSeconds()).isEqualTo(3600);
+        assertThat(result.tasks()).hasSize(1);
+        assertThat(result.tasks().get(0).description()).isEqualTo("Work");
+    }
+
+    @Test
+    void getProjectSummary_deduplicatesTasksSharedBetweenSiblings() {
+        Project root = new Project(); root.setId(1L); root.setName("Root"); root.setUser(user);
+        Project subA = new Project(); subA.setId(2L); subA.setName("A"); subA.setUser(user);
+        Project subB = new Project(); subB.setId(3L); subB.setName("B"); subB.setUser(user);
+        root.setSubprojects(new ArrayList<>(List.of(subA, subB)));
+
+        Instant start = Instant.parse("2026-06-01T08:00:00Z");
+        Task shared = makeTask(100L, start, start.plusSeconds(7200));
+        subA.getTasks().add(shared);
+        subB.getTasks().add(shared);
+
+        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(root));
+
+        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null);
+
+        assertThat(result.totalSeconds()).isEqualTo(7200); // counted once
+        assertThat(result.tasks()).hasSize(1);
+    }
+
+    @Test
+    void getProjectSummary_withDateRange_filtersTasksByStartTime() {
+        Project project = new Project(); project.setId(1L); project.setName("P"); project.setUser(user);
+        Task inRange  = makeTask(1L, Instant.parse("2026-06-15T10:00:00Z"), Instant.parse("2026-06-15T11:00:00Z"));
+        Task outRange = makeTask(2L, Instant.parse("2026-05-01T10:00:00Z"), Instant.parse("2026-05-01T11:00:00Z"));
+        project.getTasks().add(inRange);
+        project.getTasks().add(outRange);
+
+        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(project));
+
+        Instant from = Instant.parse("2026-06-01T00:00:00Z");
+        Instant to   = Instant.parse("2026-07-01T00:00:00Z");
+        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, from, to);
+
+        assertThat(result.totalSeconds()).isEqualTo(3600);
+        assertThat(result.tasks()).hasSize(1);
+    }
+
+    @Test
+    void getProjectSummary_runningTask_notCountedInTotal() {
+        Project project = new Project(); project.setId(1L); project.setName("P"); project.setUser(user);
+        Task running = makeTask(1L, Instant.parse("2026-06-01T10:00:00Z"), null);
+        project.getTasks().add(running);
+
+        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(project));
+
+        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null);
+
+        assertThat(result.totalSeconds()).isEqualTo(0);
+        assertThat(result.tasks()).hasSize(1); // still listed
+        assertThat(result.tasks().get(0).running()).isTrue();
+    }
+
+    @Test
+    void getProjectSummary_subprojectTotalsListedIndividually() {
+        Project root = new Project(); root.setId(1L); root.setName("Root"); root.setUser(user);
+        Project sub  = new Project(); sub.setId(2L);  sub.setName("Sub"); sub.setUser(user);
+        root.setSubprojects(new ArrayList<>(List.of(sub)));
+
+        Instant start = Instant.parse("2026-06-01T09:00:00Z");
+        Task task = makeTask(10L, start, start.plusSeconds(5400));
+        sub.getTasks().add(task);
+
+        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(root));
+
+        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null);
+
+        assertThat(result.subprojects()).hasSize(1);
+        assertThat(result.subprojects().get(0).name()).isEqualTo("Sub");
+        assertThat(result.subprojects().get(0).totalSeconds()).isEqualTo(5400);
+        assertThat(result.totalSeconds()).isEqualTo(5400);
+    }
+
+    @Test
+    void getProjectSummary_projectNotFound_throwsProjectNotFoundException() {
+        when(projectRepository.findByIdAndUser(99L, user)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> projectService.getProjectSummary("alice@example.com", 99L, null, null))
                 .isInstanceOf(ProjectNotFoundException.class);
     }
 }
