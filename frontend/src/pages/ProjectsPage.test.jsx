@@ -72,7 +72,7 @@ describe('ProjectsPage', () => {
     fireEvent.change(screen.getByTestId('project-name-input'), { target: { value: 'NewProject' } })
     fireEvent.click(screen.getByTestId('create-project-btn'))
 
-    await waitFor(() => expect(projectApi.createProject).toHaveBeenCalledWith('NewProject', null, null))
+    await waitFor(() => expect(projectApi.createProject).toHaveBeenCalledWith('NewProject', null, null, null))
     await waitFor(() => expect(screen.getByTestId('project-name-1')).toBeInTheDocument())
   })
 
@@ -92,7 +92,7 @@ describe('ProjectsPage', () => {
     fireEvent.change(screen.getByTestId('parent-project-select'), { target: { value: '5' } })
     fireEvent.click(screen.getByTestId('create-project-btn'))
 
-    await waitFor(() => expect(projectApi.createProject).toHaveBeenCalledWith('Child', null, 5))
+    await waitFor(() => expect(projectApi.createProject).toHaveBeenCalledWith('Child', null, 5, null))
   })
 
   it('shows subprojects nested in tree', async () => {
@@ -210,7 +210,7 @@ describe('ProjectsPage', () => {
     fireEvent.change(screen.getByTestId('edit-project-name-input'), { target: { value: 'Updated' } })
     fireEvent.click(screen.getByTestId('save-project-edit-btn'))
 
-    await waitFor(() => expect(projectApi.updateProject).toHaveBeenCalledWith(1, 'Updated', 'My thesis'))
+    await waitFor(() => expect(projectApi.updateProject).toHaveBeenCalledWith(1, 'Updated', 'My thesis', null))
   })
 
   it('shows error when updateProject returns duplicate name', async () => {
