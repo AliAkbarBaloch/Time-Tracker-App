@@ -315,7 +315,7 @@ class ProjectServiceTest {
         // US-022: getProjectSummary uses findByIdAndMember (accessible to all members)
         when(projectRepository.findByIdAndMember(1L, user)).thenReturn(Optional.of(project));
 
-        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null);
+        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null, null);
 
         assertThat(result.totalSeconds()).isEqualTo(3600);
         assertThat(result.tasks()).hasSize(1);
@@ -336,7 +336,7 @@ class ProjectServiceTest {
 
         when(projectRepository.findByIdAndMember(1L, user)).thenReturn(Optional.of(root));
 
-        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null);
+        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null, null);
 
         assertThat(result.totalSeconds()).isEqualTo(7200); // counted once
         assertThat(result.tasks()).hasSize(1);
@@ -354,7 +354,7 @@ class ProjectServiceTest {
 
         Instant from = Instant.parse("2026-06-01T00:00:00Z");
         Instant to   = Instant.parse("2026-07-01T00:00:00Z");
-        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, from, to);
+        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, from, to, null);
 
         assertThat(result.totalSeconds()).isEqualTo(3600);
         assertThat(result.tasks()).hasSize(1);
@@ -368,7 +368,7 @@ class ProjectServiceTest {
 
         when(projectRepository.findByIdAndMember(1L, user)).thenReturn(Optional.of(project));
 
-        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null);
+        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null, null);
 
         assertThat(result.totalSeconds()).isEqualTo(0);
         assertThat(result.tasks()).hasSize(1); // still listed
@@ -387,7 +387,7 @@ class ProjectServiceTest {
 
         when(projectRepository.findByIdAndMember(1L, user)).thenReturn(Optional.of(root));
 
-        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null);
+        ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null, null);
 
         assertThat(result.subprojects()).hasSize(1);
         assertThat(result.subprojects().get(0).name()).isEqualTo("Sub");
@@ -399,7 +399,7 @@ class ProjectServiceTest {
     void getProjectSummary_projectNotFound_throwsProjectNotFoundException() {
         when(projectRepository.findByIdAndMember(99L, user)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> projectService.getProjectSummary("alice@example.com", 99L, null, null))
+        assertThatThrownBy(() -> projectService.getProjectSummary("alice@example.com", 99L, null, null, null))
                 .isInstanceOf(ProjectNotFoundException.class);
     }
 }

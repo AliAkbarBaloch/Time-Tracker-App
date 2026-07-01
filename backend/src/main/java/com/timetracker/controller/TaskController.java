@@ -32,15 +32,21 @@ public class TaskController {
         return taskService.createTask(principal.getUsername(), request);
     }
 
+    /**
+     * List tasks with optional filters.
+     * When userId is provided it must be combined with projectId; both the caller
+     * and the target user must be project members — otherwise 403 is returned (US-023).
+     */
     @GetMapping
     public List<TaskResponse> listTasks(@AuthenticationPrincipal UserDetails principal,
                                         @RequestParam(required = false) String from,
                                         @RequestParam(required = false) String to,
                                         @RequestParam(required = false) String search,
-                                        @RequestParam(required = false) Long projectId) {
+                                        @RequestParam(required = false) Long projectId,
+                                        @RequestParam(required = false) Long userId) {
         Instant fromInstant = from != null ? Instant.parse(from) : null;
         Instant toInstant   = to   != null ? Instant.parse(to)   : null;
-        return taskService.listTasks(principal.getUsername(), fromInstant, toInstant, search, projectId);
+        return taskService.listTasks(principal.getUsername(), fromInstant, toInstant, search, projectId, userId);
     }
 
     @PostMapping("/start")
