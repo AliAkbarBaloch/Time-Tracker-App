@@ -329,6 +329,17 @@ Tests connect to `http://localhost:3000` (frontend) and `http://localhost:8080` 
 | `us001-registration.spec.ts` | US-001 | Happy path (→ /dashboard), duplicate email error, empty form validation, password mismatch, short password |
 | `us002-login.spec.ts` | US-002 | Valid credentials → /dashboard, wrong password generic error, non-existent email same error, empty form validation, protected route stays accessible after login, invalid token → /login |
 | `us003-logout.spec.ts` | US-003 | Logout button → /login + localStorage cleared, /dashboard after logout → /login, /tasks after logout → /login, unauthenticated API call → 401 |
+| `us005-start-timer.spec.ts` | US-005 | Start button shows elapsed timer, counter updates live after 2 s, timer persists after page reload, Start button hidden while timer runs |
+| `us006-stop-timer.spec.ts` | US-006 | Stop ends active timer and restores Start button, today-total non-zero after stop, POST /api/tasks/stop with no active timer → 404 |
+| `us007-add-task-manually.spec.ts` | US-007 | Manual task saved and appears in list with edit/delete actions, start ≥ end time shows validation alert |
+| `us008-edit-task.spec.ts` | US-008 | Description change persists after edit, start ≥ end on edit shows alert, PUT by non-owner returns 403/404 |
+| `us009-delete-task.spec.ts` | US-009 | Delete removes task from UI, last task deleted shows empty state, DELETE by non-owner returns 403/404 |
+| `us010-create-project.spec.ts` | US-010 | Unique project saved and appears in list, duplicate name shows error, 100-character name accepted |
+| `us011-create-subproject.spec.ts` | US-011 | Subproject visually nested under parent, circular parent rejected by API (400/409) |
+| `us012-edit-delete-project.spec.ts` | US-012 | Rename to unique name succeeds, deleting project with tasks shows warning dialog (cancel keeps it), PUT by non-owner returns 403/404 |
+| `us013-associate-tasks-projects.spec.ts` | US-013 | Task created with project shows project chip, removing association via edit clears chip, only own projects appear in selector |
+| `us014-daily-overview.spec.ts` | US-014 | Empty state shows 00:00:00 daily total, completed task increments daily total, running task visible with elapsed timer on dashboard |
+| `us015-weekly-overview.spec.ts` | US-015 | All 7 day columns visible (including empty), weekly total non-zero after adding task, prev-week navigation changes week heading, midnight-spanning task attributed to start-time day |
 
 ### Frontend
 
