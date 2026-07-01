@@ -17,3 +17,6 @@ frontend/dist/
 # OS
 .DS_Store
 Thumbs.db
+
+# Local QA guide — never commit
+QA_TEST_GUIDE.md
