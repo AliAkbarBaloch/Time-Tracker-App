@@ -341,4 +341,24 @@ describe('ProjectsPage', () => {
       expect(screen.getByTestId('new-project-btn')).toBeInTheDocument()
     )
   })
+
+  // ── US-022: Shared project badge ──────────────────────────────────────────
+
+  it('renders shared badge for projects with shared=true', async () => {
+    projectApi.listProjects.mockResolvedValueOnce({
+      data: [{ id: 5, name: 'SharedProject', description: null, subprojects: [], totalSeconds: 0, createdAt: NOW, shared: true }]
+    })
+    setup()
+    await waitFor(() => expect(screen.getByTestId('shared-badge-5')).toBeInTheDocument())
+    expect(screen.getByTestId('shared-badge-5')).toHaveTextContent('Shared')
+  })
+
+  it('does not render shared badge for projects with shared=false', async () => {
+    projectApi.listProjects.mockResolvedValueOnce({
+      data: [{ id: 6, name: 'OwnedProject', description: null, subprojects: [], totalSeconds: 0, createdAt: NOW, shared: false }]
+    })
+    setup()
+    await waitFor(() => expect(screen.getByTestId('project-name-6')).toBeInTheDocument())
+    expect(screen.queryByTestId('shared-badge-6')).not.toBeInTheDocument()
+  })
 })

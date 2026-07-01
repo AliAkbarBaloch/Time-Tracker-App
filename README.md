@@ -25,10 +25,13 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Usability (NFR-003)** — start/stop timer in one click from the Dashboard, add task/project in ≤ 2 clicks, running timer always visible in the top navigation bar on every page, field-level validation errors shown inline under the relevant input (not concatenated into a single banner), responsive layout at ≥ 1024 px.
 - **Local deployability (NFR-004)** — the entire stack (backend + frontend + database) starts with a single `docker compose up --build` command; no cloud accounts, no external databases, and no manual setup beyond Docker. The `GET /api/health` endpoint allows Docker Compose to health-check the backend. SPA routing (direct-link refreshes, bookmarks) works correctly — the backend serves `static/index.html` for all non-API client-side routes so React Router can take over. The H2 console is disabled by default and can be enabled temporarily with `-Dspring.h2.console.enabled=true` if needed for database inspection.
 - **Performance (NFR-002)** — dashboard summary data is fetched in a single aggregated `GET /api/dashboard/summary` call (no waterfall). Task lists include embedded project data in the same response body — no follow-up calls needed. Database indexes on `tasks(user_id, start_time)`, `tasks(user_id, end_time)`, and `projects(user_id, parent_project_id)` cover the hot query paths. All task-fetching repository methods use `LEFT JOIN FETCH t.projects` to eliminate the N+1 query problem when loading task–project associations.
+- **Project sharing (US-022)** — project owners can invite registered users by email (`POST /api/projects/{id}/members`). Invitees see the shared project immediately in their project list with a "👥 Shared" badge. Members can associate their own tasks with shared projects. The project detail page shows all members with their roles (OWNER/MEMBER) and an invite form for the owner. Only the owner can edit, delete, or manage membership. Time aggregation in the project summary automatically includes tasks from all members. The `project_members` table is back-filled on startup for pre-existing projects via `MembershipSeeder`.
 
 **What is expected (remaining stories):**
 
-- Export of time data to CSV or PDF
+- Export of time data to CSV or JSON
+- Task overview for shared projects (per-user contribution breakdown)
+- Time zone preferences
 
 ---
 
@@ -124,7 +127,7 @@ What this does:
 
 Expected output at the end:
 ```
-Tests run: 274, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 291, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -179,7 +182,7 @@ npx vitest run
 Expected output:
 ```
 Test Files  10 passed (10)
-     Tests  189 passed (189)
+     Tests  200 passed (200)
 ```
 
 ### Step 7 — Start the frontend dev server
@@ -263,6 +266,7 @@ cd backend
 | `UsabilityNfrTest` | 16 | NFR-003 Usability: field-level 400 errors have human-readable messages (register/login/createTask/createProject), 401/409 include `message`, start/stop timer each require exactly 1 API call, GET /tasks/active returns running task for topbar, 204 returned (not an error) when no timer is running |
 | `LocalDeployabilityTest` | 15 | NFR-004 Local Deployability: health endpoint returns 200 with status UP (public), production config uses jdbc:h2:file: (file-based persistence), ddl-auto=update (data survives restarts), H2 console disabled by default, SPA fallback serves index.html for /dashboard/tasks/projects/5 routes, SPA controller ignores /api/ routes and static file paths, docker-compose.yml exists and defines backend+frontend services with a volume, application starts with no external dependencies |
 | `PerformanceNfrTest` | 11 | NFR-002 Performance: DB indexes verified in INFORMATION_SCHEMA (tasks user+start, tasks user+endtime, projects user+parent, task_projects join columns), dashboard single-call returns all fields (today/week totals + running task + top projects), task list embeds project data per task (no follow-up calls), date-range list embeds projects, active task embeds projects |
+| `ProjectSharingTest` | 17 | US-022 Project Sharing: invite returns 201 + MemberResponse, invitee sees project with shared=true, own project has shared=false, unknown email 404, duplicate 409, member associates task, non-member 404 on summary, remove member + loses access, owner self-remove 400, member edit/delete blocked 404, members list returns all fields, member can list members, non-member listMembers 404, time aggregation across users, invalid email 400, blank email 400 |
 
 ### Frontend
 
@@ -277,9 +281,9 @@ npx vitest run
 | `DashboardPage.test.jsx` | 19 | Timer start/stop, active task display, summary cards (today/week), top projects list, running task info, refresh after timer actions |
 | `SettingsPage.test.jsx` | 3 | Change password form, error display |
 | `TasksPage.test.jsx` | 30 | Create, edit, delete tasks; project multi-select on create/edit; project display in task row; field-level error extraction from 400 responses; Add Task button reachable in 1 click |
-| `ProjectsPage.test.jsx` | 21 | Create, edit, delete projects; tree view; collapse; force delete dialog; field-level error extraction from 400 responses; New Project button reachable in 1 click |
+| `ProjectsPage.test.jsx` | 23 | Create, edit, delete projects; tree view; collapse; force delete dialog; field-level error extraction from 400 responses; New Project button reachable in 1 click; shared badge shown for shared=true projects; no badge for owned projects |
 | `OverviewPage.test.jsx` | 48 | Week view (day/week totals, nav, task grouping, click); month view (calendar cells, day totals, month total, selected-day panel, nav, loading) |
-| `ProjectDetailPage.test.jsx` | 27 | Date-range presets, custom range form, project name/desc/total, subproject totals, task list, running task, error states, back navigation |
+| `ProjectDetailPage.test.jsx` | 36 | Date-range presets, custom range form, project name/desc/total, subproject totals, task list, running task, error states, back navigation; members section rendered; member list shows name+email+role; invite form visible to owner only; invite API called with correct email; invite error shown; remove button only for MEMBER rows; removeMember API called; member count in header |
 | `Layout.test.jsx` | 14 | Topbar timer visible/hidden, elapsed from startTime, timer on all pages, API called once on mount |
 | `TasksPage.test.jsx (filter)` | 10 | Filter panel rendered, search debounce, project filter, date range, no-results message, reset |
 
@@ -348,11 +352,14 @@ Task response shape:
 
 | Method | Path | Request body | Response | Notes |
 |---|---|---|---|---|
-| GET | `/api/projects` | — | 200 `Project[]` | Returns root projects with nested subprojects |
+| GET | `/api/projects` | — | 200 `Project[]` | Returns root projects; includes owned AND shared projects; `shared: true` on invited projects |
 | POST | `/api/projects` | `{name, description?, parentProjectId?}` | 201 | Creates project or subproject |
-| PUT | `/api/projects/{id}` | `{name, description?}` | 200 | Rename / re-describe |
-| DELETE | `/api/projects/{id}` | — | 204 or 409 | 409 if associations exist; add `?force=true` to override |
-| GET | `/api/projects/{id}/summary` | — | 200 `ProjectSummaryResponse` | Add `?from=<ISO>&to=<ISO>` to filter by date range |
+| PUT | `/api/projects/{id}` | `{name, description?}` | 200 | Rename / re-describe (OWNER only) |
+| DELETE | `/api/projects/{id}` | — | 204 or 409 | 409 if associations exist; add `?force=true` to override (OWNER only) |
+| GET | `/api/projects/{id}/summary` | — | 200 `ProjectSummaryResponse` | Any member can view; add `?from=<ISO>&to=<ISO>` to filter; aggregates tasks from ALL members |
+| GET | `/api/projects/{id}/members` | — | 200 `Member[]` | Lists all members with role; accessible to any member |
+| POST | `/api/projects/{id}/members` | `{email}` | 201 `Member` | Invite by email (OWNER only); 404 if unknown, 409 if duplicate |
+| DELETE | `/api/projects/{id}/members/{userId}` | — | 204 | Remove member (OWNER only); 400 if owner tries to remove themselves |
 
 Project response shape:
 ```json
@@ -362,10 +369,22 @@ Project response shape:
   "description": "My master's thesis",
   "parentId": null,
   "subprojects": [
-    {"id": 6, "name": "Literature Review", "subprojects": [], "totalSeconds": 3600, "createdAt": "..."}
+    {"id": 6, "name": "Literature Review", "subprojects": [], "totalSeconds": 3600, "createdAt": "...", "shared": false}
   ],
   "totalSeconds": 7200,
-  "createdAt": "2026-06-01T09:00:00Z"
+  "createdAt": "2026-06-01T09:00:00Z",
+  "shared": false
+}
+```
+
+Member response shape:
+```json
+{
+  "userId": 2,
+  "email": "bob@example.com",
+  "displayName": "Bob",
+  "role": "MEMBER",
+  "joinedAt": "2026-07-01T10:00:00Z"
 }
 ```
 
@@ -380,3 +399,4 @@ Project response shape:
 - **Force-delete pattern** — deleting a project with associations returns 409 with counts. The frontend shows a confirmation dialog; confirming calls `DELETE ?force=true` which disassociates tasks and recursively removes subprojects.
 - **Date-range filtering on task list** — `GET /api/tasks?from=<ISO>&to=<ISO>` reuses the existing `findByUserAndStartTimeBetweenOrderByStartTimeAsc` repository method. Daily and weekly views both call this same endpoint with appropriate bounds.
 - **Security NFR** — BCrypt cost-10 hashing means each password hash is unique even for identical passwords (random salt per hash). JWT tokens use HMAC-SHA256 with a 256-bit+ secret and expire after 24 hours. CSRF is disabled intentionally because the API is stateless (no session cookies) — disabling it for a JWT/Bearer API is the correct and secure approach per Spring Security documentation.
+- **Project sharing membership model (US-022)** — a separate `project_members` table stores `(project_id, user_id, role, joined_at)` with a unique constraint on `(project_id, user_id)`. `project.user_id` is kept as the original owner FK for backward compatibility. Access checks use the membership table: `findByIdAndMember` for read operations (any member), `findByIdAndUser` for write operations (owner only). `MembershipSeeder` runs on startup to back-fill OWNER rows for all projects created before this feature was added. `UserNotFoundException` (plain `RuntimeException`) is used instead of Spring Security's `UsernameNotFoundException` when the invitee email is not registered, to prevent the exception from being intercepted by Spring Security's exception handling as a 401.

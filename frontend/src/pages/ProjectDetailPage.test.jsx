@@ -7,6 +7,14 @@ import * as projectApi from '../api/projectApi'
 
 vi.mock('../api/projectApi')
 
+// Default members returned by getMembers (Alice is OWNER, Bob is MEMBER)
+const ALICE_ID = 1
+const BOB_ID   = 2
+const DEFAULT_MEMBERS = [
+  { userId: ALICE_ID, email: 'alice@example.com', displayName: 'Alice', role: 'OWNER',  joinedAt: '2026-06-01T00:00:00Z' },
+  { userId: BOB_ID,   email: 'bob@example.com',   displayName: 'Bob',   role: 'MEMBER', joinedAt: '2026-06-02T00:00:00Z' },
+]
+
 const mockNavigate = vi.fn()
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
@@ -30,6 +38,10 @@ function makeSummary(overrides = {}) {
 
 function setup(projectId = '1') {
   projectApi.getProjectSummary.mockResolvedValue({ data: makeSummary() })
+  // Default: getMembers returns Alice (OWNER) + Bob (MEMBER); current user is Alice
+  projectApi.getMembers.mockResolvedValue({ data: DEFAULT_MEMBERS })
+  localStorage.setItem('tt_user', JSON.stringify({ email: 'alice@example.com', displayName: 'Alice' }))
+  localStorage.setItem('tt_token', 'fake-token')
   render(
     <MemoryRouter initialEntries={[`/projects/${projectId}`]}>
       <AuthProvider>
@@ -45,6 +57,7 @@ describe('ProjectDetailPage', () => {
 
   beforeEach(() => {
     vi.clearAllMocks()
+    localStorage.clear()
   })
 
   // ── Initial render ────────────────────────────────────────
@@ -310,6 +323,94 @@ describe('ProjectDetailPage', () => {
     )
     await waitFor(() => expect(screen.getByTestId('summary-task-duration-77')).toBeInTheDocument())
     expect(screen.getByTestId('summary-task-duration-77')).toHaveTextContent('45s')
+  })
+
+  // ── US-022: Members section ───────────────────────────────────────────────
+
+  it('renders the members section', async () => {
+    setup()
+    await waitFor(() => expect(screen.getByTestId('members-section')).toBeInTheDocument())
+  })
+
+  it('renders member list with name, email and role', async () => {
+    setup()
+    await waitFor(() => expect(screen.getByTestId(`member-row-${BOB_ID}`)).toBeInTheDocument())
+    expect(screen.getByTestId(`member-name-${BOB_ID}`)).toHaveTextContent('Bob')
+    expect(screen.getByTestId(`member-email-${BOB_ID}`)).toHaveTextContent('bob@example.com')
+    expect(screen.getByTestId(`member-role-${BOB_ID}`)).toHaveTextContent('MEMBER')
+  })
+
+  it('shows invite form for project owner', async () => {
+    setup()
+    await waitFor(() => expect(screen.getByTestId('invite-form')).toBeInTheDocument())
+    expect(screen.getByTestId('invite-email-input')).toBeInTheDocument()
+    expect(screen.getByTestId('invite-submit-btn')).toBeInTheDocument()
+  })
+
+  it('does not show invite form for non-owner member', async () => {
+    projectApi.getProjectSummary.mockResolvedValue({ data: makeSummary() })
+    // Bob is a MEMBER, not OWNER
+    projectApi.getMembers.mockResolvedValue({ data: DEFAULT_MEMBERS })
+    localStorage.setItem('tt_user', JSON.stringify({ email: 'bob@example.com', displayName: 'Bob' }))
+    localStorage.setItem('tt_token', 'fake-token')
+    render(
+      <MemoryRouter initialEntries={['/projects/1']}>
+        <AuthProvider>
+          <Routes><Route path="/projects/:id" element={<ProjectDetailPage />} /></Routes>
+        </AuthProvider>
+      </MemoryRouter>
+    )
+    await waitFor(() => expect(screen.getByTestId('members-section')).toBeInTheDocument())
+    expect(screen.queryByTestId('invite-form')).not.toBeInTheDocument()
+  })
+
+  it('calls inviteMember API with correct email on submit', async () => {
+    projectApi.inviteMember.mockResolvedValue({ data: { userId: 3, email: 'carol@example.com', displayName: 'Carol', role: 'MEMBER', joinedAt: '2026-06-03T00:00:00Z' } })
+    projectApi.getMembers.mockResolvedValue({ data: DEFAULT_MEMBERS })
+    setup()
+
+    await waitFor(() => expect(screen.getByTestId('invite-form')).toBeInTheDocument())
+    fireEvent.change(screen.getByTestId('invite-email-input'), { target: { value: 'carol@example.com' } })
+    fireEvent.click(screen.getByTestId('invite-submit-btn'))
+
+    await waitFor(() => expect(projectApi.inviteMember).toHaveBeenCalledWith('1', 'carol@example.com'))
+  })
+
+  it('shows error message when invite fails', async () => {
+    projectApi.inviteMember.mockRejectedValue({ response: { data: { message: 'No registered user found with email: unknown@x.com' } } })
+    setup()
+
+    await waitFor(() => expect(screen.getByTestId('invite-form')).toBeInTheDocument())
+    fireEvent.change(screen.getByTestId('invite-email-input'), { target: { value: 'unknown@x.com' } })
+    fireEvent.click(screen.getByTestId('invite-submit-btn'))
+
+    await waitFor(() => expect(screen.getByTestId('invite-error')).toBeInTheDocument())
+    expect(screen.getByTestId('invite-error')).toHaveTextContent('No registered user found')
+  })
+
+  it('shows remove button only for MEMBER rows when current user is OWNER', async () => {
+    setup()
+    await waitFor(() => expect(screen.getByTestId(`member-row-${BOB_ID}`)).toBeInTheDocument())
+    // Bob (MEMBER) has a remove button
+    expect(screen.getByTestId(`remove-member-btn-${BOB_ID}`)).toBeInTheDocument()
+    // Alice (OWNER) does NOT have a remove button on her own row
+    expect(screen.queryByTestId(`remove-member-btn-${ALICE_ID}`)).not.toBeInTheDocument()
+  })
+
+  it('calls removeMember API when remove button is clicked', async () => {
+    projectApi.removeMember.mockResolvedValue({})
+    setup()
+
+    await waitFor(() => expect(screen.getByTestId(`remove-member-btn-${BOB_ID}`)).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId(`remove-member-btn-${BOB_ID}`))
+
+    await waitFor(() => expect(projectApi.removeMember).toHaveBeenCalledWith('1', BOB_ID))
+  })
+
+  it('displays member count in section header', async () => {
+    setup()
+    await waitFor(() => expect(screen.getByTestId('members-count')).toBeInTheDocument())
+    expect(screen.getByTestId('members-count')).toHaveTextContent('2 members')
   })
 
 })

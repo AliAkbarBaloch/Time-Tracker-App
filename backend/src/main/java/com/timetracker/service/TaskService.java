@@ -77,7 +77,8 @@ public class TaskService {
         Set<Project> projects = new HashSet<>();
         if (request.projectIds() != null) {
             for (Long pid : request.projectIds()) {
-                Project p = projectRepository.findByIdAndUser(pid, user)
+                // Allow members of shared projects to associate tasks, not just owners
+                Project p = projectRepository.findByIdAndMember(pid, user)
                         .orElseThrow(() -> new ProjectNotFoundException(pid));
                 projects.add(p);
             }
@@ -110,7 +111,8 @@ public class TaskService {
         Set<Project> projects = new HashSet<>();
         if (request.projectIds() != null) {
             for (Long pid : request.projectIds()) {
-                Project p = projectRepository.findByIdAndUser(pid, user)
+                // Allow members of shared projects to reassign tasks too
+                Project p = projectRepository.findByIdAndMember(pid, user)
                         .orElseThrow(() -> new ProjectNotFoundException(pid));
                 projects.add(p);
             }
@@ -156,7 +158,8 @@ public class TaskService {
         }
 
         if (projectId != null) {
-            Project project = projectRepository.findByIdAndUser(projectId, user)
+            // Members of shared projects can filter their own tasks by that project too
+            Project project = projectRepository.findByIdAndMember(projectId, user)
                     .orElseThrow(() -> new ProjectNotFoundException(projectId));
             Set<Long> subtreeIds = collectSubtreeProjectIds(project);
             tasks = tasks.stream()

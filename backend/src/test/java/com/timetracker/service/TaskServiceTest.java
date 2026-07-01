@@ -289,7 +289,8 @@ class TaskServiceTest {
         project.setName("Thesis");
         project.setUser(user);
 
-        when(projectRepository.findByIdAndUser(10L, user)).thenReturn(Optional.of(project));
+        // US-022: createTask now uses findByIdAndMember (allows members of shared projects)
+        when(projectRepository.findByIdAndMember(10L, user)).thenReturn(Optional.of(project));
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         TaskResponse resp = taskService.createTask("alice@example.com",
@@ -305,7 +306,7 @@ class TaskServiceTest {
         Instant start = Instant.now().minusSeconds(3600);
         Instant end   = Instant.now().minusSeconds(1800);
 
-        when(projectRepository.findByIdAndUser(99L, user)).thenReturn(Optional.empty());
+        when(projectRepository.findByIdAndMember(99L, user)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> taskService.createTask("alice@example.com",
                 new CreateTaskRequest("Work", start, end, List.of(99L))))
@@ -341,7 +342,8 @@ class TaskServiceTest {
         task.setEndTime(end);
 
         when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
-        when(projectRepository.findByIdAndUser(20L, user)).thenReturn(Optional.of(project));
+        // US-022: updateTask now uses findByIdAndMember (allows members of shared projects)
+        when(projectRepository.findByIdAndMember(20L, user)).thenReturn(Optional.of(project));
         when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
 
         TaskResponse resp = taskService.updateTask("alice@example.com", 1L,
@@ -362,7 +364,7 @@ class TaskServiceTest {
         task.setEndTime(end);
 
         when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
-        when(projectRepository.findByIdAndUser(99L, user)).thenReturn(Optional.empty());
+        when(projectRepository.findByIdAndMember(99L, user)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> taskService.updateTask("alice@example.com", 1L,
                 new UpdateTaskRequest("X", start, end, List.of(99L))))
@@ -496,7 +498,8 @@ class TaskServiceTest {
         notInProject.setEndTime(Instant.now().minusSeconds(5400));
 
         when(taskRepository.findByUserOrderByStartTimeDesc(user)).thenReturn(List.of(inProject, notInProject));
-        when(projectRepository.findByIdAndUser(10L, user)).thenReturn(Optional.of(project));
+        // US-022: listTasks with projectId filter uses findByIdAndMember
+        when(projectRepository.findByIdAndMember(10L, user)).thenReturn(Optional.of(project));
 
         List<TaskResponse> result = taskService.listTasks("alice@example.com", null, null, null, 10L);
 
@@ -507,7 +510,7 @@ class TaskServiceTest {
     @Test
     void listTasks_projectIdFilter_projectNotFound_throws() {
         when(taskRepository.findByUserOrderByStartTimeDesc(user)).thenReturn(List.of());
-        when(projectRepository.findByIdAndUser(99L, user)).thenReturn(Optional.empty());
+        when(projectRepository.findByIdAndMember(99L, user)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->
                 taskService.listTasks("alice@example.com", null, null, null, 99L))

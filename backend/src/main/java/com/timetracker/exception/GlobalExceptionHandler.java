@@ -136,4 +136,42 @@ public class GlobalExceptionHandler {
         body.put("subprojectCount", ex.getSubprojectCount());
         return body;
     }
+
+    // ── US-022: Project Sharing exceptions ───────────────────────────────────
+
+    @ExceptionHandler(MemberAlreadyInvitedException.class)
+    @ResponseStatus(HttpStatus.CONFLICT)
+    public Map<String, Object> handleMemberAlreadyInvited(MemberAlreadyInvitedException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 409);
+        body.put("message", ex.getMessage());
+        return body;
+    }
+
+    @ExceptionHandler(MemberNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Map<String, Object> handleMemberNotFound(MemberNotFoundException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 404);
+        body.put("message", ex.getMessage());
+        return body;
+    }
+
+    @ExceptionHandler(CannotRemoveOwnerException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, Object> handleCannotRemoveOwner(CannotRemoveOwnerException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 400);
+        body.put("message", ex.getMessage());
+        return body;
+    }
+
+    @ExceptionHandler(UserNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Map<String, Object> handleUserNotFound(UserNotFoundException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 404);
+        body.put("message", ex.getMessage());
+        return body;
+    }
 }

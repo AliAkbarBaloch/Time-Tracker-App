@@ -16,6 +16,9 @@ import java.util.Set;
 })
 public class Project {
 
+    // project_members rows are managed by ProjectMember; cascade ensures they are
+    // removed when a project is deleted (orphanRemoval = true on this side).
+
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
@@ -42,6 +45,10 @@ public class Project {
     @ManyToMany(mappedBy = "projects")
     private Set<Task> tasks = new HashSet<>();
 
+    /** All memberships for this project (OWNER + all invited MEMBERs). */
+    @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<ProjectMember> members = new ArrayList<>();
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -54,6 +61,7 @@ public class Project {
     public Project getParent() { return parent; }
     public List<Project> getSubprojects() { return subprojects; }
     public Set<Task> getTasks() { return tasks; }
+    public List<ProjectMember> getMembers() { return members; }
     public Instant getCreatedAt() { return createdAt; }
 
     public void setId(Long id) { this.id = id; }
@@ -63,4 +71,5 @@ public class Project {
     public void setParent(Project parent) { this.parent = parent; }
     public void setSubprojects(List<Project> subprojects) { this.subprojects = subprojects; }
     public void setTasks(Set<Task> tasks) { this.tasks = tasks; }
+    public void setMembers(List<ProjectMember> members) { this.members = members; }
 }
