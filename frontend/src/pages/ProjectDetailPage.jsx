@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import * as projectApi from '../api/projectApi'
+import { formatInZone, todayInTz, localDateToUtcIso } from '../utils/dateUtils'
 
 const PRESETS = [
   { key: 'all-time',   label: 'All Time' },
@@ -11,23 +12,36 @@ const PRESETS = [
   { key: 'custom',     label: 'Custom' },
 ]
 
-function getPresetRange(preset) {
-  const now = new Date()
+function getPresetRange(preset, tz) {
+  const { year, month, day } = todayInTz(tz)
   switch (preset) {
     case 'today': {
-      const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-      return { from: start.toISOString(), to: new Date(start.getTime() + 86400000).toISOString() }
+      return {
+        from: localDateToUtcIso(year, month, day, 0, 0, 0, tz),
+        to:   localDateToUtcIso(year, month, day + 1, 0, 0, 0, tz),
+      }
     }
     case 'this-week': {
-      const dow = now.getDay()
-      const diff = dow === 0 ? -6 : 1 - dow
-      const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() + diff)
-      return { from: monday.toISOString(), to: new Date(monday.getTime() + 7 * 86400000).toISOString() }
+      // Monday of current week in user's timezone
+      const todayUtc = new Date(Date.UTC(year, month - 1, day))
+      const dow = todayUtc.getUTCDay() // 0=Sun
+      const mondayDiff = dow === 0 ? -6 : 1 - dow
+      const monD = new Date(Date.UTC(year, month - 1, day + mondayDiff))
+      const nextMonD = new Date(Date.UTC(monD.getUTCFullYear(), monD.getUTCMonth(), monD.getUTCDate() + 7))
+      return {
+        from: localDateToUtcIso(monD.getUTCFullYear(), monD.getUTCMonth() + 1, monD.getUTCDate(), 0, 0, 0, tz),
+        to:   localDateToUtcIso(nextMonD.getUTCFullYear(), nextMonD.getUTCMonth() + 1, nextMonD.getUTCDate(), 0, 0, 0, tz),
+      }
     }
     case 'this-month': {
-      const first = new Date(now.getFullYear(), now.getMonth(), 1)
-      const next  = new Date(now.getFullYear(), now.getMonth() + 1, 1)
-      return { from: first.toISOString(), to: next.toISOString() }
+      // month is 1-indexed; Date.UTC(year, month, 1) treats month as 0-indexed → next month
+      const nextFirst = new Date(Date.UTC(year, month, 1))
+      const ny = nextFirst.getUTCFullYear()
+      const nm = nextFirst.getUTCMonth() + 1 // back to 1-indexed
+      return {
+        from: localDateToUtcIso(year, month, 1, 0, 0, 0, tz),
+        to:   localDateToUtcIso(ny, nm, 1, 0, 0, 0, tz),
+      }
     }
     default:
       return { from: null, to: null }
@@ -54,6 +68,7 @@ export default function ProjectDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
   const { user: currentUser } = useAuth()
+  const tz = currentUser?.timezone ?? 'UTC'
 
   const [preset, setPreset]               = useState('all-time')
   const [customFrom, setCustomFrom]       = useState('')
@@ -88,7 +103,7 @@ export default function ProjectDetailPage() {
       from = customFrom ? new Date(customFrom).toISOString() : null
       to   = customTo   ? new Date(customTo + 'T23:59:59').toISOString() : null
     } else {
-      const range = getPresetRange(preset)
+      const range = getPresetRange(preset, tz)
       from = range.from
       to   = range.to
     }
@@ -106,7 +121,7 @@ export default function ProjectDetailPage() {
         }
       })
       .finally(() => setLoading(false))
-  }, [id, preset, customFrom, customTo, selectedUserId])
+  }, [id, preset, customFrom, customTo, selectedUserId, tz])
 
   useEffect(() => {
     if (preset !== 'custom') {
@@ -345,7 +360,7 @@ export default function ProjectDetailPage() {
                       </span>
                     )}
                     <span className="summary-item-time muted">
-                      {new Date(t.startTime).toLocaleDateString()}
+                      {formatInZone(t.startTime, tz, { dateStyle: 'short' })}
                     </span>
                     <span className="summary-item-total" data-testid={`summary-task-duration-${t.id}`}>
                       {formatTaskDuration(t.startTime, t.endTime)}

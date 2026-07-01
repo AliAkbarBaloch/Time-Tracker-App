@@ -1,8 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as taskApi from '../api/taskApi'
+import { useAuth } from '../context/AuthContext'
+import { getDateStrInTz, todayInTz, localDateToUtcIso } from '../utils/dateUtils'
 
 const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+const MONTHS    = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec']
 
 function formatSeconds(totalSecs) {
   if (!totalSecs) return '—'
@@ -11,33 +14,40 @@ function formatSeconds(totalSecs) {
   return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`
 }
 
-function getLocalDateStr(iso) {
-  const d = new Date(iso)
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-}
-
 // ─── Week helpers ───────────────────────────────────────────────────────────
 
-function getWeekDays(offset) {
-  const now = new Date()
-  const dow = now.getDay()
+/**
+ * Return 7 Date objects (UTC midnight) representing Mon–Sun of the given
+ * week offset, anchored to "today" in the user's timezone.
+ * Dates are stored as UTC midnight so getUTC* methods give the correct calendar day.
+ */
+function getWeekDays(offset, tz) {
+  const { year, month, day } = todayInTz(tz)
+  const todayUtc = new Date(Date.UTC(year, month - 1, day))
+  const dow = todayUtc.getUTCDay() // 0=Sun
   const mondayDiff = dow === 0 ? -6 : 1 - dow
   return Array.from({ length: 7 }, (_, i) =>
-    new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayDiff + offset * 7 + i)
+    new Date(Date.UTC(year, month - 1, day + mondayDiff + offset * 7 + i))
   )
 }
 
-function weekApiRange(weekDays) {
-  const monday = weekDays[0]
-  const from = monday.toISOString()
-  const to = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7).toISOString()
-  return { from, to }
+function weekApiRange(weekDays, tz) {
+  const mon = weekDays[0]
+  const sun = weekDays[6]
+  const nextMon = new Date(Date.UTC(sun.getUTCFullYear(), sun.getUTCMonth(), sun.getUTCDate() + 1))
+  return {
+    from: localDateToUtcIso(mon.getUTCFullYear(), mon.getUTCMonth() + 1, mon.getUTCDate(), 0, 0, 0, tz),
+    to:   localDateToUtcIso(nextMon.getUTCFullYear(), nextMon.getUTCMonth() + 1, nextMon.getUTCDate(), 0, 0, 0, tz),
+  }
 }
 
-function buildWeekData(weekDays, tasks) {
+function buildWeekData(weekDays, tasks, tz) {
   return weekDays.map(date => {
-    const ds = getLocalDateStr(date.toISOString())
-    const dayTasks = tasks.filter(t => getLocalDateStr(t.startTime) === ds)
+    const y = date.getUTCFullYear()
+    const m = String(date.getUTCMonth() + 1).padStart(2, '0')
+    const d = String(date.getUTCDate()).padStart(2, '0')
+    const ds = `${y}-${m}-${d}`
+    const dayTasks = tasks.filter(t => getDateStrInTz(t.startTime, tz) === ds)
     const totalSecs = dayTasks.reduce((sum, t) => {
       if (!t.endTime) return sum
       return sum + Math.floor((new Date(t.endTime) - new Date(t.startTime)) / 1000)
@@ -47,8 +57,8 @@ function buildWeekData(weekDays, tasks) {
 }
 
 function formatWeekLabel(weekDays) {
-  const fmt = d => `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`
-  return `${fmt(weekDays[0])} – ${fmt(weekDays[6])}, ${weekDays[0].getFullYear()}`
+  const fmt = d => `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`
+  return `${fmt(weekDays[0])} – ${fmt(weekDays[6])}, ${weekDays[0].getUTCFullYear()}`
 }
 
 function formatTaskDuration(startTime, endTime) {
@@ -62,46 +72,59 @@ function formatTaskDuration(startTime, endTime) {
 
 // ─── Month helpers ──────────────────────────────────────────────────────────
 
-function getMonthInfo(offset) {
-  const now = new Date()
-  const first = new Date(now.getFullYear(), now.getMonth() + offset, 1)
+/**
+ * Return metadata about the month at the given offset relative to today
+ * in the user's timezone.  Dates are UTC midnight values.
+ */
+function getMonthInfo(offset, tz) {
+  const { year: ty, month: tm } = todayInTz(tz)
+  // tm is 1-indexed; Date.UTC(ty, tm - 1 + offset, 1) handles over/underflow
+  const firstDay = new Date(Date.UTC(ty, tm - 1 + offset, 1))
+  const lastDay  = new Date(Date.UTC(firstDay.getUTCFullYear(), firstDay.getUTCMonth() + 1, 0))
   return {
-    year: first.getFullYear(),
-    month: first.getMonth(),
-    firstDay: first,
-    lastDay: new Date(first.getFullYear(), first.getMonth() + 1, 0),
+    year:     firstDay.getUTCFullYear(),
+    month:    firstDay.getUTCMonth(), // 0-indexed (for internal Date.UTC usage)
+    firstDay,
+    lastDay,
   }
 }
 
-function getCalendarCells(offset) {
-  const { year, month, firstDay, lastDay } = getMonthInfo(offset)
-  const firstDow = (firstDay.getDay() + 6) % 7  // Mon = 0
-  const lastDow  = (lastDay.getDay()  + 6) % 7
+function getCalendarCells(offset, tz) {
+  const { year, month, firstDay, lastDay } = getMonthInfo(offset, tz)
+  const firstDow = (firstDay.getUTCDay() + 6) % 7  // Mon = 0
+  const lastDow  = (lastDay.getUTCDay()  + 6) % 7
   const cells = []
   for (let i = 0; i < firstDow; i++) cells.push(null)
-  for (let d = 1; d <= lastDay.getDate(); d++) cells.push(new Date(year, month, d))
+  const numDays = lastDay.getUTCDate()
+  for (let d = 1; d <= numDays; d++) cells.push(new Date(Date.UTC(year, month, d)))
   const trailing = lastDow === 6 ? 0 : 6 - lastDow
   for (let i = 0; i < trailing; i++) cells.push(null)
   return cells
 }
 
-function monthApiRange(offset) {
-  const { firstDay, year, month } = getMonthInfo(offset)
+function monthApiRange(offset, tz) {
+  const { firstDay } = getMonthInfo(offset, tz)
+  const y  = firstDay.getUTCFullYear()
+  const m1 = firstDay.getUTCMonth() + 1 // 1-indexed
+  // Next month's first day (Date.UTC handles Dec→Jan overflow)
+  const nextFirst = new Date(Date.UTC(y, firstDay.getUTCMonth() + 1, 1))
+  const y2 = nextFirst.getUTCFullYear()
+  const m2 = nextFirst.getUTCMonth() + 1
   return {
-    from: firstDay.toISOString(),
-    to:   new Date(year, month + 1, 1).toISOString(),
+    from: localDateToUtcIso(y, m1, 1, 0, 0, 0, tz),
+    to:   localDateToUtcIso(y2, m2, 1, 0, 0, 0, tz),
   }
 }
 
-function formatMonthLabel(offset) {
-  const { firstDay } = getMonthInfo(offset)
-  return firstDay.toLocaleString('default', { month: 'long', year: 'numeric' })
+function formatMonthLabel(offset, tz) {
+  const { firstDay } = getMonthInfo(offset, tz)
+  return firstDay.toLocaleDateString('default', { month: 'long', year: 'numeric', timeZone: 'UTC' })
 }
 
-function buildDayDataMap(tasks) {
+function buildDayDataMap(tasks, tz) {
   const map = {}
   for (const t of tasks) {
-    const ds = getLocalDateStr(t.startTime)
+    const ds = getDateStrInTz(t.startTime, tz)
     if (!map[ds]) map[ds] = { tasks: [], totalSecs: 0 }
     map[ds].tasks.push(t)
     if (t.endTime) {
@@ -115,6 +138,9 @@ function buildDayDataMap(tasks) {
 
 export default function OverviewPage() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const tz = user?.timezone ?? 'UTC'
+
   const [view, setView]               = useState('week')
   const [weekOffset, setWeekOffset]   = useState(0)
   const [monthOffset, setMonthOffset] = useState(0)
@@ -123,34 +149,34 @@ export default function OverviewPage() {
   const [selectedDay, setSelectedDay] = useState(null)
 
   // Week derived
-  const weekDays      = getWeekDays(weekOffset)
-  const weekData      = buildWeekData(weekDays, tasks)
+  const weekDays      = getWeekDays(weekOffset, tz)
+  const weekData      = buildWeekData(weekDays, tasks, tz)
   const weekTotalSecs = weekData.reduce((sum, d) => sum + d.totalSecs, 0)
 
   // Month derived
-  const calendarCells  = getCalendarCells(monthOffset)
-  const dayDataMap     = buildDayDataMap(tasks)
+  const calendarCells  = getCalendarCells(monthOffset, tz)
+  const dayDataMap     = buildDayDataMap(tasks, tz)
   const monthTotalSecs = Object.values(dayDataMap).reduce((sum, d) => sum + d.totalSecs, 0)
   const selectedDayTasks = selectedDay ? (dayDataMap[selectedDay]?.tasks ?? []) : []
 
   const fetchWeekTasks = useCallback(() => {
-    const days = getWeekDays(weekOffset)
-    const { from, to } = weekApiRange(days)
+    const days = getWeekDays(weekOffset, tz)
+    const { from, to } = weekApiRange(days, tz)
     setLoading(true)
     taskApi.listTasks(from, to)
       .then(res => setTasks(res.data))
       .catch(() => setTasks([]))
       .finally(() => setLoading(false))
-  }, [weekOffset])
+  }, [weekOffset, tz])
 
   const fetchMonthTasks = useCallback(() => {
-    const { from, to } = monthApiRange(monthOffset)
+    const { from, to } = monthApiRange(monthOffset, tz)
     setLoading(true)
     taskApi.listTasks(from, to)
       .then(res => setTasks(res.data))
       .catch(() => setTasks([]))
       .finally(() => setLoading(false))
-  }, [monthOffset])
+  }, [monthOffset, tz])
 
   useEffect(() => {
     if (view === 'week') fetchWeekTasks()
@@ -198,7 +224,7 @@ export default function OverviewPage() {
               onClick={() => setMonthOffset(o => o - 1)}
               data-testid="prev-month-btn">‹ Prev</button>
             <span className="nav-label" data-testid="month-label">
-              {formatMonthLabel(monthOffset)}
+              {formatMonthLabel(monthOffset, tz)}
             </span>
             <button className="btn btn-ghost btn-sm"
               onClick={() => setMonthOffset(o => o + 1)}
@@ -218,7 +244,7 @@ export default function OverviewPage() {
                 data-testid={`week-col-${i}`}>
                 <div className="week-day-name">{DAY_NAMES[i]}</div>
                 <div className="week-date">
-                  {date.getDate()} {date.toLocaleString('default', { month: 'short' })}
+                  {date.getUTCDate()} {MONTHS[date.getUTCMonth()]}
                 </div>
                 <div className="week-total" data-testid={`day-total-${i}`}>
                   {formatSeconds(totalSecs)}
@@ -279,7 +305,10 @@ export default function OverviewPage() {
               if (!date) {
                 return <div key={`empty-${i}`} className="month-cell month-cell--empty" data-testid={`month-empty-${i}`} />
               }
-              const ds = getLocalDateStr(date.toISOString())
+              const y  = date.getUTCFullYear()
+              const m  = String(date.getUTCMonth() + 1).padStart(2, '0')
+              const d  = String(date.getUTCDate()).padStart(2, '0')
+              const ds = `${y}-${m}-${d}`
               const dayData = dayDataMap[ds]
               const isSelected = selectedDay === ds
               return (
@@ -291,7 +320,7 @@ export default function OverviewPage() {
                   tabIndex={0}
                   onKeyDown={e => e.key === 'Enter' && setSelectedDay(isSelected ? null : ds)}
                 >
-                  <span className="month-day-num">{date.getDate()}</span>
+                  <span className="month-day-num">{date.getUTCDate()}</span>
                   <span className="month-cell-time" data-testid={`month-day-total-${ds}`}>
                     {dayData ? formatSeconds(dayData.totalSecs) : '—'}
                   </span>

@@ -23,6 +23,87 @@ function fill(current, next, confirm) {
   fireEvent.change(screen.getByTestId('confirm-password-input'), { target: { value: confirm } })
 }
 
+// ─── Timezone selector (US-025) ─────────────────────────────────────────────
+
+describe('SettingsPage — Timezone selector', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+  })
+
+  it('renders the timezone form with a select', () => {
+    setup()
+    expect(screen.getByTestId('timezone-form')).toBeInTheDocument()
+    expect(screen.getByTestId('timezone-select')).toBeInTheDocument()
+    expect(screen.getByTestId('timezone-submit-btn')).toBeInTheDocument()
+  })
+
+  it('defaults to UTC when no user is logged in', () => {
+    setup()
+    expect(screen.getByTestId('timezone-select').value).toBe('UTC')
+  })
+
+  it('selecting a timezone changes the select value', () => {
+    setup()
+    fireEvent.change(screen.getByTestId('timezone-select'), { target: { value: 'Europe/Berlin' } })
+    expect(screen.getByTestId('timezone-select').value).toBe('Europe/Berlin')
+  })
+
+  it('calls updateProfile with selected timezone on submit', async () => {
+    authApi.updateProfile.mockResolvedValueOnce({ data: { timezone: 'Europe/Berlin' } })
+    setup()
+    fireEvent.change(screen.getByTestId('timezone-select'), { target: { value: 'Europe/Berlin' } })
+    fireEvent.click(screen.getByTestId('timezone-submit-btn'))
+    await waitFor(() =>
+      expect(authApi.updateProfile).toHaveBeenCalledWith(null, 'Europe/Berlin')
+    )
+  })
+
+  it('shows success message after saving timezone', async () => {
+    authApi.updateProfile.mockResolvedValueOnce({ data: { timezone: 'Asia/Tokyo' } })
+    setup()
+    fireEvent.change(screen.getByTestId('timezone-select'), { target: { value: 'Asia/Tokyo' } })
+    fireEvent.click(screen.getByTestId('timezone-submit-btn'))
+    await waitFor(() =>
+      expect(screen.getByTestId('timezone-success')).toBeInTheDocument()
+    )
+  })
+
+  it('shows error message when updateProfile API fails', async () => {
+    authApi.updateProfile.mockRejectedValueOnce({
+      response: { data: { message: 'Unknown or invalid timezone: "banana".' } }
+    })
+    setup()
+    fireEvent.change(screen.getByTestId('timezone-select'), { target: { value: 'UTC' } })
+    fireEvent.click(screen.getByTestId('timezone-submit-btn'))
+    await waitFor(() =>
+      expect(screen.getByTestId('timezone-error')).toBeInTheDocument()
+    )
+  })
+
+  it('success message disappears when timezone select changes again', async () => {
+    authApi.updateProfile.mockResolvedValueOnce({ data: { timezone: 'UTC' } })
+    setup()
+    fireEvent.click(screen.getByTestId('timezone-submit-btn'))
+    await waitFor(() => expect(screen.getByTestId('timezone-success')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByTestId('timezone-select'), { target: { value: 'Europe/Berlin' } })
+    expect(screen.queryByTestId('timezone-success')).not.toBeInTheDocument()
+  })
+
+  it('common IANA timezones are available as options', () => {
+    setup()
+    const select = screen.getByTestId('timezone-select')
+    const options = Array.from(select.querySelectorAll('option')).map(o => o.value)
+    expect(options).toContain('UTC')
+    expect(options).toContain('Europe/Berlin')
+    expect(options).toContain('America/New_York')
+    expect(options).toContain('Asia/Tokyo')
+  })
+})
+
+// ─── Change Password ──────────────────────────────────────────────────────────
+
 describe('SettingsPage — Change Password', () => {
   beforeEach(() => {
     vi.clearAllMocks()

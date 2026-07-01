@@ -28,10 +28,7 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Project sharing (US-022)** — project owners can invite registered users by email (`POST /api/projects/{id}/members`). Invitees see the shared project immediately in their project list with a "👥 Shared" badge. Members can associate their own tasks with shared projects. The project detail page shows all members with their roles (OWNER/MEMBER) and an invite form for the owner. Only the owner can edit, delete, or manage membership. Time aggregation in the project summary automatically includes tasks from all members. The `project_members` table is back-filled on startup for pre-existing projects via `MembershipSeeder`.
 - **Task overview for shared projects (US-023)** — the project summary response now includes a `contributions` array showing each member's total seconds. Each task entry carries `userId`/`userName` so the frontend can attribute work to its owner. An optional `?userId={id}` query param on both `GET /api/projects/{id}/summary` and `GET /api/tasks` filters results to a single member (both caller and target must be project members; non-member userId returns 403). The project detail page shows a "Contributors" card and a user-filter dropdown for shared projects; task rows display the owner's display name when the project is shared.
 - **Export project tasks (US-024)** — an "Export" button on the project detail page opens a modal where you choose the file format (CSV or JSON) and optionally restrict the export to a specific calendar month. Clicking "Download" calls `GET /api/projects/{id}/export?format=csv|json` and triggers a browser file download via a Blob URL (the JWT is never embedded in the URL). Tasks are collected recursively from the full project subtree so sub-project activity is always included. The CSV columns are `task_id, description, start_time, end_time, duration_seconds, projects, user`; the `projects` column shows the full hierarchy path (e.g. `"Thesis > Literature Review"`). The JSON response wraps the task array in `{ "project": "...", "exportedAt": "...", "tasks": [...] }`. Non-members receive 404. Both `?from/to` ISO params and `?year/month` convenience params are supported for date filtering.
-
-**What is expected (remaining stories):**
-
-- Time zone preferences
+- **User preferred time zone (US-025)** — every user has a `timezone` field (default `"UTC"`) stored in the database. The timezone is returned in both the register and login responses, stored in `AuthContext`, and persisted in `localStorage`. A new "Preferred Time Zone" section in the Settings page lets users choose from a curated list of common IANA timezone identifiers and saves the choice via `PUT /api/users/profile`. All task times throughout the app (task list, project detail, weekly/monthly overview, new-task form defaults) are displayed in the user's preferred timezone using the browser's built-in `Intl.DateTimeFormat` API — no external libraries needed. Stored times remain UTC at all times; only the display layer changes. `GET /api/users/profile` returns the full user profile including `timezone`; `PUT /api/users/profile` validates the timezone string with `ZoneId.of()` and returns HTTP 400 with an informative message if the value is not a valid IANA identifier.
 
 ---
 
@@ -69,8 +66,9 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 └── frontend/                         # React + Vite SPA
     └── src/
         ├── api/                      # authApi.js, taskApi.js, projectApi.js (Axios)
-        ├── context/                  # AuthContext (JWT storage + auth state), TimerContext (shared active task state)
+        ├── context/                  # AuthContext (JWT storage + auth state + timezone), TimerContext (shared active task state)
         ├── pages/                    # LoginPage, DashboardPage, TasksPage, ProjectsPage, ProjectDetailPage, OverviewPage, SettingsPage
+        ├── utils/                    # dateUtils.js — timezone-aware Intl API helpers (US-025)
         └── components/               # Layout (topbar + navigation), ProtectedRoute
 ```
 
@@ -127,7 +125,7 @@ What this does:
 
 Expected output at the end:
 ```
-Tests run: 317, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 330, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -181,8 +179,8 @@ npx vitest run
 
 Expected output:
 ```
-Test Files  10 passed (10)
-     Tests  215 passed (215)
+Test Files  11 passed (11)
+     Tests  248 passed (248)
 ```
 
 ### Step 7 — Start the frontend dev server
@@ -211,7 +209,7 @@ All `/api/*` requests from the browser are automatically proxied to the backend 
    - Open **Tasks** in the navigation to add tasks manually, edit, or delete them.
    - Open **Projects** to create projects and subprojects, then link tasks to them via the checkbox list in the task form. Click any project name to open its detail page with time totals and a date-range picker.
    - Open **Overview** to see your weekly breakdown. Use the prev/next arrows to navigate weeks.
-   - Open **Settings** to change your password.
+   - Open **Settings** to change your preferred time zone (choose from common IANA zones; all task times across the app update immediately) or to change your password.
 
 ---
 
@@ -269,6 +267,7 @@ cd backend
 | `ProjectSharingTest` | 17 | US-022 Project Sharing: invite returns 201 + MemberResponse, invitee sees project with shared=true, own project has shared=false, unknown email 404, duplicate 409, member associates task, non-member 404 on summary, remove member + loses access, owner self-remove 400, member edit/delete blocked 404, members list returns all fields, member can list members, non-member listMembers 404, time aggregation across users, invalid email 400, blank email 400 |
 | `SharedProjectSummaryTest` | 12 | US-023 Task Overview: contributions array with per-user totals, tasks include userId/userName, ?userId= filter scopes tasks + total, contributions always full for dropdown, all-users default shows combined total, non-member 404, non-member userId 403, combined total = sum of contributions, member can access, task list userId filter, non-member userId 403, userId without projectId 403 |
 | `ProjectExportTest` | 14 | US-024 Export: CSV attachment header + filename, CSV header row, task data in row, project name in projects column, JSON attachment header, JSON top-level structure, JSON task fields complete, subproject tasks included, hierarchy path "Root > Sub", year+month filter, empty date range returns header-only CSV, running timer without project excluded, non-member 404, no-auth 401 |
+| `UserProfileTest` | 13 | US-025 Time Zones: GET profile returns all fields, default UTC timezone, 401 without auth, PUT valid IANA timezone, PUT persists timezone, invalid timezone 400, bogus timezone 400, displayName-only update, both fields update, login response includes timezone, register response defaults to UTC, timezone change does not affect createdAt, PUT 401 without auth |
 
 ### Frontend
 
@@ -281,7 +280,8 @@ npx vitest run
 |---|---|---|
 | `LoginPage.test.jsx` | 17 | Register, login, tabs, error states; confirm-password field shown in register mode; client-side validation (password ≥ 8 chars, passwords match) blocks API call; field-level inline errors under each input (email, password, displayName, confirmPassword); clears on tab switch; general banner for non-validation errors |
 | `DashboardPage.test.jsx` | 19 | Timer start/stop, active task display, summary cards (today/week), top projects list, running task info, refresh after timer actions |
-| `SettingsPage.test.jsx` | 3 | Change password form, error display |
+| `SettingsPage.test.jsx` | 11 | Timezone selector renders with UTC default; change timezone; calls updateProfile on submit; success/error messages; success clears on change; common IANA zones in dropdown; change password form, error display |
+| `dateUtils.test.js` | 22 | formatInZone (empty input, valid ISO, invalid tz fallback); toDatetimeLocalInTz (empty, UTC, Berlin, Kolkata, NY, day boundary); nowInTz (format); getDateStrInTz (empty, UTC, Kolkata next-day, NY prev-day); todayInTz (shape, consistency); localDateToUtcIso (UTC, Berlin, Kolkata, NY, round-trips UTC/Berlin/Kolkata) |
 | `TasksPage.test.jsx` | 30 | Create, edit, delete tasks; project multi-select on create/edit; project display in task row; field-level error extraction from 400 responses; Add Task button reachable in 1 click |
 | `ProjectsPage.test.jsx` | 23 | Create, edit, delete projects; tree view; collapse; force delete dialog; field-level error extraction from 400 responses; New Project button reachable in 1 click; shared badge shown for shared=true projects; no badge for owned projects |
 | `OverviewPage.test.jsx` | 48 | Week view (day/week totals, nav, task grouping, click); month view (calendar cells, day totals, month total, selected-day panel, nav, loading) |
@@ -322,9 +322,27 @@ Dashboard summary response shape:
 
 | Method | Path | Request body | Response | Notes |
 |---|---|---|---|---|
-| POST | `/api/auth/register` | `{email, password, displayName}` | 201 | Creates account; returns JWT |
-| POST | `/api/auth/login` | `{email, password}` | 200 `{token}` | Returns JWT |
+| POST | `/api/auth/register` | `{email, password, displayName}` | 201 | Creates account; returns JWT + timezone (default "UTC") |
+| POST | `/api/auth/login` | `{email, password}` | 200 `{token, email, displayName, timezone}` | Returns JWT with user's current timezone |
 | POST | `/api/auth/change-password` | `{currentPassword, newPassword}` | 204 | — |
+
+### User Profile (US-025)
+
+| Method | Path | Request body | Response | Notes |
+|---|---|---|---|---|
+| GET | `/api/users/profile` | — | 200 `UserProfileResponse` | Returns id, email, displayName, timezone, createdAt |
+| PUT | `/api/users/profile` | `{displayName?, timezone?}` | 200 `UserProfileResponse` | Both fields optional; null = no change; invalid IANA timezone → 400 |
+
+User profile response shape:
+```json
+{
+  "id": 1,
+  "email": "alice@example.com",
+  "displayName": "Alice",
+  "timezone": "Europe/Berlin",
+  "createdAt": "2026-07-01T10:00:00Z"
+}
+```
 
 ### Tasks
 
@@ -403,4 +421,5 @@ Member response shape:
 - **Date-range filtering on task list** — `GET /api/tasks?from=<ISO>&to=<ISO>` reuses the existing `findByUserAndStartTimeBetweenOrderByStartTimeAsc` repository method. Daily and weekly views both call this same endpoint with appropriate bounds.
 - **Security NFR** — BCrypt cost-10 hashing means each password hash is unique even for identical passwords (random salt per hash). JWT tokens use HMAC-SHA256 with a 256-bit+ secret and expire after 24 hours. CSRF is disabled intentionally because the API is stateless (no session cookies) — disabling it for a JWT/Bearer API is the correct and secure approach per Spring Security documentation.
 - **Project sharing membership model (US-022)** — a separate `project_members` table stores `(project_id, user_id, role, joined_at)` with a unique constraint on `(project_id, user_id)`. `project.user_id` is kept as the original owner FK for backward compatibility. Access checks use the membership table: `findByIdAndMember` for read operations (any member), `findByIdAndUser` for write operations (owner only). `MembershipSeeder` runs on startup to back-fill OWNER rows for all projects created before this feature was added. `UserNotFoundException` (plain `RuntimeException`) is used instead of Spring Security's `UsernameNotFoundException` when the invitee email is not registered, to prevent the exception from being intercepted by Spring Security's exception handling as a 401.
+- **Timezone display without a library (US-025)** — all timezone conversion uses the built-in `Intl.DateTimeFormat` API (`Intl.DateTimeFormat`, `formatToParts`, `en-CA` locale for deterministic `YYYY-MM-DD` output). `localDateToUtcIso` converts a "local" datetime-local input value to UTC using a naive-UTC + offset-measurement approach: treat the input as UTC, measure the offset the target timezone shows for that UTC instant, apply the correction. One iteration is accurate for all standard and DST zones. The `timezone` column on the `User` entity defaults to `"UTC"` so pre-existing accounts work without migration. IANA timezone IDs are validated at the Spring layer using `ZoneId.of()`, which throws `DateTimeException` on unrecognised strings; `GlobalExceptionHandler` catches `InvalidTimezoneException` and returns HTTP 400.
 - **Per-user contribution breakdown (US-023)** — `ProjectSummaryResponse` now carries a `contributions` list (per-user totals) and `userId`/`userName` on every `TaskSummary` entry. `getProjectSummary` collects all task entities from the subtree via `collectSubtreeTaskEntities` (deduplication by task id), groups them by `Task.user` for contributions, and optionally filters `tasks` + `totalSeconds` when `?userId=` is present. The `contributions` array is always the full per-user breakdown regardless of the user filter, so the frontend dropdown remains functional. `AccessDeniedException` (403) is thrown when the `userId` param belongs to a non-member. The same `userId` filter on `GET /api/tasks` validates that both the caller and the target user are project members using `projectRepository.findByIdAndMember(projectId, targetUser)` — no new repository dependency needed in `TaskService`.

@@ -4,20 +4,30 @@ import * as authApi from '../api/authApi'
 const AuthContext = createContext(null)
 
 const TOKEN_KEY = 'tt_token'
-const USER_KEY = 'tt_user'
+const USER_KEY  = 'tt_user'
 
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(() => localStorage.getItem(TOKEN_KEY))
-  const [user, setUser] = useState(() => {
+  const [user, setUser]   = useState(() => {
     const stored = localStorage.getItem(USER_KEY)
     return stored ? JSON.parse(stored) : null
   })
 
+  /**
+   * Store the auth response (token + user fields including timezone) in
+   * localStorage and sync React state.
+   * timezone defaults to "UTC" when the field is absent (e.g. old stored sessions).
+   */
   function persist(data) {
+    const userObj = {
+      email:       data.email,
+      displayName: data.displayName,
+      timezone:    data.timezone ?? 'UTC',
+    }
     localStorage.setItem(TOKEN_KEY, data.token)
-    localStorage.setItem(USER_KEY, JSON.stringify({ email: data.email, displayName: data.displayName }))
+    localStorage.setItem(USER_KEY, JSON.stringify(userObj))
     setToken(data.token)
-    setUser({ email: data.email, displayName: data.displayName })
+    setUser(userObj)
   }
 
   async function register(email, password, displayName) {
@@ -38,8 +48,26 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
+  /**
+   * Update the in-memory and localStorage user profile without requiring a
+   * re-login.  Used by SettingsPage after a successful PUT /api/users/profile (US-025).
+   */
+  function updateUser(updates) {
+    const updated = { ...user, ...updates }
+    localStorage.setItem(USER_KEY, JSON.stringify(updated))
+    setUser(updated)
+  }
+
   return (
-    <AuthContext.Provider value={{ token, user, register, login, logout, isAuthenticated: !!token }}>
+    <AuthContext.Provider value={{
+      token,
+      user,
+      register,
+      login,
+      logout,
+      updateUser,
+      isAuthenticated: !!token,
+    }}>
       {children}
     </AuthContext.Provider>
   )

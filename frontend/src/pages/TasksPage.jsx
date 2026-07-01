@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback } from 'react'
 import * as taskApi from '../api/taskApi'
 import * as projectApi from '../api/projectApi'
+import { useAuth } from '../context/AuthContext'
+import { toDatetimeLocalInTz, formatInZone, nowInTz, localDateToUtcIso } from '../utils/dateUtils'
 
 function formatDuration(startTime, endTime) {
   if (!endTime) return '—'
@@ -13,11 +15,19 @@ function formatDuration(startTime, endTime) {
     : `${m}m ${String(s).padStart(2, '0')}s`
 }
 
-function toLocalDatetimeValue(iso) {
-  if (!iso) return ''
-  const d = new Date(iso)
-  const pad = n => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`
+/**
+ * Convert a datetime-local string ("YYYY-MM-DDTHH:MM") or ISO string to UTC ISO,
+ * interpreting it as local time in the given IANA timezone.
+ * Falls back to native Date parsing for ISO strings (test-env compatibility).
+ */
+function datetimeLocalToUtcIso(dtLocal, tz) {
+  if (!dtLocal) return null
+  const match = dtLocal.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+  if (match) {
+    const [, y, m, d, h, min] = match.map(Number)
+    return localDateToUtcIso(y, m, d, h, min, 0, tz)
+  }
+  return new Date(dtLocal).toISOString()
 }
 
 function flattenProjects(projects, depth = 0) {
@@ -54,6 +64,9 @@ function ProjectCheckboxList({ flatProjects, selectedIds, onToggle, prefix, disa
 }
 
 export default function TasksPage() {
+  const { user } = useAuth()
+  const tz = user?.timezone ?? 'UTC'
+
   const [tasks, setTasks]                   = useState([])
   const [availableProjects, setAvailableProjects] = useState([])
 
@@ -115,16 +128,16 @@ export default function TasksPage() {
   const handleCreate = async (e) => {
     e.preventDefault()
     setError('')
-    const start = new Date(startTime)
-    const end   = new Date(endTime)
-    if (start >= end) { setError('Start time must be before end time.'); return }
-    if (end > new Date()) { setError('End time cannot be in the future.'); return }
+    const startIso = datetimeLocalToUtcIso(startTime, tz)
+    const endIso   = datetimeLocalToUtcIso(endTime, tz)
+    if (new Date(startIso) >= new Date(endIso)) { setError('Start time must be before end time.'); return }
+    if (new Date(endIso) > new Date()) { setError('End time cannot be in the future.'); return }
     setLoading(true)
     try {
       await taskApi.createTask(
         description || null,
-        start.toISOString(),
-        end.toISOString(),
+        startIso,
+        endIso,
         createProjectIds.length > 0 ? createProjectIds : null
       )
       setDescription(''); setStartTime(''); setEndTime(''); setCreateProjectIds([])
@@ -142,8 +155,8 @@ export default function TasksPage() {
   const startEdit = (task) => {
     setEditingId(task.id)
     setEditDesc(task.description || '')
-    setEditStart(toLocalDatetimeValue(task.startTime))
-    setEditEnd(toLocalDatetimeValue(task.endTime))
+    setEditStart(toDatetimeLocalInTz(task.startTime, tz))
+    setEditEnd(toDatetimeLocalInTz(task.endTime, tz))
     setEditProjectIds((task.projects || []).map(p => p.id))
     setEditError('')
   }
@@ -172,16 +185,16 @@ export default function TasksPage() {
   const handleUpdate = async (e, taskId) => {
     e.preventDefault()
     setEditError('')
-    const start = new Date(editStart)
-    const end   = new Date(editEnd)
-    if (start >= end) { setEditError('Start time must be before end time.'); return }
+    const startIso = datetimeLocalToUtcIso(editStart, tz)
+    const endIso   = datetimeLocalToUtcIso(editEnd, tz)
+    if (new Date(startIso) >= new Date(endIso)) { setEditError('Start time must be before end time.'); return }
     setEditLoading(true)
     try {
       await taskApi.updateTask(
         taskId,
         editDesc || null,
-        start.toISOString(),
-        end.toISOString(),
+        startIso,
+        endIso,
         editProjectIds.length > 0 ? editProjectIds : null
       )
       setEditingId(null)
@@ -203,7 +216,14 @@ export default function TasksPage() {
         <h2 className="page-title">Tasks</h2>
         <button
           className="btn btn-primary btn-sm"
-          onClick={() => { setShowForm(f => !f); setError('') }}
+          onClick={() => {
+            if (!showForm) {
+              setStartTime(nowInTz(tz))
+              setEndTime(nowInTz(tz))
+            }
+            setShowForm(f => !f)
+            setError('')
+          }}
           data-testid="add-task-btn"
         >
           {showForm ? 'Cancel' : '+ Add Task'}
@@ -320,7 +340,9 @@ export default function TasksPage() {
             ) : (
               <>
                 <span className="task-description">{t.description || '(no description)'}</span>
-                <span className="task-time">{new Date(t.startTime).toLocaleString()}</span>
+                <span className="task-time">
+                  {formatInZone(t.startTime, tz, { dateStyle: 'short', timeStyle: 'short' })}
+                </span>
                 <span className="task-duration">{formatDuration(t.startTime, t.endTime)}</span>
                 {t.projects && t.projects.length > 0 && (
                   <span className="task-projects" data-testid={`task-projects-${t.id}`}>

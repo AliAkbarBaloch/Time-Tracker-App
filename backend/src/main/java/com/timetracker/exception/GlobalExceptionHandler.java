@@ -174,4 +174,15 @@ public class GlobalExceptionHandler {
         body.put("message", ex.getMessage());
         return body;
     }
+
+    // ── US-025: Timezone validation ───────────────────────────────────────────
+
+    @ExceptionHandler(InvalidTimezoneException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
+    public Map<String, Object> handleInvalidTimezone(InvalidTimezoneException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 400);
+        body.put("message", ex.getMessage());
+        return body;
+    }
 }
