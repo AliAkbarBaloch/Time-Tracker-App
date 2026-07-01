@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import * as taskApi from '../api/taskApi'
+import { useTimer } from '../context/TimerContext'
 
 function formatSeconds(totalSecs) {
   const h = Math.floor(totalSecs / 3600)
@@ -25,13 +26,12 @@ function todayRange() {
 }
 
 export default function DashboardPage() {
-  const [activeTask, setActiveTask]     = useState(null)
-  const [taskDesc, setTaskDesc]         = useState('')
-  const [elapsed, setElapsed]           = useState('00:00:00')
-  const [error, setError]               = useState('')
-  const [loading, setLoading]           = useState(false)
-  const [todayTasks, setTodayTasks]     = useState([])
-  const [dailyTotal, setDailyTotal]     = useState(0)
+  const { activeTask, elapsed, startTask, stopTask } = useTimer()
+  const [taskDesc, setTaskDesc]     = useState('')
+  const [error, setError]           = useState('')
+  const [loading, setLoading]       = useState(false)
+  const [todayTasks, setTodayTasks] = useState([])
+  const [dailyTotal, setDailyTotal] = useState(0)
 
   const fetchTodayTasks = useCallback(() => {
     const { from, to } = todayRange()
@@ -40,28 +40,7 @@ export default function DashboardPage() {
       .catch(() => {})
   }, [])
 
-  useEffect(() => {
-    taskApi.getActiveTask()
-      .then(res => { if (res.status === 200) setActiveTask(res.data) })
-      .catch(() => {})
-  }, [])
-
   useEffect(() => { fetchTodayTasks() }, [fetchTodayTasks])
-
-  // Live elapsed clock for the running timer card
-  useEffect(() => {
-    if (!activeTask) { setElapsed('00:00:00'); return }
-    const update = () => {
-      const secs = Math.floor((Date.now() - new Date(activeTask.startTime).getTime()) / 1000)
-      const h = String(Math.floor(secs / 3600)).padStart(2, '0')
-      const m = String(Math.floor((secs % 3600) / 60)).padStart(2, '0')
-      const s = String(secs % 60).padStart(2, '0')
-      setElapsed(`${h}:${m}:${s}`)
-    }
-    update()
-    const id = setInterval(update, 1000)
-    return () => clearInterval(id)
-  }, [activeTask])
 
   // Recalculate daily total every second when a running task is in the list
   useEffect(() => {
@@ -86,8 +65,7 @@ export default function DashboardPage() {
     setError('')
     setLoading(true)
     try {
-      const { data } = await taskApi.startTask(taskDesc || null)
-      setActiveTask(data)
+      await startTask(taskDesc)
       setTaskDesc('')
       fetchTodayTasks()
     } catch (err) {
@@ -95,21 +73,20 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
     }
-  }, [taskDesc, fetchTodayTasks])
+  }, [taskDesc, startTask, fetchTodayTasks])
 
   const handleStop = useCallback(async () => {
     setError('')
     setLoading(true)
     try {
-      await taskApi.stopTask()
-      setActiveTask(null)
+      await stopTask()
       fetchTodayTasks()
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to stop timer')
     } finally {
       setLoading(false)
     }
-  }, [fetchTodayTasks])
+  }, [stopTask, fetchTodayTasks])
 
   return (
     <div className="page">
