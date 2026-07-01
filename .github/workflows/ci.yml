@@ -28,9 +28,9 @@ jobs:
       - name: Run tests inside Docker (eclipse-temurin:21-jdk)
         run: |
           docker run --rm \
-            -v "${{ github.workspace }}/backend":/workspace \
+            -v "${{ github.workspace }}":/workspace \
             -v "$HOME/.m2":/root/.m2 \
-            -w /workspace \
+            -w /workspace/backend \
             eclipse-temurin:21-jdk \
             bash -c "chmod +x mvnw && ./mvnw --no-transfer-progress verify"
 
