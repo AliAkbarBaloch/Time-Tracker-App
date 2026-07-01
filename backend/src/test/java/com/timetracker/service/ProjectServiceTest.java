@@ -11,6 +11,7 @@ import com.timetracker.exception.CircularProjectHierarchyException;
 import com.timetracker.exception.ProjectHasAssociationsException;
 import com.timetracker.exception.ProjectNameAlreadyExistsException;
 import com.timetracker.exception.ProjectNotFoundException;
+import com.timetracker.repository.ProjectMemberRepository;
 import com.timetracker.repository.ProjectRepository;
 import com.timetracker.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -33,6 +34,7 @@ import static org.mockito.Mockito.*;
 class ProjectServiceTest {
 
     @Mock ProjectRepository projectRepository;
+    @Mock ProjectMemberRepository memberRepository;
     @Mock UserRepository userRepository;
     @InjectMocks ProjectService projectService;
 
@@ -154,7 +156,8 @@ class ProjectServiceTest {
     void listProjects_returnsUserRootProjects() {
         Project p1 = new Project(); p1.setName("Alpha"); p1.setUser(user);
         Project p2 = new Project(); p2.setName("Beta");  p2.setUser(user);
-        when(projectRepository.findByUserAndParentIsNull(user)).thenReturn(List.of(p1, p2));
+        // US-022: listProjects now queries findRootProjectsByMember (includes owned + shared)
+        when(projectRepository.findRootProjectsByMember(user)).thenReturn(List.of(p1, p2));
 
         List<ProjectResponse> result = projectService.listProjects("alice@example.com");
 
@@ -164,7 +167,7 @@ class ProjectServiceTest {
 
     @Test
     void listProjects_noProjects_returnsEmptyList() {
-        when(projectRepository.findByUserAndParentIsNull(user)).thenReturn(List.of());
+        when(projectRepository.findRootProjectsByMember(user)).thenReturn(List.of());
 
         List<ProjectResponse> result = projectService.listProjects("alice@example.com");
 
@@ -177,7 +180,7 @@ class ProjectServiceTest {
         Project child  = new Project(); child.setName("Child"); child.setUser(user);
         child.setParent(parent);
         parent.setSubprojects(new ArrayList<>(List.of(child)));
-        when(projectRepository.findByUserAndParentIsNull(user)).thenReturn(List.of(parent));
+        when(projectRepository.findRootProjectsByMember(user)).thenReturn(List.of(parent));
 
         List<ProjectResponse> result = projectService.listProjects("alice@example.com");
 
@@ -309,7 +312,8 @@ class ProjectServiceTest {
         task.setDescription("Work");
         project.getTasks().add(task);
 
-        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(project));
+        // US-022: getProjectSummary uses findByIdAndMember (accessible to all members)
+        when(projectRepository.findByIdAndMember(1L, user)).thenReturn(Optional.of(project));
 
         ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null);
 
@@ -330,7 +334,7 @@ class ProjectServiceTest {
         subA.getTasks().add(shared);
         subB.getTasks().add(shared);
 
-        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(root));
+        when(projectRepository.findByIdAndMember(1L, user)).thenReturn(Optional.of(root));
 
         ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null);
 
@@ -346,7 +350,7 @@ class ProjectServiceTest {
         project.getTasks().add(inRange);
         project.getTasks().add(outRange);
 
-        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(project));
+        when(projectRepository.findByIdAndMember(1L, user)).thenReturn(Optional.of(project));
 
         Instant from = Instant.parse("2026-06-01T00:00:00Z");
         Instant to   = Instant.parse("2026-07-01T00:00:00Z");
@@ -362,7 +366,7 @@ class ProjectServiceTest {
         Task running = makeTask(1L, Instant.parse("2026-06-01T10:00:00Z"), null);
         project.getTasks().add(running);
 
-        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(project));
+        when(projectRepository.findByIdAndMember(1L, user)).thenReturn(Optional.of(project));
 
         ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null);
 
@@ -381,7 +385,7 @@ class ProjectServiceTest {
         Task task = makeTask(10L, start, start.plusSeconds(5400));
         sub.getTasks().add(task);
 
-        when(projectRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(root));
+        when(projectRepository.findByIdAndMember(1L, user)).thenReturn(Optional.of(root));
 
         ProjectSummaryResponse result = projectService.getProjectSummary("alice@example.com", 1L, null, null);
 
@@ -393,7 +397,7 @@ class ProjectServiceTest {
 
     @Test
     void getProjectSummary_projectNotFound_throwsProjectNotFoundException() {
-        when(projectRepository.findByIdAndUser(99L, user)).thenReturn(Optional.empty());
+        when(projectRepository.findByIdAndMember(99L, user)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> projectService.getProjectSummary("alice@example.com", 99L, null, null))
                 .isInstanceOf(ProjectNotFoundException.class);

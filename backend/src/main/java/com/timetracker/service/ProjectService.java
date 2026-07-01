@@ -18,6 +18,7 @@ import com.timetracker.exception.MemberNotFoundException;
 import com.timetracker.exception.ProjectHasAssociationsException;
 import com.timetracker.exception.ProjectNameAlreadyExistsException;
 import com.timetracker.exception.ProjectNotFoundException;
+import com.timetracker.exception.UserNotFoundException;
 import com.timetracker.repository.ProjectMemberRepository;
 import com.timetracker.repository.ProjectRepository;
 import com.timetracker.repository.UserRepository;
@@ -187,9 +188,9 @@ public class ProjectService {
                 .orElseThrow(() -> new ProjectNotFoundException(projectId));
 
         // Look up the invitee by email; 404 if not registered
+        // UserNotFoundException (not UsernameNotFoundException) avoids Spring Security intercepting it as 401
         User invitee = userRepository.findByEmail(request.email())
-                .orElseThrow(() -> new UsernameNotFoundException(
-                        "No registered user found with email: " + request.email()));
+                .orElseThrow(() -> new UserNotFoundException(request.email()));
 
         // Prevent duplicate memberships
         if (memberRepository.existsByProjectAndUser(project, invitee)) {
