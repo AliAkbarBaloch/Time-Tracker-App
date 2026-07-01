@@ -22,6 +22,7 @@ import com.timetracker.exception.UserNotFoundException;
 import com.timetracker.repository.ProjectMemberRepository;
 import com.timetracker.repository.ProjectRepository;
 import com.timetracker.repository.UserRepository;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,7 +32,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class ProjectService {
@@ -140,25 +143,73 @@ public class ProjectService {
 
     // ── Summary ───────────────────────────────────────────────────────────────
 
+    /**
+     * Returns the project summary including a per-user contribution breakdown.
+     *
+     * When filterUserId is provided (US-023):
+     *  - tasks and totalSeconds are scoped to that user's entries only
+     *  - the target user must be a project member; otherwise 403
+     *  - contributions always reflects ALL members (needed for the dropdown)
+     */
     @Transactional(readOnly = true)
     public ProjectSummaryResponse getProjectSummary(String userEmail, Long projectId,
-                                                     Instant from, Instant to) {
+                                                     Instant from, Instant to, Long filterUserId) {
         User user = loadUser(userEmail);
         // Any member (OWNER or MEMBER) can view the summary
         Project project = projectRepository.findByIdAndMember(projectId, user)
                 .orElseThrow(() -> new ProjectNotFoundException(projectId));
 
-        // Rolled-up total for the entire subtree, deduplicated across all descendants
-        Set<Long> globalSeen = new HashSet<>();
-        long totalSeconds = calcSubtreeSeconds(project, from, to, globalSeen);
+        // Validate the optional userId filter — the target must also be a project member
+        if (filterUserId != null) {
+            User filterUser = userRepository.findById(filterUserId)
+                    .orElseThrow(() -> new AccessDeniedException("User is not a member of this project."));
+            if (!memberRepository.existsByProjectAndUser(project, filterUser)) {
+                throw new AccessDeniedException("User is not a member of this project.");
+            }
+        }
 
-        // Collect all unique tasks across the entire subtree, sorted by startTime
+        // Collect all unique task entities across the subtree (global deduplication)
         Set<Long> taskSeen = new HashSet<>();
-        List<ProjectSummaryResponse.TaskSummary> allTasks = new ArrayList<>();
-        collectSubtreeTasks(project, from, to, taskSeen, allTasks);
-        allTasks.sort(Comparator.comparing(ProjectSummaryResponse.TaskSummary::startTime));
+        List<Task> allUniqueTasks = new ArrayList<>();
+        collectSubtreeTaskEntities(project, from, to, taskSeen, allUniqueTasks);
 
-        // Individual total per direct subproject (each uses its own seen set)
+        // Apply user filter for the task list and totalSeconds
+        List<Task> filteredTasks = filterUserId != null
+                ? allUniqueTasks.stream()
+                        .filter(t -> t.getUser().getId().equals(filterUserId))
+                        .collect(Collectors.toCollection(ArrayList::new))
+                : allUniqueTasks;
+
+        // Total seconds (filtered when userId param present, combined otherwise)
+        long totalSeconds = filteredTasks.stream()
+                .filter(t -> t.getEndTime() != null)
+                .mapToLong(t -> t.getEndTime().getEpochSecond() - t.getStartTime().getEpochSecond())
+                .sum();
+
+        // Task summaries with owner info, sorted by startTime
+        List<ProjectSummaryResponse.TaskSummary> taskSummaries = filteredTasks.stream()
+                .sorted(Comparator.comparing(Task::getStartTime))
+                .map(t -> new ProjectSummaryResponse.TaskSummary(
+                        t.getId(), t.getDescription(),
+                        t.getStartTime(), t.getEndTime(), t.isRunning(),
+                        t.getUser().getId(), t.getUser().getDisplayName()))
+                .toList();
+
+        // Per-user contributions from ALL tasks (not filtered) — always returned so
+        // the frontend dropdown works even when a userId filter is active
+        Map<User, Long> userTotals = allUniqueTasks.stream()
+                .filter(t -> t.getEndTime() != null)
+                .collect(Collectors.groupingBy(
+                        Task::getUser,
+                        Collectors.summingLong(t ->
+                                t.getEndTime().getEpochSecond() - t.getStartTime().getEpochSecond())));
+        List<ProjectSummaryResponse.UserContribution> contributions = userTotals.entrySet().stream()
+                .map(e -> new ProjectSummaryResponse.UserContribution(
+                        e.getKey().getId(), e.getKey().getDisplayName(), e.getValue()))
+                .sorted(Comparator.comparingLong(ProjectSummaryResponse.UserContribution::totalSeconds).reversed())
+                .toList();
+
+        // Individual total per direct subproject (each uses its own seen set, unfiltered)
         List<ProjectSummaryResponse.SubprojectSummary> subSummaries = project.getSubprojects()
                 .stream()
                 .map(sub -> {
@@ -170,7 +221,7 @@ public class ProjectService {
 
         Long parentId = project.getParent() != null ? project.getParent().getId() : null;
         return new ProjectSummaryResponse(project.getId(), project.getName(),
-                project.getDescription(), parentId, totalSeconds, subSummaries, allTasks);
+                project.getDescription(), parentId, totalSeconds, subSummaries, taskSummaries, contributions);
     }
 
     // ── Member management (US-022) ────────────────────────────────────────────
@@ -280,17 +331,20 @@ public class ProjectService {
         return total;
     }
 
-    private void collectSubtreeTasks(Project project, Instant from, Instant to,
-                                      Set<Long> seen, List<ProjectSummaryResponse.TaskSummary> tasks) {
+    /**
+     * Recursively collects unique Task entities across the project subtree.
+     * Deduplication is handled by the seen set (task IDs already added are skipped).
+     * Returns raw entities so the caller can apply user-filtering and map to DTOs.
+     */
+    private void collectSubtreeTaskEntities(Project project, Instant from, Instant to,
+                                             Set<Long> seen, List<Task> tasks) {
         for (Task task : project.getTasks()) {
             if (isInRange(task, from, to) && seen.add(task.getId())) {
-                tasks.add(new ProjectSummaryResponse.TaskSummary(
-                        task.getId(), task.getDescription(),
-                        task.getStartTime(), task.getEndTime(), task.isRunning()));
+                tasks.add(task);
             }
         }
         for (Project sub : project.getSubprojects()) {
-            collectSubtreeTasks(sub, from, to, seen, tasks);
+            collectSubtreeTaskEntities(sub, from, to, seen, tasks);
         }
     }
 

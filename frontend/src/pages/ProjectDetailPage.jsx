@@ -55,12 +55,14 @@ export default function ProjectDetailPage() {
   const navigate = useNavigate()
   const { user: currentUser } = useAuth()
 
-  const [preset, setPreset]         = useState('all-time')
-  const [customFrom, setCustomFrom] = useState('')
-  const [customTo, setCustomTo]     = useState('')
-  const [summary, setSummary]       = useState(null)
-  const [loading, setLoading]       = useState(false)
-  const [error, setError]           = useState('')
+  const [preset, setPreset]               = useState('all-time')
+  const [customFrom, setCustomFrom]       = useState('')
+  const [customTo, setCustomTo]           = useState('')
+  const [summary, setSummary]             = useState(null)
+  const [loading, setLoading]             = useState(false)
+  const [error, setError]                 = useState('')
+  // US-023: optional per-user filter; null = show all users
+  const [selectedUserId, setSelectedUserId] = useState(null)
 
   // ── US-022: Members section state ─────────────────────────────────────────
   const [members, setMembers]           = useState([])
@@ -84,7 +86,8 @@ export default function ProjectDetailPage() {
 
     setLoading(true)
     setError('')
-    projectApi.getProjectSummary(id, from, to)
+    // Pass selectedUserId for per-user filtering (US-023); null = all users
+    projectApi.getProjectSummary(id, from, to, selectedUserId)
       .then(res => setSummary(res.data))
       .catch(err => {
         if (err.response?.status === 404) {
@@ -94,7 +97,7 @@ export default function ProjectDetailPage() {
         }
       })
       .finally(() => setLoading(false))
-  }, [id, preset, customFrom, customTo])
+  }, [id, preset, customFrom, customTo, selectedUserId])
 
   useEffect(() => {
     if (preset !== 'custom') {
@@ -227,6 +230,51 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
+          {/* ── US-023: Contributors card — only shown for shared projects ────── */}
+          {summary.contributions && summary.contributions.length > 1 && (
+            <div className="section" data-testid="contributors-section">
+              <div className="section-header">
+                <h3>Contributors</h3>
+                <span className="muted" data-testid="contributors-count">
+                  {summary.contributions.length} contributor{summary.contributions.length !== 1 ? 's' : ''}
+                </span>
+              </div>
+              <ul className="summary-list">
+                {summary.contributions.map(c => (
+                  <li key={c.userId} className="summary-list-item"
+                    data-testid={`contributor-row-${c.userId}`}>
+                    <span className="summary-item-name" data-testid={`contributor-name-${c.userId}`}>
+                      {c.displayName}
+                    </span>
+                    <span className="summary-item-total" data-testid={`contributor-total-${c.userId}`}>
+                      {formatSeconds(c.totalSeconds)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* ── US-023: User-filter dropdown — only shown for shared projects ── */}
+          {summary.contributions && summary.contributions.length > 1 && (
+            <div className="section user-filter-row">
+              <label className="user-filter-label">
+                Filter by user:
+                <select
+                  className="timer-input user-filter-select"
+                  value={selectedUserId ?? ''}
+                  onChange={e => setSelectedUserId(e.target.value ? Number(e.target.value) : null)}
+                  data-testid="user-filter-select"
+                >
+                  <option value="">All users</option>
+                  {summary.contributions.map(c => (
+                    <option key={c.userId} value={c.userId}>{c.displayName}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+          )}
+
           {/* Tasks */}
           <div className="section" data-testid="tasks-section">
             <div className="section-header">
@@ -243,6 +291,12 @@ export default function ProjectDetailPage() {
                   <li key={t.id} className="summary-list-item"
                     data-testid={`summary-task-${t.id}`}>
                     <span className="summary-item-name">{t.description || '(no description)'}</span>
+                    {/* Show task owner name on shared projects (US-023) */}
+                    {t.userName && summary.contributions && summary.contributions.length > 1 && (
+                      <span className="muted task-owner" data-testid={`task-owner-${t.id}`}>
+                        {t.userName}
+                      </span>
+                    )}
                     <span className="summary-item-time muted">
                       {new Date(t.startTime).toLocaleDateString()}
                     </span>

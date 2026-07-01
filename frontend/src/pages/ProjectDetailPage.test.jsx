@@ -182,7 +182,8 @@ describe('ProjectDetailPage', () => {
 
   it('calls API with no date params for All Time preset', async () => {
     setup()
-    await waitFor(() => expect(projectApi.getProjectSummary).toHaveBeenCalledWith('1', null, null))
+    // US-023: getProjectSummary now accepts a 4th userId param (null = all users)
+    await waitFor(() => expect(projectApi.getProjectSummary).toHaveBeenCalledWith('1', null, null, null))
   })
 
   it('calls API with today date range when Today preset selected', async () => {
@@ -411,6 +412,111 @@ describe('ProjectDetailPage', () => {
     setup()
     await waitFor(() => expect(screen.getByTestId('members-count')).toBeInTheDocument())
     expect(screen.getByTestId('members-count')).toHaveTextContent('2 members')
+  })
+
+  // ── US-023: Contributors card and user-filter dropdown ────────────────────
+
+  it('renders contributors section when summary has multiple contributions', async () => {
+    // mockResolvedValueOnce before setup() so it wins over setup()'s default mock
+    projectApi.getProjectSummary.mockResolvedValueOnce({
+      data: makeSummary({
+        contributions: [
+          { userId: ALICE_ID, displayName: 'Alice', totalSeconds: 3600 },
+          { userId: BOB_ID,   displayName: 'Bob',   totalSeconds: 1800 },
+        ]
+      })
+    })
+    setup()
+    await waitFor(() => expect(screen.getByTestId('contributors-section')).toBeInTheDocument())
+    expect(screen.getByTestId(`contributor-name-${ALICE_ID}`)).toHaveTextContent('Alice')
+    expect(screen.getByTestId(`contributor-name-${BOB_ID}`)).toHaveTextContent('Bob')
+    expect(screen.getByTestId(`contributor-total-${ALICE_ID}`)).toHaveTextContent('1h 00m')
+    expect(screen.getByTestId(`contributor-total-${BOB_ID}`)).toHaveTextContent('30m')
+  })
+
+  it('does not render contributors section when summary has only one contribution', async () => {
+    // Solo project → contributions has 1 entry → no card shown
+    projectApi.getProjectSummary.mockResolvedValue({
+      data: makeSummary({
+        contributions: [{ userId: ALICE_ID, displayName: 'Alice', totalSeconds: 3600 }]
+      })
+    })
+    setup()
+    await waitFor(() => expect(screen.getByTestId('project-summary-name')).toBeInTheDocument())
+    expect(screen.queryByTestId('contributors-section')).not.toBeInTheDocument()
+  })
+
+  it('renders user-filter dropdown for shared projects', async () => {
+    projectApi.getProjectSummary.mockResolvedValueOnce({
+      data: makeSummary({
+        contributions: [
+          { userId: ALICE_ID, displayName: 'Alice', totalSeconds: 3600 },
+          { userId: BOB_ID,   displayName: 'Bob',   totalSeconds: 1800 },
+        ]
+      })
+    })
+    setup()
+    await waitFor(() => expect(screen.getByTestId('user-filter-select')).toBeInTheDocument())
+    // Dropdown must have "All users" option plus one per contributor
+    const select = screen.getByTestId('user-filter-select')
+    expect(select).toHaveDisplayValue('All users')
+  })
+
+  it('changing user-filter dropdown re-fetches summary with userId param', async () => {
+    const twoContributions = [
+      { userId: ALICE_ID, displayName: 'Alice', totalSeconds: 3600 },
+      { userId: BOB_ID,   displayName: 'Bob',   totalSeconds: 1800 },
+    ]
+    projectApi.getProjectSummary
+      .mockResolvedValueOnce({ data: makeSummary({ contributions: twoContributions }) })
+      .mockResolvedValueOnce({ data: makeSummary({ totalSeconds: 1800, contributions: twoContributions,
+        tasks: [{ id: 20, description: 'Bob task', startTime: '2026-06-01T10:00:00Z', endTime: '2026-06-01T10:30:00Z', running: false, userId: BOB_ID, userName: 'Bob' }] }) })
+
+    setup()
+    await waitFor(() => expect(screen.getByTestId('user-filter-select')).toBeInTheDocument())
+
+    // Select Bob from dropdown
+    fireEvent.change(screen.getByTestId('user-filter-select'), { target: { value: String(BOB_ID) } })
+
+    // Summary API should be called again with userId = BOB_ID
+    await waitFor(() =>
+      expect(projectApi.getProjectSummary).toHaveBeenCalledWith('1', null, null, BOB_ID)
+    )
+  })
+
+  it('shows task owner name on shared project task rows', async () => {
+    projectApi.getProjectSummary.mockResolvedValueOnce({
+      data: makeSummary({
+        contributions: [
+          { userId: ALICE_ID, displayName: 'Alice', totalSeconds: 3600 },
+          { userId: BOB_ID,   displayName: 'Bob',   totalSeconds: 1800 },
+        ],
+        tasks: [
+          { id: 10, description: 'Alice task', startTime: '2026-06-01T10:00:00Z',
+            endTime: '2026-06-01T11:00:00Z', running: false, userId: ALICE_ID, userName: 'Alice' },
+          { id: 11, description: 'Bob task',   startTime: '2026-06-01T11:00:00Z',
+            endTime: '2026-06-01T11:30:00Z', running: false, userId: BOB_ID,   userName: 'Bob' },
+        ]
+      })
+    })
+    setup()
+    await waitFor(() => expect(screen.getByTestId('task-owner-10')).toBeInTheDocument())
+    expect(screen.getByTestId('task-owner-10')).toHaveTextContent('Alice')
+    expect(screen.getByTestId('task-owner-11')).toHaveTextContent('Bob')
+  })
+
+  it('does not show task owner name for solo projects', async () => {
+    // Only one contribution → not a shared project → no owner badge on tasks
+    projectApi.getProjectSummary.mockResolvedValue({
+      data: makeSummary({
+        contributions: [{ userId: ALICE_ID, displayName: 'Alice', totalSeconds: 3600 }],
+        tasks: [{ id: 10, description: 'Solo task', startTime: '2026-06-01T10:00:00Z',
+          endTime: '2026-06-01T11:00:00Z', running: false, userId: ALICE_ID, userName: 'Alice' }]
+      })
+    })
+    setup()
+    await waitFor(() => expect(screen.getByTestId('summary-task-10')).toBeInTheDocument())
+    expect(screen.queryByTestId('task-owner-10')).not.toBeInTheDocument()
   })
 
 })

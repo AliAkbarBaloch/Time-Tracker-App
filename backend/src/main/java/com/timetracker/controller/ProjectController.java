@@ -56,14 +56,20 @@ public class ProjectController {
         projectService.deleteProject(principal.getUsername(), id, force);
     }
 
+    /**
+     * Returns project summary with per-user contributions (US-023).
+     * Optional ?userId={id} filters tasks and totalSeconds to a single member.
+     * Returns 403 if userId belongs to someone who is not a project member.
+     */
     @GetMapping("/{id}/summary")
     public ProjectSummaryResponse getProjectSummary(@AuthenticationPrincipal UserDetails principal,
                                                     @PathVariable Long id,
                                                     @RequestParam(required = false) String from,
-                                                    @RequestParam(required = false) String to) {
+                                                    @RequestParam(required = false) String to,
+                                                    @RequestParam(required = false) Long userId) {
         Instant fromInstant = from != null ? Instant.parse(from) : null;
         Instant toInstant   = to   != null ? Instant.parse(to)   : null;
-        return projectService.getProjectSummary(principal.getUsername(), id, fromInstant, toInstant);
+        return projectService.getProjectSummary(principal.getUsername(), id, fromInstant, toInstant, userId);
     }
 
     // ── Member management (US-022) ────────────────────────────────────────────

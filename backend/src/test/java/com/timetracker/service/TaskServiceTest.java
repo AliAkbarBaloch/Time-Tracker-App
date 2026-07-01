@@ -509,7 +509,7 @@ class TaskServiceTest {
 
     @Test
     void listTasks_projectIdFilter_projectNotFound_throws() {
-        when(taskRepository.findByUserOrderByStartTimeDesc(user)).thenReturn(List.of());
+        // Project lookup happens before task fetch now, so no taskRepository stub needed
         when(projectRepository.findByIdAndMember(99L, user)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() ->

@@ -134,19 +134,58 @@ public class TaskService {
     }
 
     public List<TaskResponse> listTasks(String userEmail, Instant from, Instant to) {
-        return listTasks(userEmail, from, to, null, null);
+        return listTasks(userEmail, from, to, null, null, null);
     }
 
+    /** Delegates to the 6-param version with no userId filter for backward compatibility. */
     public List<TaskResponse> listTasks(String userEmail, Instant from, Instant to,
                                         String search, Long projectId) {
-        User user = loadUser(userEmail);
+        return listTasks(userEmail, from, to, search, projectId, null);
+    }
+
+    /**
+     * Full-featured list with optional date range, keyword search, project filter,
+     * and — when combined with projectId — a per-user filter (US-023).
+     *
+     * When userId is provided:
+     *  - projectId must also be provided (caller must be a project member)
+     *  - the target user (userId) must also be a project member; otherwise 403
+     *  - returns tasks belonging to userId rather than the caller
+     */
+    public List<TaskResponse> listTasks(String userEmail, Instant from, Instant to,
+                                        String search, Long projectId, Long userId) {
+        User caller = loadUser(userEmail);
+        User taskOwner = caller;  // whose tasks to fetch; defaults to the caller
+        Project filterProject = null;
+
+        // Load and validate project membership for the caller when projectId is given
+        if (projectId != null) {
+            filterProject = projectRepository.findByIdAndMember(projectId, caller)
+                    .orElseThrow(() -> new ProjectNotFoundException(projectId));
+        }
+
+        // userId filter: validate both caller and target are project members (US-023)
+        if (userId != null) {
+            if (filterProject == null) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "userId filter requires projectId to be specified.");
+            }
+            // Verify the target user exists and is a member of the same project
+            User targetUser = userRepository.findById(userId)
+                    .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException(
+                            "User is not a member of this project."));
+            projectRepository.findByIdAndMember(projectId, targetUser)
+                    .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException(
+                            "User is not a member of this project."));
+            taskOwner = targetUser;
+        }
 
         List<Task> tasks;
         if (from != null && to != null) {
             tasks = new ArrayList<>(taskRepository
-                    .findByUserAndStartTimeBetweenOrderByStartTimeAsc(user, from, to));
+                    .findByUserAndStartTimeBetweenOrderByStartTimeAsc(taskOwner, from, to));
         } else {
-            tasks = new ArrayList<>(taskRepository.findByUserOrderByStartTimeDesc(user));
+            tasks = new ArrayList<>(taskRepository.findByUserOrderByStartTimeDesc(taskOwner));
         }
 
         if (search != null && !search.isBlank()) {
@@ -157,11 +196,8 @@ public class TaskService {
                     .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
         }
 
-        if (projectId != null) {
-            // Members of shared projects can filter their own tasks by that project too
-            Project project = projectRepository.findByIdAndMember(projectId, user)
-                    .orElseThrow(() -> new ProjectNotFoundException(projectId));
-            Set<Long> subtreeIds = collectSubtreeProjectIds(project);
+        if (filterProject != null) {
+            Set<Long> subtreeIds = collectSubtreeProjectIds(filterProject);
             tasks = tasks.stream()
                     .filter(t -> t.getProjects().stream()
                             .anyMatch(p -> subtreeIds.contains(p.getId())))
