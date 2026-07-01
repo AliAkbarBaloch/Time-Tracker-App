@@ -458,3 +458,149 @@ describe('TasksPage', () => {
     )
   })
 })
+
+// ── US-019: Search and Filter ──────────────────────────────
+describe('TasksPage — search and filter', () => {
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
+  })
+
+  it('renders filter panel with all controls', async () => {
+    taskApi.listTasks.mockResolvedValue({ data: [] })
+    setup()
+    expect(screen.getByTestId('filter-panel')).toBeInTheDocument()
+    expect(screen.getByTestId('filter-search-input')).toBeInTheDocument()
+    expect(screen.getByTestId('filter-project-select')).toBeInTheDocument()
+    expect(screen.getByTestId('filter-from')).toBeInTheDocument()
+    expect(screen.getByTestId('filter-to')).toBeInTheDocument()
+    expect(screen.getByTestId('filter-reset-btn')).toBeInTheDocument()
+  })
+
+  it('passes search keyword to listTasks after debounce', async () => {
+    taskApi.listTasks.mockResolvedValue({ data: [] })
+    setup()
+    await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalled())
+
+    fireEvent.change(screen.getByTestId('filter-search-input'), { target: { value: 'research' } })
+
+    await waitFor(() => {
+      const calls = taskApi.listTasks.mock.calls
+      const last = calls[calls.length - 1]
+      expect(last[2]).toBe('research')
+    }, { timeout: 1000 })
+  })
+
+  it('passes projectId to listTasks when project selected', async () => {
+    taskApi.listTasks.mockResolvedValue({ data: [] })
+    setup()
+    await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalled())
+    await waitFor(() => expect(screen.getByTestId('filter-project-select')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByTestId('filter-project-select'), { target: { value: '100' } })
+
+    await waitFor(() => {
+      const calls = taskApi.listTasks.mock.calls
+      const last = calls[calls.length - 1]
+      expect(last[3]).toBe('100')
+    })
+  })
+
+  it('passes date range to listTasks when from/to set', async () => {
+    taskApi.listTasks.mockResolvedValue({ data: [] })
+    setup()
+    await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalled())
+
+    fireEvent.change(screen.getByTestId('filter-from'), { target: { value: '2026-06-01' } })
+    fireEvent.change(screen.getByTestId('filter-to'),   { target: { value: '2026-06-30' } })
+
+    await waitFor(() => {
+      const calls = taskApi.listTasks.mock.calls
+      const last = calls[calls.length - 1]
+      expect(last[0]).toContain('2026-06-01')
+      expect(last[1]).toContain('2026-06-30')
+    })
+  })
+
+  it('shows no-tasks-message when filtered results are empty', async () => {
+    taskApi.listTasks.mockResolvedValue({ data: [] })
+    setup()
+    await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalled())
+
+    fireEvent.change(screen.getByTestId('filter-search-input'), { target: { value: 'xyz' } })
+
+    await waitFor(() => {
+      expect(screen.getByTestId('no-tasks-message')).toBeInTheDocument()
+    }, { timeout: 1000 })
+  })
+
+  it('shows match message when filter yields no results', async () => {
+    taskApi.listTasks.mockResolvedValue({ data: [] })
+    setup()
+    await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalled())
+
+    fireEvent.change(screen.getByTestId('filter-search-input'), { target: { value: 'xyz' } })
+
+    await waitFor(() => {
+      const msg = screen.getByTestId('no-tasks-message')
+      expect(msg).toHaveTextContent('No tasks match')
+    }, { timeout: 1000 })
+  })
+
+  it('reset button clears search input', async () => {
+    taskApi.listTasks.mockResolvedValue({ data: [] })
+    setup()
+    await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalled())
+
+    fireEvent.change(screen.getByTestId('filter-search-input'), { target: { value: 'test' } })
+    expect(screen.getByTestId('filter-search-input')).toHaveValue('test')
+
+    fireEvent.click(screen.getByTestId('filter-reset-btn'))
+    expect(screen.getByTestId('filter-search-input')).toHaveValue('')
+  })
+
+  it('reset button clears project select', async () => {
+    taskApi.listTasks.mockResolvedValue({ data: [] })
+    setup()
+    await waitFor(() => expect(screen.getByTestId('filter-project-select')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByTestId('filter-project-select'), { target: { value: '100' } })
+    expect(screen.getByTestId('filter-project-select')).toHaveValue('100')
+
+    fireEvent.click(screen.getByTestId('filter-reset-btn'))
+    expect(screen.getByTestId('filter-project-select')).toHaveValue('')
+  })
+
+  it('reset button refetches with no filters', async () => {
+    taskApi.listTasks.mockResolvedValue({ data: [] })
+    setup()
+    await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalled())
+
+    // Use date filter (no debounce) to trigger an extra fetch, then reset
+    fireEvent.change(screen.getByTestId('filter-from'), { target: { value: '2026-06-01' } })
+    await waitFor(() => {
+      const calls = taskApi.listTasks.mock.calls
+      expect(calls[calls.length - 1][0]).toContain('2026-06-01')
+    })
+
+    fireEvent.click(screen.getByTestId('filter-reset-btn'))
+
+    await waitFor(() => {
+      const calls = taskApi.listTasks.mock.calls
+      const last = calls[calls.length - 1]
+      expect(last[0]).toBeFalsy()
+      expect(last[2]).toBeFalsy()
+    })
+  })
+
+  it('project dropdown is populated with available projects', async () => {
+    taskApi.listTasks.mockResolvedValue({ data: [] })
+    setup()
+    await waitFor(() => expect(screen.getByTestId('filter-project-select')).toBeInTheDocument())
+    await waitFor(() => {
+      expect(screen.getByRole('option', { name: /Thesis/ })).toBeInTheDocument()
+      expect(screen.getByRole('option', { name: /Work/ })).toBeInTheDocument()
+    })
+  })
+})
