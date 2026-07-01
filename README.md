@@ -17,6 +17,7 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Weekly overview** — the Overview page shows all seven days of the selected week in a grid, with per-day totals, a week total, and prev/next navigation to browse past or future weeks.
 - **Monthly overview** — the Overview page's Month tab shows a full calendar grid of the selected month. Each day cell displays its tracked total; clicking a day opens a panel listing that day's tasks with durations. Prev/next navigation and a monthly total are included.
 - **Project time summary** — click any project name to open its detail page. A date-range picker (Today, This Week, This Month, All Time, Custom) filters the aggregation window. The page shows the project's rolled-up total (across the full subproject tree, with deduplication for shared tasks), each direct subproject's individual total, and a sorted task list with durations.
+- **Search and filter tasks** — a filter panel above the task list lets you search by description keyword (debounced 300 ms), filter by project (includes all subprojects), and filter by date range. Filters combine with AND logic. A Reset button clears all filters at once.
 - **Persistent timer** — a running timer survives page refreshes, tab closes, and browser restarts. On every page load the app calls `GET /api/tasks/active` to recompute elapsed time from `startTime` in the database. No browser storage is used for timer state. A live-updating banner in the top navigation bar shows the running task description and elapsed time on every page.
 - **Change password** — update your account password securely at any time from the Settings page.
 
@@ -118,7 +119,7 @@ What this does:
 
 Expected output at the end:
 ```
-Tests run: 154, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 169, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -169,7 +170,7 @@ npx vitest run
 Expected output:
 ```
 Test Files  10 passed (10)
-     Tests  161 passed (161)
+     Tests  171 passed (171)
 ```
 
 ### Step 7 — Start the frontend dev server
@@ -238,11 +239,12 @@ cd backend
 | `TaskControllerDeleteTest` | 5 | Delete task, ownership, authentication |
 | `TaskControllerAssociateProjectsTest` | 8 | Create/update task with projects, invalid project ID, project totals |
 | `TaskControllerListFilterTest` | 6 | List tasks with/without date-range params, sort order, 401 |
+| `TaskControllerSearchFilterTest` | 10 | Keyword search (case-insensitive), project filter (incl. subprojects), combined filters, 401 |
 | `ProjectControllerTest` | 7 | Create project, duplicate name, list, hierarchy |
 | `ProjectControllerSubprojectTest` | 5 | Subproject creation, circular hierarchy guard |
 | `ProjectControllerEditDeleteTest` | 11 | Edit project, delete with/without associations, force delete |
 | `AuthServiceTest` | 8 | Registration, login, change password (unit) |
-| `TaskServiceTest` | 27 | All task service operations including project association and date filtering (unit) |
+| `TaskServiceTest` | 32 | All task service operations including project association, date filtering, keyword search, projectId filter (unit) |
 | `ProjectServiceTest` | 18 | All project service operations (unit) |
 | `ProjectSummaryControllerTest` | 9 | GET /projects/{id}/summary — date range, deduplication, subproject totals, 401/404 |
 
@@ -263,6 +265,7 @@ npx vitest run
 | `OverviewPage.test.jsx` | 48 | Week view (day/week totals, nav, task grouping, click); month view (calendar cells, day totals, month total, selected-day panel, nav, loading) |
 | `ProjectDetailPage.test.jsx` | 27 | Date-range presets, custom range form, project name/desc/total, subproject totals, task list, running task, error states, back navigation |
 | `Layout.test.jsx` | 14 | Topbar timer visible/hidden, elapsed from startTime, timer on all pages, API called once on mount |
+| `TasksPage.test.jsx (filter)` | 10 | Filter panel rendered, search debounce, project filter, date range, no-results message, reset |
 
 ---
 
@@ -286,7 +289,7 @@ Authorization: Bearer <your-JWT-token>
 
 | Method | Path | Request body | Response | Notes |
 |---|---|---|---|---|
-| GET | `/api/tasks` | — | 200 `Task[]` | Add `?from=<ISO>&to=<ISO>` for date range |
+| GET | `/api/tasks` | — | 200 `Task[]` | Add `?from=<ISO>&to=<ISO>&search=<keyword>&projectId=<id>` for filtering |
 | GET | `/api/tasks/active` | — | 200 or 204 | 204 = no active timer |
 | POST | `/api/tasks/start` | `{description?}` | 201 | Returns the new running task |
 | POST | `/api/tasks/stop` | — | 200 | Returns the stopped task |

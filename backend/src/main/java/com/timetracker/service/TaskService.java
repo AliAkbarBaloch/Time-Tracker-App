@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -131,13 +132,49 @@ public class TaskService {
     }
 
     public List<TaskResponse> listTasks(String userEmail, Instant from, Instant to) {
+        return listTasks(userEmail, from, to, null, null);
+    }
+
+    public List<TaskResponse> listTasks(String userEmail, Instant from, Instant to,
+                                        String search, Long projectId) {
         User user = loadUser(userEmail);
+
+        List<Task> tasks;
         if (from != null && to != null) {
-            return taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(user, from, to)
-                    .stream().map(TaskResponse::from).toList();
+            tasks = new ArrayList<>(taskRepository
+                    .findByUserAndStartTimeBetweenOrderByStartTimeAsc(user, from, to));
+        } else {
+            tasks = new ArrayList<>(taskRepository.findByUserOrderByStartTimeDesc(user));
         }
-        return taskRepository.findByUserOrderByStartTimeDesc(user).stream()
-                .map(TaskResponse::from).toList();
+
+        if (search != null && !search.isBlank()) {
+            String lower = search.toLowerCase();
+            tasks = tasks.stream()
+                    .filter(t -> t.getDescription() != null
+                            && t.getDescription().toLowerCase().contains(lower))
+                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        }
+
+        if (projectId != null) {
+            Project project = projectRepository.findByIdAndUser(projectId, user)
+                    .orElseThrow(() -> new ProjectNotFoundException(projectId));
+            Set<Long> subtreeIds = collectSubtreeProjectIds(project);
+            tasks = tasks.stream()
+                    .filter(t -> t.getProjects().stream()
+                            .anyMatch(p -> subtreeIds.contains(p.getId())))
+                    .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
+        }
+
+        return tasks.stream().map(TaskResponse::from).toList();
+    }
+
+    private Set<Long> collectSubtreeProjectIds(Project project) {
+        Set<Long> ids = new HashSet<>();
+        ids.add(project.getId());
+        for (Project sub : project.getSubprojects()) {
+            ids.addAll(collectSubtreeProjectIds(sub));
+        }
+        return ids;
     }
 
     public Optional<TaskResponse> getActiveTask(String userEmail) {

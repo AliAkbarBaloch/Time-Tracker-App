@@ -57,6 +57,13 @@ export default function TasksPage() {
   const [tasks, setTasks]                   = useState([])
   const [availableProjects, setAvailableProjects] = useState([])
 
+  // filter state
+  const [searchKw, setSearchKw]             = useState('')
+  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const [filterProjectId, setFilterProjectId] = useState('')
+  const [filterFrom, setFilterFrom]         = useState('')
+  const [filterTo, setFilterTo]             = useState('')
+
   const [showForm, setShowForm]             = useState(false)
   const [description, setDescription]       = useState('')
   const [startTime, setStartTime]           = useState('')
@@ -74,11 +81,19 @@ export default function TasksPage() {
   const [editError, setEditError]           = useState('')
   const [editLoading, setEditLoading]       = useState(false)
 
+  // debounce search keyword 300 ms
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedSearch(searchKw), 300)
+    return () => clearTimeout(id)
+  }, [searchKw])
+
   const fetchTasks = useCallback(() => {
-    taskApi.listTasks()
+    const from = filterFrom ? new Date(filterFrom).toISOString() : null
+    const to   = filterTo   ? new Date(filterTo + 'T23:59:59').toISOString() : null
+    taskApi.listTasks(from, to, debouncedSearch || null, filterProjectId || null)
       .then(res => setTasks(res.data))
       .catch(() => {})
-  }, [])
+  }, [debouncedSearch, filterProjectId, filterFrom, filterTo])
 
   const fetchProjects = useCallback(() => {
     projectApi.listProjects()
@@ -134,6 +149,14 @@ export default function TasksPage() {
 
   const cancelEdit = () => { setEditingId(null); setEditError('') }
 
+  const handleReset = () => {
+    setSearchKw('')
+    setDebouncedSearch('')
+    setFilterProjectId('')
+    setFilterFrom('')
+    setFilterTo('')
+  }
+
   const handleDelete = async (taskId) => {
     if (!window.confirm('Are you sure you want to delete this task? This action cannot be undone.')) return
     try {
@@ -185,6 +208,48 @@ export default function TasksPage() {
         </button>
       </div>
 
+      {/* Filter panel */}
+      <div className="filter-panel" data-testid="filter-panel">
+        <input
+          className="timer-input filter-input"
+          type="text"
+          placeholder="Search by description…"
+          value={searchKw}
+          onChange={e => setSearchKw(e.target.value)}
+          data-testid="filter-search-input"
+        />
+        <select
+          className="timer-input filter-select"
+          value={filterProjectId}
+          onChange={e => setFilterProjectId(e.target.value)}
+          data-testid="filter-project-select"
+        >
+          <option value="">All Projects</option>
+          {flatProjects.map(p => (
+            <option key={p.id} value={p.id}>{'— '.repeat(p.depth)}{p.name}</option>
+          ))}
+        </select>
+        <input
+          className="timer-input filter-date"
+          type="date"
+          value={filterFrom}
+          onChange={e => setFilterFrom(e.target.value)}
+          data-testid="filter-from"
+        />
+        <input
+          className="timer-input filter-date"
+          type="date"
+          value={filterTo}
+          onChange={e => setFilterTo(e.target.value)}
+          data-testid="filter-to"
+        />
+        <button
+          className="btn btn-ghost btn-sm"
+          onClick={handleReset}
+          data-testid="filter-reset-btn"
+        >Reset</button>
+      </div>
+
       {showForm && (
         <form className="project-form" onSubmit={handleCreate} data-testid="add-task-form">
           <input className="timer-input" type="text" placeholder="Description (optional)"
@@ -215,7 +280,9 @@ export default function TasksPage() {
 
       <div className="task-list" data-testid="task-list">
         {tasks.length === 0 && !showForm && (
-          <p className="empty-state">No tasks yet. Add your first task above.</p>
+          (debouncedSearch || filterProjectId || filterFrom || filterTo)
+            ? <p className="empty-state" data-testid="no-tasks-message">No tasks match the current filters.</p>
+            : <p className="empty-state" data-testid="no-tasks-message">No tasks yet. Add your first task above.</p>
         )}
         {tasks.map(t => (
           <div key={t.id} className="task-row" data-testid={`task-item-${t.id}`}>
