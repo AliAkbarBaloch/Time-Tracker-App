@@ -130,7 +130,7 @@ What this does:
 
 Expected output at the end:
 ```
-Tests run: 416, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 428, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -255,7 +255,7 @@ To run mutation tests (PITest — ≥ 80% test strength on service unit tests):
 ./mvnw pitest:mutationCoverage
 ```
 
-PITest targets all `com.timetracker.service.*` classes and runs against the Mockito-based service unit tests (no Spring context started). The test-strength metric measures killed/covered mutations = 82% against the 80% threshold. HTML report generated at `target/pit-reports/index.html`.
+PITest targets all `com.timetracker.service.*` classes and runs against the Mockito-based service unit tests (no Spring context started). The test-strength metric measures killed/covered mutations (225/281 = 80%) against the 80% threshold. HTML report generated at `target/pit-reports/index.html`.
 
 
 
@@ -276,11 +276,11 @@ PITest targets all `com.timetracker.service.*` classes and runs against the Mock
 | `ProjectControllerSubprojectTest` | 5 | Subproject creation, circular hierarchy guard |
 | `ProjectControllerEditDeleteTest` | 11 | Edit project, delete with/without associations, force delete |
 | `AuthServiceTest` | 8 | Registration, login, change password (unit) |
-| `TaskServiceTest` | 32 | All task service operations including project association, date filtering, keyword search, projectId filter (unit) |
+| `TaskServiceTest` | 37 | All task service operations including project association, date filtering, keyword search, projectId filter (unit); ArgumentCaptor tests kill setter/boundary/lambda mutations |
 | `ProjectServiceTest` | 24 | All project service operations including member management (unit) |
 | `ProjectSummaryControllerTest` | 9 | GET /projects/{id}/summary — date range, deduplication, subproject totals, 401/404 |
 | `DashboardControllerTest` | 10 | GET /api/dashboard/summary — today/week totals, running task, top projects, cross-user isolation, 401 |
-| `DashboardServiceTest` | 9 | Dashboard service unit — empty state, today/week aggregation, running task, top 5 limit, subtree time, user not found |
+| `DashboardServiceTest` | 11 | Dashboard service unit — empty state, today/week aggregation, running task, top 5 limit, subtree time, user not found; weekStart=Monday assertion, budget usedHours/budgetPercent verification |
 | `SecurityNfrTest` | 33 | NFR-001 Security: BCrypt hash format/salting, JWT 401 on all protected endpoints, tampered token, public endpoints, cross-user isolation (403/404 for tasks/projects), Bean Validation 400 (blank/invalid fields), SQL injection inputs handled safely |
 | `DataPersistenceTest` | 11 | US-021 Data Persistence: tasks/projects survive logout+re-login, running timer accessible after re-auth, subproject hierarchy persists, task-project join persists, multi-task retrieval, cross-user isolation after re-login, schema auto-created on first boot |
 | `UsabilityNfrTest` | 16 | NFR-003 Usability: field-level 400 errors have human-readable messages (register/login/createTask/createProject), 401/409 include `message`, start/stop timer each require exactly 1 API call, GET /tasks/active returns running task for topbar, 204 returned (not an error) when no timer is running |
