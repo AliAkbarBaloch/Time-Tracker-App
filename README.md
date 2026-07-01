@@ -71,12 +71,10 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 │       └── test/java/com/timetracker/
 │           ├── controller/           # Integration tests (MockMvc + real H2)
 │           └── service/              # Unit tests (Mockito)
-├── e2e/                              # Playwright system tests (TypeScript)
-│   ├── helpers/                      # auth.ts — API-based login helper (injects JWT into localStorage)
-│   ├── tests/                        # one .spec.ts file per user story
-│   ├── playwright.config.ts          # baseURL, retries, reporters, Chromium project
-│   └── package.json                  # @playwright/test 1.49 dependency
 └── frontend/                         # React + Vite SPA
+    ├── e2e/                          # Playwright system tests (TypeScript, one file per user story)
+    │   └── helpers/                  # auth.ts — API-based login helper (injects JWT into localStorage)
+    ├── playwright.config.ts          # Playwright config: baseURL, retries, Chromium project
     └── src/
         ├── api/                      # authApi.js, taskApi.js, projectApi.js, analyticsApi.js (Axios)
         ├── context/                  # AuthContext (JWT storage + auth state + timezone), TimerContext (shared active task state)
@@ -319,9 +317,8 @@ Requires the full application to be running (either locally or via Docker Compos
 # Start the stack
 docker compose up -d
 
-# Run Playwright tests
-cd e2e
-npm ci
+# Run Playwright tests (from the frontend directory)
+cd frontend
 npx playwright test
 ```
 

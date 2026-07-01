@@ -16,6 +16,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: './src/test/setup.js',
+    exclude: ['**/node_modules/**', '**/e2e/**'],
     coverage: {
       provider: 'v8',
       reporter: ['text', 'lcov', 'html'],
@@ -28,6 +29,7 @@ export default defineConfig({
         'src/main.jsx',
         '**/*.config.*',
         '**/node_modules/**',
+        'e2e/**',
       ],
       thresholds: {
         lines: 90,
