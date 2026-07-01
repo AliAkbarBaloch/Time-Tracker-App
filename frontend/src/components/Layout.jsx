@@ -38,7 +38,8 @@ export default function Layout() {
           <NavLink to="/dashboard" className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Dashboard</NavLink>
           <NavLink to="/tasks"     className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Tasks</NavLink>
           <NavLink to="/projects"  className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Projects</NavLink>
-          <NavLink to="/overview"  className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Overview</NavLink>
+          <NavLink to="/overview"   className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Overview</NavLink>
+          <NavLink to="/analytics"  className={({ isActive }) => isActive ? 'nav-link active' : 'nav-link'}>Analytics</NavLink>
         </nav>
 
         <div className="topbar-user">
