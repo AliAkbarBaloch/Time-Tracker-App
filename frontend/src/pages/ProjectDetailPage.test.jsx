@@ -414,8 +414,7 @@ describe('ProjectDetailPage', () => {
 
   it('displays member count in section header', async () => {
     setup()
-    await waitFor(() => expect(screen.getByTestId('members-count')).toBeInTheDocument())
-    expect(screen.getByTestId('members-count')).toHaveTextContent('2 members')
+    await waitFor(() => expect(screen.getByTestId('members-count')).toHaveTextContent('2 members'))
   })
 
   // ── US-023: Contributors card and user-filter dropdown ────────────────────

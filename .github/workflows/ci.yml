@@ -56,4 +56,4 @@ jobs:
             -v "${{ github.workspace }}/frontend":/workspace \
             -w /workspace \
             node:24-alpine \
-            sh -c "npm ci && npm run lint && npm run test && npm run build"
+            sh -c "npm ci && npm run lint && npm run test:coverage && npm run build"
