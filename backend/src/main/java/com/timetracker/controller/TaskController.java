@@ -35,10 +35,12 @@ public class TaskController {
     @GetMapping
     public List<TaskResponse> listTasks(@AuthenticationPrincipal UserDetails principal,
                                         @RequestParam(required = false) String from,
-                                        @RequestParam(required = false) String to) {
+                                        @RequestParam(required = false) String to,
+                                        @RequestParam(required = false) String search,
+                                        @RequestParam(required = false) Long projectId) {
         Instant fromInstant = from != null ? Instant.parse(from) : null;
         Instant toInstant   = to   != null ? Instant.parse(to)   : null;
-        return taskService.listTasks(principal.getUsername(), fromInstant, toInstant);
+        return taskService.listTasks(principal.getUsername(), fromInstant, toInstant, search, projectId);
     }
 
     @PostMapping("/start")
