@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { registerUser } from '../helpers/auth';
+import { registerUser } from './helpers/auth';
 
 const UNIQUE = () => `reg${Date.now()}@e2e.test`;
 
