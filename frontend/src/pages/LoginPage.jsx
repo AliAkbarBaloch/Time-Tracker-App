@@ -8,6 +8,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState('')
+  const [fieldErrors, setFieldErrors] = useState({})
   const [loading, setLoading] = useState(false)
 
   const { register, login } = useAuth()
@@ -16,6 +17,7 @@ export default function LoginPage() {
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
+    setFieldErrors({})
     setLoading(true)
     try {
       if (mode === 'register') {
@@ -25,10 +27,12 @@ export default function LoginPage() {
       }
       navigate('/dashboard')
     } catch (err) {
-      const msg = err.response?.data?.message
-        || Object.values(err.response?.data?.errors || {}).join(', ')
-        || 'Something went wrong. Please try again.'
-      setError(msg)
+      const errors = err.response?.data?.errors
+      if (errors && Object.keys(errors).length > 0) {
+        setFieldErrors(errors)
+      } else {
+        setError(err.response?.data?.message || 'Something went wrong. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
@@ -46,11 +50,11 @@ export default function LoginPage() {
         <div className="tab-bar">
           <button
             className={`tab-btn ${mode === 'login' ? 'active' : ''}`}
-            onClick={() => { setMode('login'); setError('') }}
+            onClick={() => { setMode('login'); setError(''); setFieldErrors({}) }}
           >Log In</button>
           <button
             className={`tab-btn ${mode === 'register' ? 'active' : ''}`}
-            onClick={() => { setMode('register'); setError('') }}
+            onClick={() => { setMode('register'); setError(''); setFieldErrors({}) }}
           >Register</button>
         </div>
 
@@ -66,8 +70,12 @@ export default function LoginPage() {
                 placeholder="Ali Akbar"
                 value={displayName}
                 onChange={e => setDisplayName(e.target.value)}
+                className={fieldErrors.displayName ? 'input-error' : ''}
                 required
               />
+              {fieldErrors.displayName && (
+                <p className="field-error" role="alert" data-testid="error-displayName">{fieldErrors.displayName}</p>
+              )}
             </div>
           )}
           <div className="form-group">
@@ -78,8 +86,12 @@ export default function LoginPage() {
               placeholder="you@example.com"
               value={email}
               onChange={e => setEmail(e.target.value)}
+              className={fieldErrors.email ? 'input-error' : ''}
               required
             />
+            {fieldErrors.email && (
+              <p className="field-error" role="alert" data-testid="error-email">{fieldErrors.email}</p>
+            )}
           </div>
           <div className="form-group">
             <label htmlFor="password">Password</label>
@@ -89,8 +101,12 @@ export default function LoginPage() {
               placeholder="••••••••"
               value={password}
               onChange={e => setPassword(e.target.value)}
+              className={fieldErrors.password ? 'input-error' : ''}
               required
             />
+            {fieldErrors.password && (
+              <p className="field-error" role="alert" data-testid="error-password">{fieldErrors.password}</p>
+            )}
           </div>
           <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
             {loading ? 'Please wait…' : mode === 'login' ? 'Log In' : 'Create Account'}

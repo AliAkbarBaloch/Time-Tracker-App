@@ -179,5 +179,11 @@ input { font-family: inherit; font-size: 14px; }
 .top-project-name { font-weight: 500; color: #1e293b; }
 .top-project-time { font-weight: 600; color: #3b82f6; font-size: 14px; }
 
+/* ─── Error Messages ─────────────────────────────────────── */
+.auth-error { background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; border-radius: 8px; padding: .55rem .9rem; font-size: 13px; margin-bottom: .25rem; }
+.timer-error { color: #b91c1c; font-size: 13px; margin-top: .25rem; }
+.field-error { color: #b91c1c; font-size: 12px; margin-top: .2rem; }
+.form-group input.input-error { border-color: #ef4444; }
+
 /* ─── Animation ──────────────────────────────────────────── */
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
