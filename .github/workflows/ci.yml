@@ -34,6 +34,15 @@ jobs:
             eclipse-temurin:21-jdk \
             bash -c "chmod +x mvnw && ./mvnw --no-transfer-progress verify"
 
+      - name: Mutation tests (PITest) inside Docker
+        run: |
+          docker run --rm \
+            -v "${{ github.workspace }}":/workspace \
+            -v "$HOME/.m2":/root/.m2 \
+            -w /workspace/backend \
+            eclipse-temurin:21-jdk \
+            bash -c "chmod +x mvnw && ./mvnw --no-transfer-progress pitest:mutationCoverage"
+
   # ─── Frontend: lint, unit tests, build ───────────────────────────────────
   frontend:
     name: Frontend (Node 24 / Vite)

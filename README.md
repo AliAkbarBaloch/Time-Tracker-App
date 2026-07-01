@@ -44,8 +44,10 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 | Frontend | React 19, Vite 6, React Router 7, Axios |
 | Auth | Stateless JWT (jjwt 0.12.6) + BCrypt password hashing |
 | Testing (backend) | JUnit 5, Mockito, Spring MockMvc (integration tests hit a real H2 instance) |
-| Testing (frontend) | Vitest, @testing-library/react |
-| CI | GitHub Actions — lint + unit + integration + system tests, Jacoco line coverage |
+| Coverage (backend) | JaCoCo 0.8.12 — 90% line coverage enforced on `mvn verify` |
+| Mutation testing | PITest 1.17.1 + pitest-junit5-plugin 1.2.1 — 80% test-strength threshold (service unit tests) |
+| Testing (frontend) | Vitest, @testing-library/react, @vitest/coverage-v8 — 90% line/statement coverage enforced |
+| CI | GitHub Actions — lint + unit + integration + system tests, JaCoCo coverage, PITest mutation tests |
 
 ---
 
@@ -128,7 +130,7 @@ What this does:
 
 Expected output at the end:
 ```
-Tests run: 360, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 416, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -240,6 +242,22 @@ Data is persisted in a Docker volume (`timetracker-data`) across container resta
 cd backend
 ./mvnw test
 ```
+
+To also run JaCoCo line-coverage enforcement (≥ 90%):
+
+```bash
+./mvnw verify
+```
+
+To run mutation tests (PITest — ≥ 80% test strength on service unit tests):
+
+```bash
+./mvnw pitest:mutationCoverage
+```
+
+PITest targets all `com.timetracker.service.*` classes and runs against the Mockito-based service unit tests (no Spring context started). The test-strength metric measures killed/covered mutations = 82% against the 80% threshold. HTML report generated at `target/pit-reports/index.html`.
+
+
 
 | Test class | Count | What it covers |
 |---|---|---|
