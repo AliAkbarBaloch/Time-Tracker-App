@@ -16,11 +16,11 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Daily overview** — the Dashboard shows today's tasks and a live running total so you always know how much you have worked today.
 - **Weekly overview** — the Overview page shows all seven days of the selected week in a grid, with per-day totals, a week total, and prev/next navigation to browse past or future weeks.
 - **Monthly overview** — the Overview page's Month tab shows a full calendar grid of the selected month. Each day cell displays its tracked total; clicking a day opens a panel listing that day's tasks with durations. Prev/next navigation and a monthly total are included.
+- **Project time summary** — click any project name to open its detail page. A date-range picker (Today, This Week, This Month, All Time, Custom) filters the aggregation window. The page shows the project's rolled-up total (across the full subproject tree, with deduplication for shared tasks), each direct subproject's individual total, and a sorted task list with durations.
 - **Change password** — update your account password securely at any time from the Settings page.
 
 **What is expected (remaining stories):**
 
-- Per-project time summary with a date-range picker
 - Export of time data to CSV or PDF
 
 ---
@@ -60,7 +60,7 @@ TimeTracker is a full-stack web application that lets individuals — students, 
     └── src/
         ├── api/                      # authApi.js, taskApi.js, projectApi.js (Axios)
         ├── context/                  # AuthContext (JWT storage + auth state)
-        ├── pages/                    # LoginPage, DashboardPage, TasksPage, ProjectsPage, OverviewPage, SettingsPage
+        ├── pages/                    # LoginPage, DashboardPage, TasksPage, ProjectsPage, ProjectDetailPage, OverviewPage, SettingsPage
         └── components/               # Layout (topbar + navigation), ProtectedRoute
 ```
 
@@ -113,11 +113,11 @@ cd backend
 What this does:
 - Downloads all Maven dependencies on first run (may take 1–2 minutes)
 - Compiles the source code
-- Runs all 139 unit and integration tests against an in-memory H2 database
+- Runs all 154 unit and integration tests against an in-memory H2 database
 
 Expected output at the end:
 ```
-Tests run: 139, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 154, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -167,8 +167,8 @@ npx vitest run
 
 Expected output:
 ```
-Test Files  8 passed (8)
-     Tests  122 passed (122)
+Test Files  9 passed (9)
+     Tests  147 passed (147)
 ```
 
 ### Step 7 — Start the frontend dev server
@@ -195,7 +195,7 @@ All `/api/*` requests from the browser are automatically proxied to the backend 
    - Press **Start** on the Dashboard to begin a timer.
    - Press **Stop** to finish the timer. The task appears in the "Today" section immediately.
    - Open **Tasks** in the navigation to add tasks manually, edit, or delete them.
-   - Open **Projects** to create projects and subprojects, then link tasks to them via the checkbox list in the task form.
+   - Open **Projects** to create projects and subprojects, then link tasks to them via the checkbox list in the task form. Click any project name to open its detail page with time totals and a date-range picker.
    - Open **Overview** to see your weekly breakdown. Use the prev/next arrows to navigate weeks.
    - Open **Settings** to change your password.
 
@@ -243,6 +243,7 @@ cd backend
 | `AuthServiceTest` | 8 | Registration, login, change password (unit) |
 | `TaskServiceTest` | 27 | All task service operations including project association and date filtering (unit) |
 | `ProjectServiceTest` | 18 | All project service operations (unit) |
+| `ProjectSummaryControllerTest` | 9 | GET /projects/{id}/summary — date range, deduplication, subproject totals, 401/404 |
 
 ### Frontend
 
@@ -259,6 +260,7 @@ npx vitest run
 | `TasksPage.test.jsx` | 27 | Create, edit, delete tasks; project multi-select on create/edit; project display in task row |
 | `ProjectsPage.test.jsx` | 18 | Create, edit, delete projects; tree view; collapse; force delete dialog |
 | `OverviewPage.test.jsx` | 48 | Week view (day/week totals, nav, task grouping, click); month view (calendar cells, day totals, month total, selected-day panel, nav, loading) |
+| `ProjectDetailPage.test.jsx` | 27 | Date-range presets, custom range form, project name/desc/total, subproject totals, task list, running task, error states, back navigation |
 
 ---
 
@@ -310,6 +312,7 @@ Task response shape:
 | POST | `/api/projects` | `{name, description?, parentProjectId?}` | 201 | Creates project or subproject |
 | PUT | `/api/projects/{id}` | `{name, description?}` | 200 | Rename / re-describe |
 | DELETE | `/api/projects/{id}` | — | 204 or 409 | 409 if associations exist; add `?force=true` to override |
+| GET | `/api/projects/{id}/summary` | — | 200 `ProjectSummaryResponse` | Add `?from=<ISO>&to=<ISO>` to filter by date range |
 
 Project response shape:
 ```json
