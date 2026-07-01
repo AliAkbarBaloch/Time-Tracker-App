@@ -114,7 +114,7 @@ jobs:
             -e CI=true \
             -e BASE_URL=http://localhost:3000 \
             -e API_BASE=http://localhost:8080 \
-            mcr.microsoft.com/playwright:v1.49.0-noble \
+            mcr.microsoft.com/playwright:v1.61.1-noble \
             sh -c "npm ci && npx playwright test"
 
       - name: Upload Playwright report
