@@ -2,6 +2,7 @@ package com.timetracker.controller;
 
 import com.timetracker.dto.project.CreateProjectRequest;
 import com.timetracker.dto.project.ProjectResponse;
+import com.timetracker.dto.project.ProjectSummaryResponse;
 import com.timetracker.dto.project.UpdateProjectRequest;
 import com.timetracker.service.ProjectService;
 import jakarta.validation.Valid;
@@ -10,6 +11,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Instant;
 import java.util.List;
 
 @RestController
@@ -47,5 +49,15 @@ public class ProjectController {
                               @PathVariable Long id,
                               @RequestParam(defaultValue = "false") boolean force) {
         projectService.deleteProject(principal.getUsername(), id, force);
+    }
+
+    @GetMapping("/{id}/summary")
+    public ProjectSummaryResponse getProjectSummary(@AuthenticationPrincipal UserDetails principal,
+                                                    @PathVariable Long id,
+                                                    @RequestParam(required = false) String from,
+                                                    @RequestParam(required = false) String to) {
+        Instant fromInstant = from != null ? Instant.parse(from) : null;
+        Instant toInstant   = to   != null ? Instant.parse(to)   : null;
+        return projectService.getProjectSummary(principal.getUsername(), id, fromInstant, toInstant);
     }
 }

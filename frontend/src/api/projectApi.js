@@ -15,3 +15,10 @@ export function updateProject(id, name, description = null) {
 export function deleteProject(id, force = false) {
   return api.delete(`/projects/${id}?force=${force}`)
 }
+
+export function getProjectSummary(id, from = null, to = null) {
+  const params = {}
+  if (from) params.from = from
+  if (to) params.to = to
+  return api.get(`/projects/${id}/summary`, { params })
+}

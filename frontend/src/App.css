@@ -148,5 +148,18 @@ input { font-family: inherit; font-size: 14px; }
 .bar { width: 100%; background: #3b82f6; border-radius: 4px 4px 0 0; min-height: 4px; transition: height .3s; }
 .bar-label { font-size: 11px; color: #64748b; }
 
+/* ─── Project Detail Page ────────────────────────────────── */
+.btn-link { background: none; border: none; padding: 0; color: #3b82f6; font-weight: 500; cursor: pointer; text-align: left; }
+.btn-link:hover { text-decoration: underline; }
+.preset-bar { display: flex; gap: .4rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.preset-bar .active { background: #3b82f6; color: #fff; }
+.custom-range-form { display: flex; gap: .75rem; align-items: flex-end; flex-wrap: wrap; margin-bottom: 1rem; }
+.custom-range-form label { display: flex; flex-direction: column; gap: .25rem; font-size: 13px; color: #64748b; }
+.summary-list { list-style: none; display: flex; flex-direction: column; gap: .5rem; padding: 1rem 1.25rem; }
+.summary-list-item { display: flex; align-items: center; gap: .75rem; padding: .5rem .75rem; background: #f8fafc; border-radius: 8px; }
+.summary-item-name { flex: 1; font-weight: 500; color: #1e293b; }
+.summary-item-time { font-size: 12px; }
+.summary-item-total { font-weight: 700; color: #3b82f6; white-space: nowrap; }
+
 /* ─── Animation ──────────────────────────────────────────── */
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: .4; } }
