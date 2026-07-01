@@ -26,11 +26,11 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Local deployability (NFR-004)** — the entire stack (backend + frontend + database) starts with a single `docker compose up --build` command; no cloud accounts, no external databases, and no manual setup beyond Docker. The `GET /api/health` endpoint allows Docker Compose to health-check the backend. SPA routing (direct-link refreshes, bookmarks) works correctly — the backend serves `static/index.html` for all non-API client-side routes so React Router can take over. The H2 console is disabled by default and can be enabled temporarily with `-Dspring.h2.console.enabled=true` if needed for database inspection.
 - **Performance (NFR-002)** — dashboard summary data is fetched in a single aggregated `GET /api/dashboard/summary` call (no waterfall). Task lists include embedded project data in the same response body — no follow-up calls needed. Database indexes on `tasks(user_id, start_time)`, `tasks(user_id, end_time)`, and `projects(user_id, parent_project_id)` cover the hot query paths. All task-fetching repository methods use `LEFT JOIN FETCH t.projects` to eliminate the N+1 query problem when loading task–project associations.
 - **Project sharing (US-022)** — project owners can invite registered users by email (`POST /api/projects/{id}/members`). Invitees see the shared project immediately in their project list with a "👥 Shared" badge. Members can associate their own tasks with shared projects. The project detail page shows all members with their roles (OWNER/MEMBER) and an invite form for the owner. Only the owner can edit, delete, or manage membership. Time aggregation in the project summary automatically includes tasks from all members. The `project_members` table is back-filled on startup for pre-existing projects via `MembershipSeeder`.
+- **Task overview for shared projects (US-023)** — the project summary response now includes a `contributions` array showing each member's total seconds. Each task entry carries `userId`/`userName` so the frontend can attribute work to its owner. An optional `?userId={id}` query param on both `GET /api/projects/{id}/summary` and `GET /api/tasks` filters results to a single member (both caller and target must be project members; non-member userId returns 403). The project detail page shows a "Contributors" card and a user-filter dropdown for shared projects; task rows display the owner's display name when the project is shared.
 
 **What is expected (remaining stories):**
 
 - Export of time data to CSV or JSON
-- Task overview for shared projects (per-user contribution breakdown)
 - Time zone preferences
 
 ---
@@ -127,7 +127,7 @@ What this does:
 
 Expected output at the end:
 ```
-Tests run: 291, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 303, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -182,7 +182,7 @@ npx vitest run
 Expected output:
 ```
 Test Files  10 passed (10)
-     Tests  200 passed (200)
+     Tests  206 passed (206)
 ```
 
 ### Step 7 — Start the frontend dev server
@@ -257,7 +257,7 @@ cd backend
 | `ProjectControllerEditDeleteTest` | 11 | Edit project, delete with/without associations, force delete |
 | `AuthServiceTest` | 8 | Registration, login, change password (unit) |
 | `TaskServiceTest` | 32 | All task service operations including project association, date filtering, keyword search, projectId filter (unit) |
-| `ProjectServiceTest` | 18 | All project service operations (unit) |
+| `ProjectServiceTest` | 24 | All project service operations including member management (unit) |
 | `ProjectSummaryControllerTest` | 9 | GET /projects/{id}/summary — date range, deduplication, subproject totals, 401/404 |
 | `DashboardControllerTest` | 10 | GET /api/dashboard/summary — today/week totals, running task, top projects, cross-user isolation, 401 |
 | `DashboardServiceTest` | 9 | Dashboard service unit — empty state, today/week aggregation, running task, top 5 limit, subtree time, user not found |
@@ -267,6 +267,7 @@ cd backend
 | `LocalDeployabilityTest` | 15 | NFR-004 Local Deployability: health endpoint returns 200 with status UP (public), production config uses jdbc:h2:file: (file-based persistence), ddl-auto=update (data survives restarts), H2 console disabled by default, SPA fallback serves index.html for /dashboard/tasks/projects/5 routes, SPA controller ignores /api/ routes and static file paths, docker-compose.yml exists and defines backend+frontend services with a volume, application starts with no external dependencies |
 | `PerformanceNfrTest` | 11 | NFR-002 Performance: DB indexes verified in INFORMATION_SCHEMA (tasks user+start, tasks user+endtime, projects user+parent, task_projects join columns), dashboard single-call returns all fields (today/week totals + running task + top projects), task list embeds project data per task (no follow-up calls), date-range list embeds projects, active task embeds projects |
 | `ProjectSharingTest` | 17 | US-022 Project Sharing: invite returns 201 + MemberResponse, invitee sees project with shared=true, own project has shared=false, unknown email 404, duplicate 409, member associates task, non-member 404 on summary, remove member + loses access, owner self-remove 400, member edit/delete blocked 404, members list returns all fields, member can list members, non-member listMembers 404, time aggregation across users, invalid email 400, blank email 400 |
+| `SharedProjectSummaryTest` | 12 | US-023 Task Overview: contributions array with per-user totals, tasks include userId/userName, ?userId= filter scopes tasks + total, contributions always full for dropdown, all-users default shows combined total, non-member 404, non-member userId 403, combined total = sum of contributions, member can access, task list userId filter, non-member userId 403, userId without projectId 403 |
 
 ### Frontend
 
@@ -283,7 +284,7 @@ npx vitest run
 | `TasksPage.test.jsx` | 30 | Create, edit, delete tasks; project multi-select on create/edit; project display in task row; field-level error extraction from 400 responses; Add Task button reachable in 1 click |
 | `ProjectsPage.test.jsx` | 23 | Create, edit, delete projects; tree view; collapse; force delete dialog; field-level error extraction from 400 responses; New Project button reachable in 1 click; shared badge shown for shared=true projects; no badge for owned projects |
 | `OverviewPage.test.jsx` | 48 | Week view (day/week totals, nav, task grouping, click); month view (calendar cells, day totals, month total, selected-day panel, nav, loading) |
-| `ProjectDetailPage.test.jsx` | 36 | Date-range presets, custom range form, project name/desc/total, subproject totals, task list, running task, error states, back navigation; members section rendered; member list shows name+email+role; invite form visible to owner only; invite API called with correct email; invite error shown; remove button only for MEMBER rows; removeMember API called; member count in header |
+| `ProjectDetailPage.test.jsx` | 42 | Date-range presets, custom range form, project name/desc/total, subproject totals, task list, running task, error states, back navigation; members section rendered; member list shows name+email+role; invite form visible to owner only; invite API called with correct email; invite error shown; remove button only for MEMBER rows; removeMember API called; member count in header; contributors card for shared projects; no contributors card for solo; user-filter dropdown shown; dropdown change re-fetches with userId; task owner name on shared rows; no owner name for solo |
 | `Layout.test.jsx` | 14 | Topbar timer visible/hidden, elapsed from startTime, timer on all pages, API called once on mount |
 | `TasksPage.test.jsx (filter)` | 10 | Filter panel rendered, search debounce, project filter, date range, no-results message, reset |
 
@@ -328,7 +329,7 @@ Dashboard summary response shape:
 
 | Method | Path | Request body | Response | Notes |
 |---|---|---|---|---|
-| GET | `/api/tasks` | — | 200 `Task[]` | Optional: `?from=<ISO>&to=<ISO>` (date range), `?search=<text>` (description contains), `?projectId=<id>` (project + subtree) |
+| GET | `/api/tasks` | — | 200 `Task[]` | Optional: `?from=<ISO>&to=<ISO>` (date range), `?search=<text>` (description contains), `?projectId=<id>` (project + subtree), `?userId=<id>` (member's tasks — requires projectId, both must be members; 403 if non-member) |
 | GET | `/api/tasks/active` | — | 200 or 204 | 204 = no active timer |
 | POST | `/api/tasks/start` | `{description?}` | 201 | Returns the new running task |
 | POST | `/api/tasks/stop` | — | 200 | Returns the stopped task |
@@ -356,7 +357,7 @@ Task response shape:
 | POST | `/api/projects` | `{name, description?, parentProjectId?}` | 201 | Creates project or subproject |
 | PUT | `/api/projects/{id}` | `{name, description?}` | 200 | Rename / re-describe (OWNER only) |
 | DELETE | `/api/projects/{id}` | — | 204 or 409 | 409 if associations exist; add `?force=true` to override (OWNER only) |
-| GET | `/api/projects/{id}/summary` | — | 200 `ProjectSummaryResponse` | Any member can view; add `?from=<ISO>&to=<ISO>` to filter; aggregates tasks from ALL members |
+| GET | `/api/projects/{id}/summary` | — | 200 `ProjectSummaryResponse` | Any member can view; optional `?from=<ISO>&to=<ISO>` (date filter), `?userId=<id>` (filter tasks+total to one member; contributions always shows all; 403 if userId is not a member) |
 | GET | `/api/projects/{id}/members` | — | 200 `Member[]` | Lists all members with role; accessible to any member |
 | POST | `/api/projects/{id}/members` | `{email}` | 201 `Member` | Invite by email (OWNER only); 404 if unknown, 409 if duplicate |
 | DELETE | `/api/projects/{id}/members/{userId}` | — | 204 | Remove member (OWNER only); 400 if owner tries to remove themselves |
@@ -400,3 +401,4 @@ Member response shape:
 - **Date-range filtering on task list** — `GET /api/tasks?from=<ISO>&to=<ISO>` reuses the existing `findByUserAndStartTimeBetweenOrderByStartTimeAsc` repository method. Daily and weekly views both call this same endpoint with appropriate bounds.
 - **Security NFR** — BCrypt cost-10 hashing means each password hash is unique even for identical passwords (random salt per hash). JWT tokens use HMAC-SHA256 with a 256-bit+ secret and expire after 24 hours. CSRF is disabled intentionally because the API is stateless (no session cookies) — disabling it for a JWT/Bearer API is the correct and secure approach per Spring Security documentation.
 - **Project sharing membership model (US-022)** — a separate `project_members` table stores `(project_id, user_id, role, joined_at)` with a unique constraint on `(project_id, user_id)`. `project.user_id` is kept as the original owner FK for backward compatibility. Access checks use the membership table: `findByIdAndMember` for read operations (any member), `findByIdAndUser` for write operations (owner only). `MembershipSeeder` runs on startup to back-fill OWNER rows for all projects created before this feature was added. `UserNotFoundException` (plain `RuntimeException`) is used instead of Spring Security's `UsernameNotFoundException` when the invitee email is not registered, to prevent the exception from being intercepted by Spring Security's exception handling as a 401.
+- **Per-user contribution breakdown (US-023)** — `ProjectSummaryResponse` now carries a `contributions` list (per-user totals) and `userId`/`userName` on every `TaskSummary` entry. `getProjectSummary` collects all task entities from the subtree via `collectSubtreeTaskEntities` (deduplication by task id), groups them by `Task.user` for contributions, and optionally filters `tasks` + `totalSeconds` when `?userId=` is present. The `contributions` array is always the full per-user breakdown regardless of the user filter, so the frontend dropdown remains functional. `AccessDeniedException` (403) is thrown when the `userId` param belongs to a non-member. The same `userId` filter on `GET /api/tasks` validates that both the caller and the target user are project members using `projectRepository.findByIdAndMember(projectId, targetUser)` — no new repository dependency needed in `TaskService`.

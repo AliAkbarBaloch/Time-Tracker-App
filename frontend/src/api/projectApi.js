@@ -16,10 +16,12 @@ export function deleteProject(id, force = false) {
   return api.delete(`/projects/${id}?force=${force}`)
 }
 
-export function getProjectSummary(id, from = null, to = null) {
+/** GET /api/projects/{id}/summary with optional date range and user filter (US-023). */
+export function getProjectSummary(id, from = null, to = null, userId = null) {
   const params = {}
-  if (from) params.from = from
-  if (to) params.to = to
+  if (from)   params.from    = from
+  if (to)     params.to      = to
+  if (userId) params.userId  = userId
   return api.get(`/projects/${id}/summary`, { params })
 }
 
