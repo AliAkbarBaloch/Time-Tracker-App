@@ -46,7 +46,8 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         userRepository.save(user);
         String token = jwtTokenProvider.generateTokenFromEmail(user.getEmail());
-        return new AuthResponse(token, user.getEmail(), user.getDisplayName());
+        // Include timezone so the frontend can apply the correct display zone right away (US-025)
+        return new AuthResponse(token, user.getEmail(), user.getDisplayName(), user.getTimezone());
     }
 
     public AuthResponse login(LoginRequest request) {
@@ -56,7 +57,7 @@ public class AuthService {
         String token = jwtTokenProvider.generateToken(authentication);
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new IllegalStateException("Authenticated user not found"));
-        return new AuthResponse(token, user.getEmail(), user.getDisplayName());
+        return new AuthResponse(token, user.getEmail(), user.getDisplayName(), user.getTimezone());
     }
 
     @Transactional

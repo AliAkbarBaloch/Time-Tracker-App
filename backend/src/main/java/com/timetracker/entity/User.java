@@ -29,6 +29,10 @@ public class User {
     @Column(nullable = false)
     private String passwordHash;
 
+    /** IANA timezone identifier (e.g. "Europe/Berlin"). Stored as UTC in DB; display-only (US-025). */
+    @Column(nullable = false)
+    private String timezone = "UTC";
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -51,6 +55,8 @@ public class User {
     public void setEmail(String email) { this.email = email; }
     public void setDisplayName(String displayName) { this.displayName = displayName; }
     public void setPasswordHash(String passwordHash) { this.passwordHash = passwordHash; }
+    public void setTimezone(String timezone) { this.timezone = timezone; }
+    public String getTimezone() { return timezone; }
     public void setProjects(List<Project> projects) { this.projects = projects; }
     public void setTasks(List<Task> tasks) { this.tasks = tasks; }
 }
