@@ -20,6 +20,7 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Search and filter tasks** — a filter panel above the task list lets you search by description keyword (debounced 300 ms), filter by project (includes all subprojects), and filter by date range. Filters combine with AND logic. A Reset button clears all filters at once.
 - **Persistent timer** — a running timer survives page refreshes, tab closes, and browser restarts. On every page load the app calls `GET /api/tasks/active` to recompute elapsed time from `startTime` in the database. No browser storage is used for timer state. A live-updating banner in the top navigation bar shows the running task description and elapsed time on every page.
 - **Change password** — update your account password securely at any time from the Settings page.
+- **Data persistence** — all tasks, projects, subprojects, and user accounts are stored in a file-based H2 database (`jdbc:h2:file:./data/timetracker`). Data survives browser close, server restart, and logout/re-login. Schema is auto-created by Hibernate DDL-auto on first boot — no manual SQL steps needed.
 - **Security** — passwords hashed with BCrypt (cost 10), stateless JWT Bearer auth on every protected endpoint, Bean Validation on all request DTOs, ownership checks prevent cross-user data access, JPA parameterised queries protect against SQL injection.
 
 **What is expected (remaining stories):**
@@ -116,11 +117,11 @@ cd backend
 What this does:
 - Downloads all Maven dependencies on first run (may take 1–2 minutes)
 - Compiles the source code
-- Runs all 221 unit and integration tests against an in-memory H2 database
+- Runs all 232 unit and integration tests against an in-memory H2 database
 
 Expected output at the end:
 ```
-Tests run: 221, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 232, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -251,6 +252,7 @@ cd backend
 | `DashboardControllerTest` | 10 | GET /api/dashboard/summary — today/week totals, running task, top projects, cross-user isolation, 401 |
 | `DashboardServiceTest` | 9 | Dashboard service unit — empty state, today/week aggregation, running task, top 5 limit, subtree time, user not found |
 | `SecurityNfrTest` | 33 | NFR-001 Security: BCrypt hash format/salting, JWT 401 on all protected endpoints, tampered token, public endpoints, cross-user isolation (403/404 for tasks/projects), Bean Validation 400 (blank/invalid fields), SQL injection inputs handled safely |
+| `DataPersistenceTest` | 11 | US-021 Data Persistence: tasks/projects survive logout+re-login, running timer accessible after re-auth, subproject hierarchy persists, task-project join persists, multi-task retrieval, cross-user isolation after re-login, schema auto-created on first boot |
 
 ### Frontend
 
