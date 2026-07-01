@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
 import * as projectApi from '../api/projectApi'
 
 const PRESETS = [
@@ -52,6 +53,7 @@ function formatTaskDuration(startTime, endTime) {
 export default function ProjectDetailPage() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { user: currentUser } = useAuth()
 
   const [preset, setPreset]         = useState('all-time')
   const [customFrom, setCustomFrom] = useState('')
@@ -59,6 +61,13 @@ export default function ProjectDetailPage() {
   const [summary, setSummary]       = useState(null)
   const [loading, setLoading]       = useState(false)
   const [error, setError]           = useState('')
+
+  // ── US-022: Members section state ─────────────────────────────────────────
+  const [members, setMembers]           = useState([])
+  const [membersLoading, setMembersLoading] = useState(false)
+  const [inviteEmail, setInviteEmail]   = useState('')
+  const [inviteError, setInviteError]   = useState('')
+  const [inviteLoading, setInviteLoading] = useState(false)
 
   const fetchSummary = useCallback(() => {
     let from = null
@@ -92,6 +101,46 @@ export default function ProjectDetailPage() {
       fetchSummary()
     }
   }, [preset, fetchSummary])
+
+  // Fetch members list on mount; re-fetch after invite/remove actions
+  const fetchMembers = useCallback(() => {
+    setMembersLoading(true)
+    projectApi.getMembers(id)
+      .then(res => setMembers(res.data))
+      .catch(() => setMembers([]))
+      .finally(() => setMembersLoading(false))
+  }, [id])
+
+  useEffect(() => { fetchMembers() }, [fetchMembers])
+
+  // Determine if the current user is the project OWNER (shows invite form + remove buttons)
+  const isOwner = members.some(m => m.email === currentUser?.email && m.role === 'OWNER')
+
+  const handleInvite = async (e) => {
+    e.preventDefault()
+    setInviteError('')
+    setInviteLoading(true)
+    try {
+      await projectApi.inviteMember(id, inviteEmail)
+      setInviteEmail('')
+      fetchMembers()
+    } catch (err) {
+      const data = err.response?.data
+      setInviteError(data?.message || 'Failed to invite member.')
+    } finally {
+      setInviteLoading(false)
+    }
+  }
+
+  const handleRemoveMember = async (userId) => {
+    try {
+      await projectApi.removeMember(id, userId)
+      fetchMembers()
+    } catch (err) {
+      const data = err.response?.data
+      alert(data?.message || 'Failed to remove member.')
+    }
+  }
 
   const handleCustomApply = (e) => {
     e.preventDefault()
@@ -207,6 +256,70 @@ export default function ProjectDetailPage() {
           </div>
         </>
       )}
+
+      {/* ── US-022: Members section ──────────────────────────────────────── */}
+      <div className="section" data-testid="members-section">
+        <div className="section-header">
+          <h3>Members</h3>
+          <span className="muted" data-testid="members-count">
+            {membersLoading ? '…' : `${members.length} member${members.length !== 1 ? 's' : ''}`}
+          </span>
+        </div>
+
+        {/* Invite form — only visible to the project owner */}
+        {isOwner && (
+          <form className="invite-form" onSubmit={handleInvite} data-testid="invite-form">
+            <input
+              type="email"
+              className="timer-input"
+              placeholder="Invite by email…"
+              value={inviteEmail}
+              onChange={e => setInviteEmail(e.target.value)}
+              required
+              disabled={inviteLoading}
+              data-testid="invite-email-input"
+            />
+            <button type="submit" className="btn btn-primary btn-sm" disabled={inviteLoading}
+              data-testid="invite-submit-btn">
+              {inviteLoading ? 'Inviting…' : 'Invite'}
+            </button>
+            {inviteError && (
+              <p className="timer-error" role="alert" data-testid="invite-error">{inviteError}</p>
+            )}
+          </form>
+        )}
+
+        {/* Member list */}
+        {members.length === 0 && !membersLoading ? (
+          <p className="empty-state" data-testid="empty-members">No members yet.</p>
+        ) : (
+          <ul className="summary-list" data-testid="members-list">
+            {members.map(member => (
+              <li key={member.userId} className="summary-list-item"
+                data-testid={`member-row-${member.userId}`}>
+                <span className="summary-item-name" data-testid={`member-name-${member.userId}`}>
+                  {member.displayName}
+                </span>
+                <span className="muted" data-testid={`member-email-${member.userId}`}>
+                  {member.email}
+                </span>
+                <span className={`member-role role-${member.role.toLowerCase()}`}
+                  data-testid={`member-role-${member.userId}`}>
+                  {member.role}
+                </span>
+                {/* Remove button: shown to OWNER for all MEMBER rows (not for their own row) */}
+                {isOwner && member.role === 'MEMBER' && (
+                  <button className="btn btn-danger btn-xs"
+                    onClick={() => handleRemoveMember(member.userId)}
+                    data-testid={`remove-member-btn-${member.userId}`}>
+                    Remove
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
     </div>
   )
 }

@@ -22,3 +22,20 @@ export function getProjectSummary(id, from = null, to = null) {
   if (to) params.to = to
   return api.get(`/projects/${id}/summary`, { params })
 }
+
+// ── US-022: Project Sharing ───────────────────────────────────────────────────
+
+/** GET /api/projects/{id}/members — list all members (accessible to any member). */
+export function getMembers(projectId) {
+  return api.get(`/projects/${projectId}/members`)
+}
+
+/** POST /api/projects/{id}/members — invite a registered user by email (OWNER only). */
+export function inviteMember(projectId, email) {
+  return api.post(`/projects/${projectId}/members`, { email })
+}
+
+/** DELETE /api/projects/{id}/members/{userId} — remove a member (OWNER only). */
+export function removeMember(projectId, userId) {
+  return api.delete(`/projects/${projectId}/members/${userId}`)
+}

@@ -63,6 +63,12 @@ function ProjectTree({ projects, depth = 0, editingId, editName, editDesc, editE
               )}
               <button className="btn-link project-name" onClick={() => onView(p.id)}
                 data-testid={`project-name-${p.id}`}>{p.name}</button>
+              {/* Shared badge visible to invited members (US-022) */}
+              {p.shared && (
+                <span className="shared-badge" data-testid={`shared-badge-${p.id}`} title="Shared with you">
+                  👥 Shared
+                </span>
+              )}
               {p.description && <span className="project-description">{p.description}</span>}
               <span className="project-total" data-testid={`project-total-${p.id}`}>
                 {formatDuration(p.totalSeconds)}
