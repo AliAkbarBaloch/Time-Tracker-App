@@ -10,5 +10,14 @@ public record DashboardSummaryResponse(
         TaskResponse runningTask,
         List<TopProject> topProjects
 ) {
-    public record TopProject(Long id, String name, long weekSeconds) {}
+    /** Extended for US-026: budget fields are null when no budget is set on the project. */
+    public record TopProject(
+            Long id,
+            String name,
+            long weekSeconds,
+            Double budgetHours,
+            Double usedHours,
+            Double budgetPercent,
+            String budgetStatus
+    ) {}
 }

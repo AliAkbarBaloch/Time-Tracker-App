@@ -62,7 +62,7 @@ class TaskControllerSearchFilterTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Thesis", null, null))))
+                        new CreateProjectRequest("Thesis", null, null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         projectId = objectMapper.readTree(proj.getResponse().getContentAsString()).get("id").asLong();
@@ -148,7 +148,7 @@ class TaskControllerSearchFilterTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Literature", null, projectId))))
+                        new CreateProjectRequest("Literature", null, projectId, null))))
                 .andExpect(status().isCreated()).andReturn();
         long subId = objectMapper.readTree(subR.getResponse().getContentAsString()).get("id").asLong();
 

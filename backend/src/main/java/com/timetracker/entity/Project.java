@@ -49,6 +49,10 @@ public class Project {
     @OneToMany(mappedBy = "project", cascade = CascadeType.ALL, orphanRemoval = true)
     private List<ProjectMember> members = new ArrayList<>();
 
+    /** Optional time budget in hours. Null means no budget is set. */
+    @Column
+    private Double budgetHours;
+
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
@@ -62,6 +66,7 @@ public class Project {
     public List<Project> getSubprojects() { return subprojects; }
     public Set<Task> getTasks() { return tasks; }
     public List<ProjectMember> getMembers() { return members; }
+    public Double getBudgetHours() { return budgetHours; }
     public Instant getCreatedAt() { return createdAt; }
 
     public void setId(Long id) { this.id = id; }
@@ -72,4 +77,5 @@ public class Project {
     public void setSubprojects(List<Project> subprojects) { this.subprojects = subprojects; }
     public void setTasks(Set<Task> tasks) { this.tasks = tasks; }
     public void setMembers(List<ProjectMember> members) { this.members = members; }
+    public void setBudgetHours(Double budgetHours) { this.budgetHours = budgetHours; }
 }

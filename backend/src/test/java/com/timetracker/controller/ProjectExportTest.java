@@ -357,7 +357,7 @@ class ProjectExportTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest(name, null, parentId))))
+                        new CreateProjectRequest(name, null, parentId, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readTree(r.getResponse().getContentAsString()).get("id").asLong();

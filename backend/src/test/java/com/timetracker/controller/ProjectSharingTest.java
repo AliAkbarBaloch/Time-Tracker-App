@@ -88,7 +88,7 @@ class ProjectSharingTest {
                 .header("Authorization", "Bearer " + aliceJwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("SharedProject", "A shared project", null))))
+                        new CreateProjectRequest("SharedProject", "A shared project", null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
 

@@ -68,6 +68,7 @@ public class ProjectService {
         project.setUser(user);
         project.setName(request.name());
         project.setDescription(request.description());
+        project.setBudgetHours(request.budgetHours());
 
         if (request.parentProjectId() != null) {
             Project parent = projectRepository.findByIdAndUser(request.parentProjectId(), user)
@@ -104,6 +105,7 @@ public class ProjectService {
 
         project.setName(request.name());
         project.setDescription(request.description());
+        project.setBudgetHours(request.budgetHours());
         return ProjectResponse.from(projectRepository.save(project));
     }
 
@@ -220,8 +222,24 @@ public class ProjectService {
                 .toList();
 
         Long parentId = project.getParent() != null ? project.getParent().getId() : null;
+
+        // Budget fields (US-026): computed from all-time total across all members (no date filter)
+        Set<Long> budgetSeen = new HashSet<>();
+        List<Task> allTimeTasks = new ArrayList<>();
+        collectSubtreeTaskEntities(project, null, null, budgetSeen, allTimeTasks);
+        long allTimeTotalSeconds = allTimeTasks.stream()
+                .filter(t -> t.getEndTime() != null)
+                .mapToLong(t -> t.getEndTime().getEpochSecond() - t.getStartTime().getEpochSecond())
+                .sum();
+        Double budgetHours  = project.getBudgetHours();
+        Double usedHours    = allTimeTotalSeconds / 3600.0;
+        Double budgetPercent = budgetHours != null && budgetHours > 0
+                ? (usedHours / budgetHours * 100.0) : null;
+        String budgetStatus = computeBudgetStatus(budgetHours, usedHours);
+
         return new ProjectSummaryResponse(project.getId(), project.getName(),
-                project.getDescription(), parentId, totalSeconds, subSummaries, taskSummaries, contributions);
+                project.getDescription(), parentId, totalSeconds, subSummaries, taskSummaries, contributions,
+                budgetHours, usedHours, budgetPercent, budgetStatus);
     }
 
     // ── Member management (US-022) ────────────────────────────────────────────
@@ -357,5 +375,20 @@ public class ProjectService {
     private User loadUser(String email) {
         return userRepository.findByEmail(email)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + email));
+    }
+
+    /**
+     * Derives the budget status string from budgetHours and usedHours.
+     * Returns null when no budget is set.
+     *   < 80% used  → ON_TRACK
+     *   80–99% used → WARNING
+     *   ≥ 100% used → OVER_BUDGET
+     */
+    static String computeBudgetStatus(Double budgetHours, Double usedHours) {
+        if (budgetHours == null || budgetHours <= 0) return null;
+        double ratio = usedHours / budgetHours;
+        if (ratio >= 1.0) return "OVER_BUDGET";
+        if (ratio >= 0.8) return "WARNING";
+        return "ON_TRACK";
     }
 }

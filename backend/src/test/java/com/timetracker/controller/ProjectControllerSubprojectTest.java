@@ -57,7 +57,7 @@ class ProjectControllerSubprojectTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Lecture", null, null))))
+                        new CreateProjectRequest("Lecture", null, null, null))))
                 .andExpect(status().isCreated())
                 .andReturn();
         parentId = objectMapper.readTree(parent.getResponse().getContentAsString()).get("id").asLong();
@@ -69,7 +69,7 @@ class ProjectControllerSubprojectTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Assignment 1", null, parentId))))
+                        new CreateProjectRequest("Assignment 1", null, parentId, null))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.name", is("Assignment 1")))
                 .andExpect(jsonPath("$.parentId", is(parentId.intValue())));
@@ -81,7 +81,7 @@ class ProjectControllerSubprojectTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Assignment 1", null, parentId))))
+                        new CreateProjectRequest("Assignment 1", null, parentId, null))))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(get("/api/projects")
@@ -99,7 +99,7 @@ class ProjectControllerSubprojectTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Orphan", null, 99999L))))
+                        new CreateProjectRequest("Orphan", null, 99999L, null))))
                 .andExpect(status().isNotFound());
     }
 
@@ -110,7 +110,7 @@ class ProjectControllerSubprojectTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Sub", null, parentId))))
+                        new CreateProjectRequest("Sub", null, parentId, null))))
                 .andExpect(status().isCreated());
 
         // same name as another top-level — duplicate should still fail
@@ -118,7 +118,7 @@ class ProjectControllerSubprojectTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new CreateProjectRequest("Lecture", null, null))))
+                        new CreateProjectRequest("Lecture", null, null, null))))
                 .andExpect(status().isConflict());
     }
 
