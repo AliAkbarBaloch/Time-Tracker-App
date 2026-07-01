@@ -23,6 +23,7 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Data persistence** — all tasks, projects, subprojects, and user accounts are stored in a file-based H2 database (`jdbc:h2:file:./data/timetracker`). Data survives browser close, server restart, and logout/re-login. Schema is auto-created by Hibernate DDL-auto on first boot — no manual SQL steps needed.
 - **Security** — passwords hashed with BCrypt (cost 10), stateless JWT Bearer auth on every protected endpoint, Bean Validation on all request DTOs, ownership checks prevent cross-user data access, JPA parameterised queries protect against SQL injection.
 - **Usability (NFR-003)** — start/stop timer in one click from the Dashboard, add task/project in ≤ 2 clicks, running timer always visible in the top navigation bar on every page, field-level validation errors shown inline under the relevant input (not concatenated into a single banner), responsive layout at ≥ 1024 px.
+- **Local deployability (NFR-004)** — the entire stack (backend + frontend + database) starts with a single `docker compose up --build` command; no cloud accounts, no external databases, and no manual setup beyond Docker. The `GET /api/health` endpoint allows Docker Compose to health-check the backend. SPA routing (direct-link refreshes, bookmarks) works correctly — the backend serves `static/index.html` for all non-API client-side routes so React Router can take over. The H2 console is disabled by default and can be enabled temporarily with `-Dspring.h2.console.enabled=true` if needed for database inspection.
 
 **What is expected (remaining stories):**
 
@@ -118,11 +119,11 @@ cd backend
 What this does:
 - Downloads all Maven dependencies on first run (may take 1–2 minutes)
 - Compiles the source code
-- Runs all 232 unit and integration tests against an in-memory H2 database
+- Runs all unit and integration tests against an in-memory H2 database
 
 Expected output at the end:
 ```
-Tests run: 248, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 263, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -146,7 +147,11 @@ Started TimeTrackerApplication in X.XXX seconds
 Leave this terminal open. The backend must stay running while you use the app.
 
 > **H2 console** (optional, for inspecting the database):
-> Open http://localhost:8080/h2-console in your browser.
+> The H2 console is **disabled by default**. To enable it for a single run:
+> ```bash
+> ./mvnw spring-boot:run -Dspring-boot.run.jvmArguments="-Dspring.h2.console.enabled=true"
+> ```
+> Then open http://localhost:8080/h2-console in your browser.
 > - JDBC URL: `jdbc:h2:file:./data/timetracker`
 > - Username: `SA`
 > - Password: *(leave blank)*
@@ -255,6 +260,7 @@ cd backend
 | `SecurityNfrTest` | 33 | NFR-001 Security: BCrypt hash format/salting, JWT 401 on all protected endpoints, tampered token, public endpoints, cross-user isolation (403/404 for tasks/projects), Bean Validation 400 (blank/invalid fields), SQL injection inputs handled safely |
 | `DataPersistenceTest` | 11 | US-021 Data Persistence: tasks/projects survive logout+re-login, running timer accessible after re-auth, subproject hierarchy persists, task-project join persists, multi-task retrieval, cross-user isolation after re-login, schema auto-created on first boot |
 | `UsabilityNfrTest` | 16 | NFR-003 Usability: field-level 400 errors have human-readable messages (register/login/createTask/createProject), 401/409 include `message`, start/stop timer each require exactly 1 API call, GET /tasks/active returns running task for topbar, 204 returned (not an error) when no timer is running |
+| `LocalDeployabilityTest` | 15 | NFR-004 Local Deployability: health endpoint returns 200 with status UP (public), production config uses jdbc:h2:file: (file-based persistence), ddl-auto=update (data survives restarts), H2 console disabled by default, SPA fallback serves index.html for /dashboard/tasks/projects/5 routes, SPA controller ignores /api/ routes and static file paths, docker-compose.yml exists and defines backend+frontend services with a volume, application starts with no external dependencies |
 
 ### Frontend
 
