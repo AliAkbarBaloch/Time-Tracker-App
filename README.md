@@ -29,6 +29,7 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Task overview for shared projects (US-023)** — the project summary response now includes a `contributions` array showing each member's total seconds. Each task entry carries `userId`/`userName` so the frontend can attribute work to its owner. An optional `?userId={id}` query param on both `GET /api/projects/{id}/summary` and `GET /api/tasks` filters results to a single member (both caller and target must be project members; non-member userId returns 403). The project detail page shows a "Contributors" card and a user-filter dropdown for shared projects; task rows display the owner's display name when the project is shared.
 - **Export project tasks (US-024)** — an "Export" button on the project detail page opens a modal where you choose the file format (CSV or JSON) and optionally restrict the export to a specific calendar month. Clicking "Download" calls `GET /api/projects/{id}/export?format=csv|json` and triggers a browser file download via a Blob URL (the JWT is never embedded in the URL). Tasks are collected recursively from the full project subtree so sub-project activity is always included. The CSV columns are `task_id, description, start_time, end_time, duration_seconds, projects, user`; the `projects` column shows the full hierarchy path (e.g. `"Thesis > Literature Review"`). The JSON response wraps the task array in `{ "project": "...", "exportedAt": "...", "tasks": [...] }`. Non-members receive 404. Both `?from/to` ISO params and `?year/month` convenience params are supported for date filtering.
 - **User preferred time zone (US-025)** — every user has a `timezone` field (default `"UTC"`) stored in the database. The timezone is returned in both the register and login responses, stored in `AuthContext`, and persisted in `localStorage`. A new "Preferred Time Zone" section in the Settings page lets users choose from a curated list of common IANA timezone identifiers and saves the choice via `PUT /api/users/profile`. All task times throughout the app (task list, project detail, weekly/monthly overview, new-task form defaults) are displayed in the user's preferred timezone using the browser's built-in `Intl.DateTimeFormat` API — no external libraries needed. Stored times remain UTC at all times; only the display layer changes. `GET /api/users/profile` returns the full user profile including `timezone`; `PUT /api/users/profile` validates the timezone string with `ZoneId.of()` and returns HTTP 400 with an informative message if the value is not a valid IANA identifier.
+- **Project time budgets (US-026)** — each project can optionally have a `budgetHours` value (a positive decimal, e.g. `40.0`) set at create or edit time. When a budget is set, the project detail page and the projects list both display a colour-coded progress bar: green (ON_TRACK, < 80% used), orange (WARNING, 80–99% used), and red (OVER_BUDGET, ≥ 100% used) with an "Over budget" badge. The Dashboard's top-projects list also shows the budget bar and used/total hour labels. Budget tracking aggregates all-time hours across the full project subtree and all members (not just the current user). The `budgetStatus` field (`ON_TRACK`, `WARNING`, or `OVER_BUDGET`) and `budgetPercent` are computed server-side and included in both `ProjectSummaryResponse` and the dashboard's `TopProject` entries. A null budget means no restriction is enforced.
 
 ---
 
@@ -125,7 +126,7 @@ What this does:
 
 Expected output at the end:
 ```
-Tests run: 330, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 339, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -268,6 +269,7 @@ cd backend
 | `SharedProjectSummaryTest` | 12 | US-023 Task Overview: contributions array with per-user totals, tasks include userId/userName, ?userId= filter scopes tasks + total, contributions always full for dropdown, all-users default shows combined total, non-member 404, non-member userId 403, combined total = sum of contributions, member can access, task list userId filter, non-member userId 403, userId without projectId 403 |
 | `ProjectExportTest` | 14 | US-024 Export: CSV attachment header + filename, CSV header row, task data in row, project name in projects column, JSON attachment header, JSON top-level structure, JSON task fields complete, subproject tasks included, hierarchy path "Root > Sub", year+month filter, empty date range returns header-only CSV, running timer without project excluded, non-member 404, no-auth 401 |
 | `UserProfileTest` | 13 | US-025 Time Zones: GET profile returns all fields, default UTC timezone, 401 without auth, PUT valid IANA timezone, PUT persists timezone, invalid timezone 400, bogus timezone 400, displayName-only update, both fields update, login response includes timezone, register response defaults to UTC, timezone change does not affect createdAt, PUT 401 without auth |
+| `ProjectBudgetTest` | 9 | US-026 Project Budgets: create with budgetHours, null budget allowed, ON_TRACK status (<80%), WARNING status (80–99%), OVER_BUDGET status (≥100%), update budget, null clears budget, shared project summary includes budget, listProjects includes budgetHours |
 
 ### Frontend
 
@@ -283,7 +285,7 @@ npx vitest run
 | `SettingsPage.test.jsx` | 11 | Timezone selector renders with UTC default; change timezone; calls updateProfile on submit; success/error messages; success clears on change; common IANA zones in dropdown; change password form, error display |
 | `dateUtils.test.js` | 22 | formatInZone (empty input, valid ISO, invalid tz fallback); toDatetimeLocalInTz (empty, UTC, Berlin, Kolkata, NY, day boundary); nowInTz (format); getDateStrInTz (empty, UTC, Kolkata next-day, NY prev-day); todayInTz (shape, consistency); localDateToUtcIso (UTC, Berlin, Kolkata, NY, round-trips UTC/Berlin/Kolkata) |
 | `TasksPage.test.jsx` | 30 | Create, edit, delete tasks; project multi-select on create/edit; project display in task row; field-level error extraction from 400 responses; Add Task button reachable in 1 click |
-| `ProjectsPage.test.jsx` | 23 | Create, edit, delete projects; tree view; collapse; force delete dialog; field-level error extraction from 400 responses; New Project button reachable in 1 click; shared badge shown for shared=true projects; no badge for owned projects |
+| `ProjectsPage.test.jsx` | 30 | Create, edit, delete projects; tree view; collapse; force delete dialog; field-level error extraction from 400 responses; New Project button reachable in 1 click; shared badge shown for shared=true projects; no badge for owned projects; budget field in create/edit forms; budget bar colour-coded (green/orange/red); over-budget badge; no bar when no budget |
 | `OverviewPage.test.jsx` | 48 | Week view (day/week totals, nav, task grouping, click); month view (calendar cells, day totals, month total, selected-day panel, nav, loading) |
 | `ProjectDetailPage.test.jsx` | 51 | Date-range presets, custom range form, project name/desc/total, subproject totals, task list, running task, error states, back navigation; members section rendered; member list shows name+email+role; invite form visible to owner only; invite API called with correct email; invite error shown; remove button only for MEMBER rows; removeMember API called; member count in header; contributors card for shared projects; no contributors card for solo; user-filter dropdown shown; dropdown change re-fetches with userId; task owner name on shared rows; no owner name for solo; Export button renders; modal opens/closes; format radios (CSV/JSON); scope radios (All Time/Specific Month); year+month inputs appear for month scope; Download calls exportProject API and triggers blob download; JSON format passes correct param; month scope passes year+month params; error shown when export fails |
 | `Layout.test.jsx` | 14 | Topbar timer visible/hidden, elapsed from startTime, timer on all pages, API called once on mount |
@@ -373,8 +375,8 @@ Task response shape:
 | Method | Path | Request body | Response | Notes |
 |---|---|---|---|---|
 | GET | `/api/projects` | — | 200 `Project[]` | Returns root projects; includes owned AND shared projects; `shared: true` on invited projects |
-| POST | `/api/projects` | `{name, description?, parentProjectId?}` | 201 | Creates project or subproject |
-| PUT | `/api/projects/{id}` | `{name, description?}` | 200 | Rename / re-describe (OWNER only) |
+| POST | `/api/projects` | `{name, description?, parentProjectId?, budgetHours?}` | 201 | Creates project or subproject; `budgetHours` is a positive decimal (e.g. `40.0`); null = no budget |
+| PUT | `/api/projects/{id}` | `{name, description?, budgetHours?}` | 200 | Rename / re-describe / set budget (OWNER only); null `budgetHours` clears the budget |
 | DELETE | `/api/projects/{id}` | — | 204 or 409 | 409 if associations exist; add `?force=true` to override (OWNER only) |
 | GET | `/api/projects/{id}/summary` | — | 200 `ProjectSummaryResponse` | Any member can view; optional `?from=<ISO>&to=<ISO>` (date filter), `?userId=<id>` (filter tasks+total to one member; contributions always shows all; 403 if userId is not a member) |
 | GET | `/api/projects/{id}/members` | — | 200 `Member[]` | Lists all members with role; accessible to any member |
@@ -394,7 +396,18 @@ Project response shape:
   ],
   "totalSeconds": 7200,
   "createdAt": "2026-06-01T09:00:00Z",
-  "shared": false
+  "shared": false,
+  "budgetHours": 40.0
+}
+```
+
+Project summary response includes additional budget fields (US-026):
+```json
+{
+  "budgetHours": 40.0,
+  "usedHours": 36.5,
+  "budgetPercent": 91.25,
+  "budgetStatus": "WARNING"
 }
 ```
 
@@ -422,4 +435,5 @@ Member response shape:
 - **Security NFR** — BCrypt cost-10 hashing means each password hash is unique even for identical passwords (random salt per hash). JWT tokens use HMAC-SHA256 with a 256-bit+ secret and expire after 24 hours. CSRF is disabled intentionally because the API is stateless (no session cookies) — disabling it for a JWT/Bearer API is the correct and secure approach per Spring Security documentation.
 - **Project sharing membership model (US-022)** — a separate `project_members` table stores `(project_id, user_id, role, joined_at)` with a unique constraint on `(project_id, user_id)`. `project.user_id` is kept as the original owner FK for backward compatibility. Access checks use the membership table: `findByIdAndMember` for read operations (any member), `findByIdAndUser` for write operations (owner only). `MembershipSeeder` runs on startup to back-fill OWNER rows for all projects created before this feature was added. `UserNotFoundException` (plain `RuntimeException`) is used instead of Spring Security's `UsernameNotFoundException` when the invitee email is not registered, to prevent the exception from being intercepted by Spring Security's exception handling as a 401.
 - **Timezone display without a library (US-025)** — all timezone conversion uses the built-in `Intl.DateTimeFormat` API (`Intl.DateTimeFormat`, `formatToParts`, `en-CA` locale for deterministic `YYYY-MM-DD` output). `localDateToUtcIso` converts a "local" datetime-local input value to UTC using a naive-UTC + offset-measurement approach: treat the input as UTC, measure the offset the target timezone shows for that UTC instant, apply the correction. One iteration is accurate for all standard and DST zones. The `timezone` column on the `User` entity defaults to `"UTC"` so pre-existing accounts work without migration. IANA timezone IDs are validated at the Spring layer using `ZoneId.of()`, which throws `DateTimeException` on unrecognised strings; `GlobalExceptionHandler` catches `InvalidTimezoneException` and returns HTTP 400.
+- **Project time budgets (US-026)** — `budgetHours` is a nullable `Double` column on the `Project` entity. `ProjectService.computeBudgetStatus(budgetHours, usedHours)` is a `static` helper so both `ProjectService.getProjectSummary` and `DashboardService` can compute budget status without a circular dependency. Budget percentage is capped at 100% for the visual progress bar (the label still shows the true percentage). The three status values (`ON_TRACK`, `WARNING`, `OVER_BUDGET`) are thresholded at 80% and 100% and used by the frontend to select the bar colour and optional "Over budget" badge. Budget usage is always an all-time aggregate of the full project subtree across all members (i.e. it is independent of the date-range filter on the summary).
 - **Per-user contribution breakdown (US-023)** — `ProjectSummaryResponse` now carries a `contributions` list (per-user totals) and `userId`/`userName` on every `TaskSummary` entry. `getProjectSummary` collects all task entities from the subtree via `collectSubtreeTaskEntities` (deduplication by task id), groups them by `Task.user` for contributions, and optionally filters `tasks` + `totalSeconds` when `?userId=` is present. The `contributions` array is always the full per-user breakdown regardless of the user filter, so the frontend dropdown remains functional. `AccessDeniedException` (403) is thrown when the `userId` param belongs to a non-member. The same `userId` filter on `GET /api/tasks` validates that both the caller and the target user are project members using `projectRepository.findByIdAndMember(projectId, targetUser)` — no new repository dependency needed in `TaskService`.
