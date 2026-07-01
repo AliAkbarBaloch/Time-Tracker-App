@@ -17,6 +17,7 @@ import com.timetracker.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -85,6 +86,22 @@ class TaskTemplateServiceTest {
         assertThat(result.description()).isEqualTo("Daily meeting");
         assertThat(result.projects()).isEmpty();
         verify(templateRepository).save(any());
+    }
+
+    @Test
+    void createTemplate_setsUserNameDescriptionProjects() {
+        // Kills L48-51: removed-setter mutations for user/name/description/projects
+        when(templateRepository.save(any(TaskTemplate.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        service.createTemplate("alice@example.com",
+                new CreateTemplateRequest("Stand-Up", "Daily meeting", null));
+
+        ArgumentCaptor<TaskTemplate> captor = ArgumentCaptor.forClass(TaskTemplate.class);
+        verify(templateRepository).save(captor.capture());
+        assertThat(captor.getValue().getUser()).isEqualTo(user);
+        assertThat(captor.getValue().getName()).isEqualTo("Stand-Up");
+        assertThat(captor.getValue().getDescription()).isEqualTo("Daily meeting");
+        assertThat(captor.getValue().getProjects()).isEmpty();
     }
 
     @Test
@@ -157,6 +174,7 @@ class TaskTemplateServiceTest {
         TemplateResponse result = service.updateTemplate("alice@example.com", 1L, req);
 
         assertThat(result.name()).isEqualTo("NewName");
+        assertThat(result.description()).isEqualTo("new desc"); // kills L72: removed setDescription
         verify(templateRepository).save(existing);
     }
 
@@ -232,8 +250,9 @@ class TaskTemplateServiceTest {
         when(taskService.startTask(eq("alice@example.com"), any(StartTaskRequest.class), any()))
                 .thenReturn(mockResponse);
 
-        service.startFromTemplate("alice@example.com", 1L);
+        TaskResponse result = service.startFromTemplate("alice@example.com", 1L);
 
+        assertThat(result).isNotNull(); // kills L97: returned null mutation
         verify(taskService).startTask(eq("alice@example.com"),
                 argThat(r -> "Morning sync".equals(r.description())),
                 argThat(ids -> ids.contains(10L)));

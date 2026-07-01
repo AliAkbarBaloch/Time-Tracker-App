@@ -22,9 +22,14 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.mockito.ArgumentCaptor;
+
 import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -515,5 +520,108 @@ class TaskServiceTest {
         assertThatThrownBy(() ->
                 taskService.listTasks("alice@example.com", null, null, null, 99L))
                 .isInstanceOf(ProjectNotFoundException.class);
+    }
+
+    // ── mutation killers: ArgumentCaptor + boundary conditions ─────────────────
+
+    @Test
+    void startTask_capturesUserDescriptionAndProjects() {
+        // Kills L65-68: removed setUser/setStartTime/setDescription/setProjects mutations
+        when(taskRepository.findByUserAndEndTimeIsNull(user)).thenReturn(Optional.empty());
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+        Project project = new Project();
+        project.setId(5L); project.setName("Alpha"); project.setUser(user);
+        when(projectRepository.findByIdAndMember(5L, user)).thenReturn(Optional.of(project));
+
+        taskService.startTask("alice@example.com", new StartTaskRequest("research"), List.of(5L));
+
+        ArgumentCaptor<Task> captor = ArgumentCaptor.forClass(Task.class);
+        verify(taskRepository).save(captor.capture());
+        assertThat(captor.getValue().getUser()).isEqualTo(user);
+        assertThat(captor.getValue().getDescription()).isEqualTo("research");
+        assertThat(captor.getValue().getStartTime()).isNotNull();
+        assertThat(captor.getValue().getProjects()).containsExactly(project);
+    }
+
+    @Test
+    void createTask_capturesUserAndDescription() {
+        // Kills L101-102: removed setUser/setDescription mutations
+        Instant start = Instant.now().minusSeconds(3600);
+        Instant end   = Instant.now().minusSeconds(1800);
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        taskService.createTask("alice@example.com",
+                new CreateTaskRequest("deep work", start, end, null));
+
+        ArgumentCaptor<Task> captor = ArgumentCaptor.forClass(Task.class);
+        verify(taskRepository).save(captor.capture());
+        assertThat(captor.getValue().getUser()).isEqualTo(user);
+        assertThat(captor.getValue().getDescription()).isEqualTo("deep work");
+    }
+
+    @Test
+    void updateTask_setsNewStartAndEndTime() {
+        // Kills L135-136: removed setStartTime/setEndTime mutations
+        Instant oldStart = Instant.now().minusSeconds(7200);
+        Instant oldEnd   = Instant.now().minusSeconds(5400);
+        Instant newStart = Instant.now().minusSeconds(3600);
+        Instant newEnd   = Instant.now().minusSeconds(1800);
+
+        Task task = new Task();
+        task.setUser(user);
+        task.setStartTime(oldStart);
+        task.setEndTime(oldEnd);
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        TaskResponse resp = taskService.updateTask("alice@example.com", 1L,
+                new UpdateTaskRequest("X", newStart, newEnd, null));
+
+        assertThat(resp.startTime()).isEqualTo(newStart);
+        assertThat(resp.endTime()).isEqualTo(newEnd);
+    }
+
+    @Test
+    void deleteTask_clearsProjectsBeforeDelete() {
+        // Kills L246: removed Set::clear mutation
+        Project p = new Project(); p.setId(10L); p.setName("Work"); p.setUser(user);
+        Task task = new Task();
+        task.setUser(user);
+        task.setStartTime(Instant.now().minusSeconds(3600));
+        task.setEndTime(Instant.now().minusSeconds(1800));
+        task.setProjects(new HashSet<>(Set.of(p)));
+        when(taskRepository.findById(1L)).thenReturn(Optional.of(task));
+
+        taskService.deleteTask("alice@example.com", 1L);
+
+        assertThat(task.getProjects()).isEmpty();
+        verify(taskRepository).delete(task);
+    }
+
+    @Test
+    void listTasks_projectFilter_excludesTaskFromDifferentProject() {
+        // Kills L216: replaced-boolean-return-with-true mutation in anyMatch lambda
+        Project filterProject = new Project();
+        filterProject.setId(10L); filterProject.setUser(user); filterProject.setName("Thesis");
+        Project otherProject = new Project();
+        otherProject.setId(20L); otherProject.setUser(user); otherProject.setName("Other");
+
+        Task inProject = new Task(); inProject.setUser(user); inProject.setDescription("Thesis task");
+        inProject.setStartTime(Instant.now().minusSeconds(3600));
+        inProject.setEndTime(Instant.now().minusSeconds(1800));
+        inProject.setProjects(new HashSet<>(Set.of(filterProject)));
+
+        Task inOtherProject = new Task(); inOtherProject.setUser(user); inOtherProject.setDescription("Other task");
+        inOtherProject.setStartTime(Instant.now().minusSeconds(7200));
+        inOtherProject.setEndTime(Instant.now().minusSeconds(5400));
+        inOtherProject.setProjects(new HashSet<>(Set.of(otherProject))); // has project but wrong one
+
+        when(taskRepository.findByUserOrderByStartTimeDesc(user)).thenReturn(List.of(inProject, inOtherProject));
+        when(projectRepository.findByIdAndMember(10L, user)).thenReturn(Optional.of(filterProject));
+
+        List<TaskResponse> result = taskService.listTasks("alice@example.com", null, null, null, 10L);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).description()).isEqualTo("Thesis task");
     }
 }

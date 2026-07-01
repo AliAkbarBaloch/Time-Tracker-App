@@ -14,6 +14,9 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.mockito.ArgumentCaptor;
+
+import java.time.DayOfWeek;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
@@ -234,5 +237,56 @@ class DashboardServiceTest {
 
         assertThatThrownBy(() -> dashboardService.getSummary("unknown@example.com"))
                 .isInstanceOf(org.springframework.security.core.userdetails.UsernameNotFoundException.class);
+    }
+
+    @Test
+    void getSummary_weekStartIsMonday() {
+        // Kills L47: dow+1 mutation — weekStart must be a Monday at midnight UTC
+        when(taskRepository.findByUserAndEndTimeIsNull(user)).thenReturn(Optional.empty());
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
+                .thenReturn(Collections.emptyList());
+        when(projectRepository.findByUserAndParentIsNull(user)).thenReturn(Collections.emptyList());
+
+        dashboardService.getSummary("bob@example.com");
+
+        ArgumentCaptor<Instant> fromCaptor = ArgumentCaptor.forClass(Instant.class);
+        ArgumentCaptor<Instant> toCaptor   = ArgumentCaptor.forClass(Instant.class);
+        verify(taskRepository, times(2)).findByUserAndStartTimeBetweenOrderByStartTimeAsc(
+                eq(user), fromCaptor.capture(), toCaptor.capture());
+
+        // Second call is the week range; 'from' must be Monday at 00:00 UTC
+        ZonedDateTime weekFrom = fromCaptor.getAllValues().get(1).atZone(ZoneOffset.UTC);
+        assertThat(weekFrom.getDayOfWeek()).isEqualTo(DayOfWeek.MONDAY);
+        assertThat(weekFrom.getHour()).isZero();
+        assertThat(weekFrom.getMinute()).isZero();
+        assertThat(weekFrom.getSecond()).isZero();
+    }
+
+    @Test
+    void getSummary_projectWithBudget_computesUsedHoursAndPercent() {
+        // Kills L83/L84 (conditional mutations) and L117/L119 (calcSubtreeTotalSeconds)
+        ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
+        long base = now.withHour(8).withMinute(0).withSecond(0).withNano(0).toInstant().getEpochSecond();
+
+        Project p = new Project();
+        p.setId(1L); p.setName("Budget"); p.setUser(user);
+        p.setSubprojects(new ArrayList<>());
+        p.setBudgetHours(4.0);
+
+        Task t = completedTask(base, base + 7200); // 2 hours = 7200s
+        t.setProjects(new HashSet<>(List.of(p)));
+        p.setTasks(new HashSet<>(Set.of(t)));
+
+        when(taskRepository.findByUserAndEndTimeIsNull(user)).thenReturn(Optional.empty());
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
+                .thenReturn(List.of(t));
+        when(projectRepository.findByUserAndParentIsNull(user)).thenReturn(List.of(p));
+
+        DashboardSummaryResponse result = dashboardService.getSummary("bob@example.com");
+
+        assertThat(result.topProjects()).hasSize(1);
+        DashboardSummaryResponse.TopProject tp = result.topProjects().get(0);
+        assertThat(tp.usedHours()).isEqualTo(2.0);      // 7200 / 3600; mutation: returns 0 or negates
+        assertThat(tp.budgetPercent()).isEqualTo(50.0);  // 2.0 / 4.0 * 100; mutation: returns null
     }
 }

@@ -13,7 +13,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import org.mockito.ArgumentCaptor;
+
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.Collections;
 import java.util.HashSet;
@@ -237,5 +241,72 @@ class AnalyticsServiceTest {
 
         assertThatThrownBy(() -> analyticsService.getWeeklyPattern("ghost@example.com", 12))
                 .isInstanceOf(org.springframework.security.core.userdetails.UsernameNotFoundException.class);
+    }
+
+    // ── range / arithmetic mutation killers ────────────────────────────────────
+
+    @Test
+    void getHeatmap_queriesFullYearRange() {
+        // Kills L46: year+1 mutation — captures 'to' and asserts it equals Jan 1 of next year
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        analyticsService.getHeatmap("alice@example.com", 2026);
+
+        ArgumentCaptor<Instant> fromCaptor = ArgumentCaptor.forClass(Instant.class);
+        ArgumentCaptor<Instant> toCaptor   = ArgumentCaptor.forClass(Instant.class);
+        verify(taskRepository).findByUserAndStartTimeBetweenOrderByStartTimeAsc(
+                eq(user), fromCaptor.capture(), toCaptor.capture());
+
+        ZoneId utc = ZoneId.of("UTC");
+        assertThat(fromCaptor.getValue())
+                .isEqualTo(ZonedDateTime.of(2026, 1, 1, 0, 0, 0, 0, utc).toInstant());
+        assertThat(toCaptor.getValue())
+                .isEqualTo(ZonedDateTime.of(2027, 1, 1, 0, 0, 0, 0, utc).toInstant());
+    }
+
+    @Test
+    void getWeeklyPattern_queriesCorrectWeekRange() {
+        // Kills L76: weeks*7 mutation — captures range and asserts diff equals weeks*7 days
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        analyticsService.getWeeklyPattern("alice@example.com", 4);
+
+        ArgumentCaptor<Instant> fromCaptor = ArgumentCaptor.forClass(Instant.class);
+        ArgumentCaptor<Instant> toCaptor   = ArgumentCaptor.forClass(Instant.class);
+        verify(taskRepository).findByUserAndStartTimeBetweenOrderByStartTimeAsc(
+                eq(user), fromCaptor.capture(), toCaptor.capture());
+
+        long diffDays = ChronoUnit.DAYS.between(fromCaptor.getValue(), toCaptor.getValue());
+        assertThat(diffDays).isEqualTo(28L); // 4 * 7; mutation weeks/7 → 0, weeks+7 → 11
+    }
+
+    @Test
+    void getWeeklyPattern_negativeDurationTask_excluded() {
+        // Kills L86 "removed conditional": task with end < start should contribute 0
+        Task t = new Task();
+        t.setUser(user);
+        t.setStartTime(Instant.parse("2026-04-08T10:00:00Z"));
+        t.setEndTime(Instant.parse("2026-04-08T08:00:00Z")); // end before start → negative seconds
+        t.setProjects(new HashSet<>());
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
+                .thenReturn(List.of(t));
+
+        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 1);
+
+        assertThat(result.byDayOfWeek()).allMatch(e -> e.avgSeconds() == 0.0);
+    }
+
+    @Test
+    void getWeeklyPattern_averageDividedByWeekCount() {
+        // Kills L98: total*weeks mutation — 7200/2=3600 but 7200*2=14400
+        Task t = task("2026-04-08T08:00:00Z", "2026-04-08T10:00:00Z"); // 7200s on Wednesday
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
+                .thenReturn(List.of(t));
+
+        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 2);
+
+        assertThat(result.byDayOfWeek().get(2).avgSeconds()).isEqualTo(3600.0); // index 2 = WED
     }
 }
