@@ -126,10 +126,21 @@ input { font-family: inherit; font-size: 14px; }
 .week-tasks { list-style: none; text-align: left; font-size: 11px; color: #64748b; margin-top: .5rem; display: flex; flex-direction: column; gap: .2rem; }
 .month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
 .month-header-cell { text-align: center; font-size: 11px; font-weight: 600; color: #64748b; padding: .3rem 0; text-transform: uppercase; }
-.month-cell { aspect-ratio: 1; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: filter .1s; }
-.month-cell:hover { filter: brightness(.92); }
+.month-cell { aspect-ratio: 1; border-radius: 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; transition: all .15s; border: 1px solid transparent; }
+.month-cell:hover { border-color: #3b82f6; }
+.month-cell--empty { background: transparent; border: none; pointer-events: none; }
+.month-cell--no-tasks { background: #f8fafc; }
+.month-cell--has-tasks { background: #fff; border-color: #e2e8f0; }
+.month-cell--selected { background: #eff6ff !important; border-color: #3b82f6 !important; }
 .month-day-num { font-size: 12px; font-weight: 600; color: #374151; }
-.month-cell-time { font-size: 10px; color: #1d4ed8; font-weight: 700; }
+.month-cell-time { font-size: 10px; color: #1d4ed8; font-weight: 700; margin-top: .15rem; }
+.week-task-item { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .35rem .5rem; border-radius: 6px; background: #f8fafc; cursor: pointer; }
+.week-task-item:hover { background: #eff6ff; }
+.week-task-desc { flex: 1; color: #374151; font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.week-task-dur { color: #3b82f6; font-weight: 600; font-size: 11px; white-space: nowrap; }
+.selected-day-panel { background: #fff; border: 1px solid #e2e8f0; border-radius: 12px; padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: .75rem; }
+.selected-day-title { font-size: 1rem; font-weight: 600; color: #1e293b; }
+.selected-day-tasks { list-style: none; display: flex; flex-direction: column; gap: .4rem; }
 .legend { display: flex; align-items: center; gap: .4rem; margin-top: .5rem; font-size: 11px; color: #64748b; }
 .legend-dot { width: 14px; height: 14px; border-radius: 3px; }
 .bar-chart { display: grid; grid-template-columns: repeat(7, 1fr); gap: .5rem; height: 120px; align-items: flex-end; padding: 0 .5rem; }
