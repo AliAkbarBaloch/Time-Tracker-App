@@ -328,6 +328,7 @@ Tests connect to `http://localhost:3000` (frontend) and `http://localhost:8080` 
 |---|---|---|
 | `us001-registration.spec.ts` | US-001 | Happy path (→ /dashboard), duplicate email error, empty form validation, password mismatch, short password |
 | `us002-login.spec.ts` | US-002 | Valid credentials → /dashboard, wrong password generic error, non-existent email same error, empty form validation, protected route stays accessible after login, invalid token → /login |
+| `us003-logout.spec.ts` | US-003 | Logout button → /login + localStorage cleared, /dashboard after logout → /login, /tasks after logout → /login, unauthenticated API call → 401 |
 
 ### Frontend
 
