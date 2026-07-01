@@ -185,4 +185,15 @@ public class GlobalExceptionHandler {
         body.put("message", ex.getMessage());
         return body;
     }
+
+    // ── US-027: Task Templates ────────────────────────────────────────────────
+
+    @ExceptionHandler(TemplateNotFoundException.class)
+    @ResponseStatus(HttpStatus.NOT_FOUND)
+    public Map<String, Object> handleTemplateNotFound(TemplateNotFoundException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 404);
+        body.put("message", ex.getMessage());
+        return body;
+    }
 }
