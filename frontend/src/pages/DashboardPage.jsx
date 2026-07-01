@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { getDashboardSummary } from '../api/dashboardApi'
+import * as templateApi from '../api/templateApi'
+import * as projectApi from '../api/projectApi'
 import { useTimer } from '../context/TimerContext'
 
 function formatSeconds(totalSecs) {
@@ -10,8 +12,16 @@ function formatSeconds(totalSecs) {
 }
 
 function fmtHours(secs) {
-  const h = (secs / 3600).toFixed(1)
-  return `${h}h`
+  return `${(secs / 3600).toFixed(1)}h`
+}
+
+function flattenProjects(projects, depth = 0) {
+  const result = []
+  for (const p of projects) {
+    result.push({ ...p, depth })
+    if (p.subprojects?.length > 0) result.push(...flattenProjects(p.subprojects, depth + 1))
+  }
+  return result
 }
 
 export default function DashboardPage() {
@@ -21,13 +31,48 @@ export default function DashboardPage() {
   const [loading, setLoading]   = useState(false)
   const [summary, setSummary]   = useState(null)
 
+  // Templates state
+  const [templates, setTemplates]         = useState([])
+  const [allProjects, setAllProjects]     = useState([])
+  const [showTemplateForm, setShowTemplateForm] = useState(false)
+  const [tplName, setTplName]             = useState('')
+  const [tplDesc, setTplDesc]             = useState('')
+  const [tplProjectIds, setTplProjectIds] = useState([])
+  const [tplLoading, setTplLoading]       = useState(false)
+  const [tplError, setTplError]           = useState('')
+
+  // Edit template state
+  const [editingTplId, setEditingTplId]       = useState(null)
+  const [editTplName, setEditTplName]         = useState('')
+  const [editTplDesc, setEditTplDesc]         = useState('')
+  const [editTplProjectIds, setEditTplProjectIds] = useState([])
+  const [editTplLoading, setEditTplLoading]   = useState(false)
+  const [editTplError, setEditTplError]       = useState('')
+
+  // Delete confirm state
+  const [deleteConfirmId, setDeleteConfirmId] = useState(null)
+
   const fetchSummary = useCallback(() => {
     getDashboardSummary()
       .then(res => setSummary(res.data))
       .catch(() => {})
   }, [])
 
-  useEffect(() => { fetchSummary() }, [fetchSummary])
+  const fetchTemplates = useCallback(() => {
+    templateApi.listTemplates()
+      .then(res => setTemplates(res.data))
+      .catch(() => {})
+  }, [])
+
+  useEffect(() => {
+    fetchSummary()
+    fetchTemplates()
+    projectApi.listProjects()
+      .then(res => setAllProjects(flattenProjects(res.data)))
+      .catch(() => {})
+  }, [fetchSummary, fetchTemplates])
+
+  // ── Timer handlers ────────────────────────────────────────────────────────
 
   const handleStart = useCallback(async () => {
     setError('')
@@ -56,9 +101,75 @@ export default function DashboardPage() {
     }
   }, [stopTask, fetchSummary])
 
-  const todaySecs = summary?.todaySeconds ?? 0
-  const weekSecs  = summary?.weekSeconds  ?? 0
-  const topProjects = summary?.topProjects ?? []
+  // ── Template handlers ─────────────────────────────────────────────────────
+
+  const toggleTplProject = (pid) =>
+    setTplProjectIds(ids => ids.includes(pid) ? ids.filter(x => x !== pid) : [...ids, pid])
+
+  const toggleEditTplProject = (pid) =>
+    setEditTplProjectIds(ids => ids.includes(pid) ? ids.filter(x => x !== pid) : [...ids, pid])
+
+  const handleCreateTemplate = async (e) => {
+    e.preventDefault()
+    setTplError('')
+    setTplLoading(true)
+    try {
+      await templateApi.createTemplate(tplName, tplDesc || null, tplProjectIds)
+      setTplName(''); setTplDesc(''); setTplProjectIds([])
+      setShowTemplateForm(false)
+      fetchTemplates()
+    } catch (err) {
+      setTplError(err.response?.data?.message || 'Failed to create template')
+    } finally {
+      setTplLoading(false)
+    }
+  }
+
+  const startEditTemplate = (t) => {
+    setEditingTplId(t.id)
+    setEditTplName(t.name)
+    setEditTplDesc(t.description || '')
+    setEditTplProjectIds((t.projects || []).map(p => p.id))
+    setEditTplError('')
+  }
+
+  const handleSaveTemplate = async (id) => {
+    setEditTplError('')
+    setEditTplLoading(true)
+    try {
+      await templateApi.updateTemplate(id, editTplName, editTplDesc || null, editTplProjectIds)
+      setEditingTplId(null)
+      fetchTemplates()
+    } catch (err) {
+      setEditTplError(err.response?.data?.message || 'Failed to update template')
+    } finally {
+      setEditTplLoading(false)
+    }
+  }
+
+  const handleDeleteTemplate = async (id) => {
+    try {
+      await templateApi.deleteTemplate(id)
+      setDeleteConfirmId(null)
+      fetchTemplates()
+    } catch {
+      // ignore
+    }
+  }
+
+  const handleStartTemplate = async (id) => {
+    setError('')
+    try {
+      await templateApi.startTemplate(id)
+      fetchSummary()
+    } catch (err) {
+      setError(err.response?.data?.message || 'Failed to start template')
+    }
+  }
+
+  const todaySecs   = summary?.todaySeconds ?? 0
+  const weekSecs    = summary?.weekSeconds  ?? 0
+  const topProjects = summary?.topProjects  ?? []
 
   return (
     <div className="page">
@@ -86,27 +197,161 @@ export default function DashboardPage() {
                 {activeTask.description || 'Timer running'}
               </span>
               <span className="timer-display" data-testid="elapsed">{elapsed}</span>
-              <button
-                className="btn btn-danger btn-stop"
-                onClick={handleStop}
-                disabled={loading}
-                data-testid="stop-btn"
-              >
+              <button className="btn btn-danger btn-stop" onClick={handleStop}
+                disabled={loading} data-testid="stop-btn">
                 {loading ? 'Stopping…' : '■ Stop'}
               </button>
             </div>
           ) : (
-            <button
-              className="btn btn-primary btn-start"
-              onClick={handleStart}
-              disabled={loading}
-              data-testid="start-btn"
-            >
+            <button className="btn btn-primary btn-start" onClick={handleStart}
+              disabled={loading} data-testid="start-btn">
               {loading ? 'Starting…' : '▶ Start'}
             </button>
           )}
         </div>
         {error && <p className="timer-error" role="alert">{error}</p>}
+      </div>
+
+      {/* ── Templates section (US-027) ──────────────────────────────────── */}
+      <div className="templates-section" data-testid="templates-section">
+        <div className="section-header">
+          <h3 className="section-title">Task Templates</h3>
+          <button className="btn btn-primary btn-sm" data-testid="new-template-btn"
+            onClick={() => { setShowTemplateForm(f => !f); setTplError('') }}>
+            {showTemplateForm ? 'Cancel' : '+ New Template'}
+          </button>
+        </div>
+
+        {showTemplateForm && (
+          <form className="project-form" onSubmit={handleCreateTemplate} data-testid="template-form">
+            <input className="timer-input" type="text" placeholder="Template name (required)"
+              value={tplName} onChange={e => setTplName(e.target.value)}
+              required disabled={tplLoading} data-testid="template-name-input" />
+            <input className="timer-input" type="text" placeholder="Task description (optional)"
+              value={tplDesc} onChange={e => setTplDesc(e.target.value)}
+              disabled={tplLoading} data-testid="template-desc-input" />
+            {allProjects.length > 0 && (
+              <fieldset className="project-selector" data-testid="template-project-selector">
+                <legend className="form-label">Projects (optional)</legend>
+                {allProjects.map(p => (
+                  <label key={p.id} className="project-checkbox-label"
+                    style={{ paddingLeft: `${p.depth * 1.5}rem`, display: 'block' }}>
+                    <input type="checkbox"
+                      data-testid={`template-project-checkbox-${p.id}`}
+                      checked={tplProjectIds.includes(p.id)}
+                      onChange={() => toggleTplProject(p.id)}
+                      disabled={tplLoading} />
+                    {' '}{'— '.repeat(p.depth)}{p.name}
+                  </label>
+                ))}
+              </fieldset>
+            )}
+            {tplError && <p className="timer-error" role="alert">{tplError}</p>}
+            <button type="submit" className="btn btn-primary"
+              disabled={tplLoading || !tplName.trim()} data-testid="create-template-btn">
+              {tplLoading ? 'Saving…' : 'Create Template'}
+            </button>
+          </form>
+        )}
+
+        {templates.length === 0 && !showTemplateForm ? (
+          <p className="empty-state" data-testid="templates-empty">
+            No templates yet. Create one to quick-start recurring tasks!
+          </p>
+        ) : (
+          <ul className="template-list" data-testid="template-list">
+            {templates.map(t => (
+              <li key={t.id} className="template-card" data-testid={`template-card-${t.id}`}>
+                {editingTplId === t.id ? (
+                  <form className="project-form" onSubmit={e => { e.preventDefault(); handleSaveTemplate(t.id) }}
+                    data-testid={`template-edit-form-${t.id}`}>
+                    <input className="timer-input" type="text" value={editTplName}
+                      onChange={e => setEditTplName(e.target.value)} required
+                      disabled={editTplLoading} data-testid={`template-edit-name-${t.id}`} />
+                    <input className="timer-input" type="text" value={editTplDesc}
+                      onChange={e => setEditTplDesc(e.target.value)} placeholder="Description (optional)"
+                      disabled={editTplLoading} data-testid={`template-edit-desc-${t.id}`} />
+                    {allProjects.length > 0 && (
+                      <fieldset className="project-selector">
+                        <legend className="form-label">Projects (optional)</legend>
+                        {allProjects.map(p => (
+                          <label key={p.id} className="project-checkbox-label"
+                            style={{ paddingLeft: `${p.depth * 1.5}rem`, display: 'block' }}>
+                            <input type="checkbox"
+                              data-testid={`template-edit-project-checkbox-${p.id}`}
+                              checked={editTplProjectIds.includes(p.id)}
+                              onChange={() => toggleEditTplProject(p.id)}
+                              disabled={editTplLoading} />
+                            {' '}{'— '.repeat(p.depth)}{p.name}
+                          </label>
+                        ))}
+                      </fieldset>
+                    )}
+                    {editTplError && <p className="timer-error" role="alert">{editTplError}</p>}
+                    <div className="task-actions">
+                      <button type="submit" className="btn btn-primary btn-xs"
+                        disabled={editTplLoading} data-testid={`template-save-btn-${t.id}`}>
+                        {editTplLoading ? 'Saving…' : 'Save'}
+                      </button>
+                      <button type="button" className="btn btn-ghost btn-xs"
+                        onClick={() => setEditingTplId(null)}>Cancel</button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="template-card-content">
+                    <div className="template-card-header">
+                      <span className="template-name" data-testid={`template-name-${t.id}`}>
+                        {t.name}
+                      </span>
+                      <div className="task-actions">
+                        <button className="btn btn-primary btn-xs"
+                          onClick={() => handleStartTemplate(t.id)}
+                          data-testid={`template-start-btn-${t.id}`}>
+                          ▶ Start
+                        </button>
+                        <button className="btn btn-ghost btn-xs"
+                          onClick={() => startEditTemplate(t)}
+                          data-testid={`template-edit-btn-${t.id}`}>
+                          Edit
+                        </button>
+                        <button className="btn btn-danger btn-xs"
+                          onClick={() => setDeleteConfirmId(t.id)}
+                          data-testid={`template-delete-btn-${t.id}`}>
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                    {t.description && (
+                      <p className="template-desc" data-testid={`template-desc-${t.id}`}>
+                        {t.description}
+                      </p>
+                    )}
+                    {t.projects?.length > 0 && (
+                      <div className="template-projects" data-testid={`template-projects-${t.id}`}>
+                        {t.projects.map(p => (
+                          <span key={p.id} className="project-chip">{p.name}</span>
+                        ))}
+                      </div>
+                    )}
+                    {deleteConfirmId === t.id && (
+                      <div className="delete-warning" role="alertdialog"
+                        data-testid={`template-delete-dialog-${t.id}`}>
+                        <p>Delete template "{t.name}"?</p>
+                        <button className="btn btn-danger btn-sm"
+                          onClick={() => handleDeleteTemplate(t.id)}
+                          data-testid={`template-delete-confirm-btn-${t.id}`}>
+                          Delete
+                        </button>
+                        <button className="btn btn-ghost btn-sm"
+                          onClick={() => setDeleteConfirmId(null)}>Cancel</button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
       </div>
 
       {/* Summary cards */}
@@ -144,20 +389,14 @@ export default function DashboardPage() {
               <li key={p.id} className="top-project-item" data-testid={`top-project-${p.id}`}>
                 <span className="top-project-name">{p.name}</span>
                 <span className="top-project-time">{fmtHours(p.weekSeconds)}</span>
-                {/* US-026: budget bar for projects with a budget set */}
                 {p.budgetHours && (
                   <div className="budget-bar-wrap" data-testid={`dashboard-budget-bar-${p.id}`}>
                     <div className="budget-bar-track">
-                      <div
-                        className="budget-bar-fill"
-                        style={{
-                          width: `${Math.min(p.budgetPercent ?? 0, 100)}%`,
-                          background:
-                            p.budgetStatus === 'OVER_BUDGET' ? '#ef4444'
-                            : p.budgetStatus === 'WARNING'   ? '#f97316'
-                            : '#22c55e',
-                        }}
-                      />
+                      <div className="budget-bar-fill" style={{
+                        width: `${Math.min(p.budgetPercent ?? 0, 100)}%`,
+                        background: p.budgetStatus === 'OVER_BUDGET' ? '#ef4444'
+                          : p.budgetStatus === 'WARNING' ? '#f97316' : '#22c55e',
+                      }} />
                     </div>
                     <span className="budget-bar-label" data-testid={`dashboard-budget-label-${p.id}`}>
                       {(p.usedHours ?? 0).toFixed(1)}h / {p.budgetHours}h

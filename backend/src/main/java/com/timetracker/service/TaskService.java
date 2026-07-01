@@ -43,16 +43,29 @@ public class TaskService {
 
     @Transactional
     public TaskResponse startTask(String userEmail, StartTaskRequest request) {
+        return startTask(userEmail, request, List.of());
+    }
+
+    @Transactional
+    public TaskResponse startTask(String userEmail, StartTaskRequest request, List<Long> projectIds) {
         User user = loadUser(userEmail);
 
         taskRepository.findByUserAndEndTimeIsNull(user).ifPresent(running -> {
             throw new TimerAlreadyRunningException();
         });
 
+        Set<Project> projects = new HashSet<>();
+        for (Long pid : projectIds) {
+            Project p = projectRepository.findByIdAndMember(pid, user)
+                    .orElseThrow(() -> new ProjectNotFoundException(pid));
+            projects.add(p);
+        }
+
         Task task = new Task();
         task.setUser(user);
         task.setStartTime(Instant.now());
         task.setDescription(request != null ? request.description() : null);
+        task.setProjects(projects);
 
         return TaskResponse.from(taskRepository.save(task));
     }

@@ -29,6 +29,7 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Task overview for shared projects (US-023)** — the project summary response now includes a `contributions` array showing each member's total seconds. Each task entry carries `userId`/`userName` so the frontend can attribute work to its owner. An optional `?userId={id}` query param on both `GET /api/projects/{id}/summary` and `GET /api/tasks` filters results to a single member (both caller and target must be project members; non-member userId returns 403). The project detail page shows a "Contributors" card and a user-filter dropdown for shared projects; task rows display the owner's display name when the project is shared.
 - **Export project tasks (US-024)** — an "Export" button on the project detail page opens a modal where you choose the file format (CSV or JSON) and optionally restrict the export to a specific calendar month. Clicking "Download" calls `GET /api/projects/{id}/export?format=csv|json` and triggers a browser file download via a Blob URL (the JWT is never embedded in the URL). Tasks are collected recursively from the full project subtree so sub-project activity is always included. The CSV columns are `task_id, description, start_time, end_time, duration_seconds, projects, user`; the `projects` column shows the full hierarchy path (e.g. `"Thesis > Literature Review"`). The JSON response wraps the task array in `{ "project": "...", "exportedAt": "...", "tasks": [...] }`. Non-members receive 404. Both `?from/to` ISO params and `?year/month` convenience params are supported for date filtering.
 - **User preferred time zone (US-025)** — every user has a `timezone` field (default `"UTC"`) stored in the database. The timezone is returned in both the register and login responses, stored in `AuthContext`, and persisted in `localStorage`. A new "Preferred Time Zone" section in the Settings page lets users choose from a curated list of common IANA timezone identifiers and saves the choice via `PUT /api/users/profile`. All task times throughout the app (task list, project detail, weekly/monthly overview, new-task form defaults) are displayed in the user's preferred timezone using the browser's built-in `Intl.DateTimeFormat` API — no external libraries needed. Stored times remain UTC at all times; only the display layer changes. `GET /api/users/profile` returns the full user profile including `timezone`; `PUT /api/users/profile` validates the timezone string with `ZoneId.of()` and returns HTTP 400 with an informative message if the value is not a valid IANA identifier.
+- **Task templates (US-027)** — users can save frequently-used task configurations as templates (name, optional description, optional project associations). A "Task Templates" section on the Dashboard shows all personal templates as cards with a name, description preview, and project chips. Clicking **▶ Start** on a template creates a running task pre-filled with the template's description and project associations — the topbar timer appears immediately. Templates can be created via a "New Template" form (with project multi-select), edited inline (pencil button), and deleted (with a confirmation dialog). Templates are strictly private — users can only access their own. `POST /api/task-templates/{id}/start` returns 409 if a timer is already running. All CRUD operations are available via `GET/POST /api/task-templates` and `PUT/DELETE /api/task-templates/{id}`.
 - **Project time budgets (US-026)** — each project can optionally have a `budgetHours` value (a positive decimal, e.g. `40.0`) set at create or edit time. When a budget is set, the project detail page and the projects list both display a colour-coded progress bar: green (ON_TRACK, < 80% used), orange (WARNING, 80–99% used), and red (OVER_BUDGET, ≥ 100% used) with an "Over budget" badge. The Dashboard's top-projects list also shows the budget bar and used/total hour labels. Budget tracking aggregates all-time hours across the full project subtree and all members (not just the current user). The `budgetStatus` field (`ON_TRACK`, `WARNING`, or `OVER_BUDGET`) and `budgetPercent` are computed server-side and included in both `ProjectSummaryResponse` and the dashboard's `TopProject` entries. A null budget means no restriction is enforced.
 
 ---
@@ -126,7 +127,7 @@ What this does:
 
 Expected output at the end:
 ```
-Tests run: 339, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 350, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -181,7 +182,7 @@ npx vitest run
 Expected output:
 ```
 Test Files  11 passed (11)
-     Tests  248 passed (248)
+     Tests  264 passed (264)
 ```
 
 ### Step 7 — Start the frontend dev server
@@ -270,6 +271,7 @@ cd backend
 | `ProjectExportTest` | 14 | US-024 Export: CSV attachment header + filename, CSV header row, task data in row, project name in projects column, JSON attachment header, JSON top-level structure, JSON task fields complete, subproject tasks included, hierarchy path "Root > Sub", year+month filter, empty date range returns header-only CSV, running timer without project excluded, non-member 404, no-auth 401 |
 | `UserProfileTest` | 13 | US-025 Time Zones: GET profile returns all fields, default UTC timezone, 401 without auth, PUT valid IANA timezone, PUT persists timezone, invalid timezone 400, bogus timezone 400, displayName-only update, both fields update, login response includes timezone, register response defaults to UTC, timezone change does not affect createdAt, PUT 401 without auth |
 | `ProjectBudgetTest` | 9 | US-026 Project Budgets: create with budgetHours, null budget allowed, ON_TRACK status (<80%), WARNING status (80–99%), OVER_BUDGET status (≥100%), update budget, null clears budget, shared project summary includes budget, listProjects includes budgetHours |
+| `TaskTemplateTest` | 11 | US-027 Task Templates: create with all fields, no-description/no-project create, list returns only own templates, update name+desc+projects, delete returns 204, start-from-template creates running task with description+projects, start while running 409, cross-user isolation (PUT/DELETE/start on other's template → 404), multi-project template in list, 401 without auth, 400 blank name |
 
 ### Frontend
 
@@ -281,7 +283,7 @@ npx vitest run
 | Test file | Count | What it covers |
 |---|---|---|
 | `LoginPage.test.jsx` | 17 | Register, login, tabs, error states; confirm-password field shown in register mode; client-side validation (password ≥ 8 chars, passwords match) blocks API call; field-level inline errors under each input (email, password, displayName, confirmPassword); clears on tab switch; general banner for non-validation errors |
-| `DashboardPage.test.jsx` | 19 | Timer start/stop, active task display, summary cards (today/week), top projects list, running task info, refresh after timer actions |
+| `DashboardPage.test.jsx` | 28 | Timer start/stop, active task display, summary cards (today/week), top projects list, running task info, refresh after timer actions; template list renders, Start button calls API, New Template form, create submit, edit form pre-fill, save edit, delete confirm dialog, project checkboxes in form |
 | `SettingsPage.test.jsx` | 11 | Timezone selector renders with UTC default; change timezone; calls updateProfile on submit; success/error messages; success clears on change; common IANA zones in dropdown; change password form, error display |
 | `dateUtils.test.js` | 22 | formatInZone (empty input, valid ISO, invalid tz fallback); toDatetimeLocalInTz (empty, UTC, Berlin, Kolkata, NY, day boundary); nowInTz (format); getDateStrInTz (empty, UTC, Kolkata next-day, NY prev-day); todayInTz (shape, consistency); localDateToUtcIso (UTC, Berlin, Kolkata, NY, round-trips UTC/Berlin/Kolkata) |
 | `TasksPage.test.jsx` | 30 | Create, edit, delete tasks; project multi-select on create/edit; project display in task row; field-level error extraction from 400 responses; Add Task button reachable in 1 click |
@@ -370,6 +372,27 @@ Task response shape:
 }
 ```
 
+### Task Templates (US-027)
+
+| Method | Path | Request body | Response | Notes |
+|---|---|---|---|---|
+| GET | `/api/task-templates` | — | 200 `TemplateResponse[]` | List own templates, newest first |
+| POST | `/api/task-templates` | `{name, description?, projectIds?}` | 201 `TemplateResponse` | Create template; `name` required (max 100); `projectIds` must be projects the user is a member of |
+| PUT | `/api/task-templates/{id}` | `{name, description?, projectIds?}` | 200 `TemplateResponse` | Update template (own only; 404 if not found or not owner) |
+| DELETE | `/api/task-templates/{id}` | — | 204 | Delete template (own only) |
+| POST | `/api/task-templates/{id}/start` | — | 201 `TaskResponse` | Start a timer pre-filled with template description + projects; 409 if timer already running; 404 if wrong user |
+
+Template response shape:
+```json
+{
+  "id": 1,
+  "name": "Daily Stand-Up",
+  "description": "Morning sync meeting",
+  "projects": [{"id": 2, "name": "Thesis"}],
+  "createdAt": "2026-07-01T08:00:00Z"
+}
+```
+
 ### Projects
 
 | Method | Path | Request body | Response | Notes |
@@ -435,5 +458,6 @@ Member response shape:
 - **Security NFR** — BCrypt cost-10 hashing means each password hash is unique even for identical passwords (random salt per hash). JWT tokens use HMAC-SHA256 with a 256-bit+ secret and expire after 24 hours. CSRF is disabled intentionally because the API is stateless (no session cookies) — disabling it for a JWT/Bearer API is the correct and secure approach per Spring Security documentation.
 - **Project sharing membership model (US-022)** — a separate `project_members` table stores `(project_id, user_id, role, joined_at)` with a unique constraint on `(project_id, user_id)`. `project.user_id` is kept as the original owner FK for backward compatibility. Access checks use the membership table: `findByIdAndMember` for read operations (any member), `findByIdAndUser` for write operations (owner only). `MembershipSeeder` runs on startup to back-fill OWNER rows for all projects created before this feature was added. `UserNotFoundException` (plain `RuntimeException`) is used instead of Spring Security's `UsernameNotFoundException` when the invitee email is not registered, to prevent the exception from being intercepted by Spring Security's exception handling as a 401.
 - **Timezone display without a library (US-025)** — all timezone conversion uses the built-in `Intl.DateTimeFormat` API (`Intl.DateTimeFormat`, `formatToParts`, `en-CA` locale for deterministic `YYYY-MM-DD` output). `localDateToUtcIso` converts a "local" datetime-local input value to UTC using a naive-UTC + offset-measurement approach: treat the input as UTC, measure the offset the target timezone shows for that UTC instant, apply the correction. One iteration is accurate for all standard and DST zones. The `timezone` column on the `User` entity defaults to `"UTC"` so pre-existing accounts work without migration. IANA timezone IDs are validated at the Spring layer using `ZoneId.of()`, which throws `DateTimeException` on unrecognised strings; `GlobalExceptionHandler` catches `InvalidTimezoneException` and returns HTTP 400.
+- **Task templates (US-027)** — `TaskTemplate` is a separate JPA entity (`task_templates` table) owned by a `User` with a `@ManyToMany` to `Project` via a `template_projects` join table. `startFromTemplate` delegates to `TaskService.startTask(userEmail, request, projectIds)` — an overloaded method added to `TaskService` so that `startTask` called from `TaskController` (no projects) and from templates (with projects) share the same 409-if-running logic without duplication. Ownership is enforced via `findByIdAndUser` — callers from other users get a 404 (not a 403) to avoid leaking template existence. Project associations on a template are resolved with `findByIdAndMember` so users can only link projects they are members of (preventing association with arbitrary project IDs). Deleting a template clears its project join-table entries before the delete to avoid FK constraint violations.
 - **Project time budgets (US-026)** — `budgetHours` is a nullable `Double` column on the `Project` entity. `ProjectService.computeBudgetStatus(budgetHours, usedHours)` is a `static` helper so both `ProjectService.getProjectSummary` and `DashboardService` can compute budget status without a circular dependency. Budget percentage is capped at 100% for the visual progress bar (the label still shows the true percentage). The three status values (`ON_TRACK`, `WARNING`, `OVER_BUDGET`) are thresholded at 80% and 100% and used by the frontend to select the bar colour and optional "Over budget" badge. Budget usage is always an all-time aggregate of the full project subtree across all members (i.e. it is independent of the date-range filter on the summary).
 - **Per-user contribution breakdown (US-023)** — `ProjectSummaryResponse` now carries a `contributions` list (per-user totals) and `userId`/`userName` on every `TaskSummary` entry. `getProjectSummary` collects all task entities from the subtree via `collectSubtreeTaskEntities` (deduplication by task id), groups them by `Task.user` for contributions, and optionally filters `tasks` + `totalSeconds` when `?userId=` is present. The `contributions` array is always the full per-user breakdown regardless of the user filter, so the frontend dropdown remains functional. `AccessDeniedException` (403) is thrown when the `userId` param belongs to a non-member. The same `userId` filter on `GET /api/tasks` validates that both the caller and the target user are project members using `projectRepository.findByIdAndMember(projectId, targetUser)` — no new repository dependency needed in `TaskService`.
