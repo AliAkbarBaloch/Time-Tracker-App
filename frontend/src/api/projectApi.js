@@ -41,3 +41,19 @@ export function inviteMember(projectId, email) {
 export function removeMember(projectId, userId) {
   return api.delete(`/projects/${projectId}/members/${userId}`)
 }
+
+// ── US-024: Export ────────────────────────────────────────────────────────────
+
+/**
+ * GET /api/projects/{id}/export — download tasks as CSV or JSON blob.
+ * responseType 'blob' is required so Axios returns a Blob for URL.createObjectURL.
+ * Supports ?from/to ISO strings, or ?year+month convenience params.
+ */
+export function exportProject(projectId, format = 'csv', from = null, to = null, year = null, month = null) {
+  const params = { format }
+  if (from)  params.from  = from
+  if (to)    params.to    = to
+  if (year)  params.year  = year
+  if (month) params.month = month
+  return api.get(`/projects/${projectId}/export`, { params, responseType: 'blob' })
+}

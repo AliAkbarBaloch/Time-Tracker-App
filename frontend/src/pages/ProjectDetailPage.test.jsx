@@ -7,6 +7,10 @@ import * as projectApi from '../api/projectApi'
 
 vi.mock('../api/projectApi')
 
+// Mock browser APIs used by the Blob download flow (US-024)
+global.URL.createObjectURL = vi.fn(() => 'blob:mock-url')
+global.URL.revokeObjectURL = vi.fn()
+
 // Default members returned by getMembers (Alice is OWNER, Bob is MEMBER)
 const ALICE_ID = 1
 const BOB_ID   = 2
@@ -517,6 +521,117 @@ describe('ProjectDetailPage', () => {
     setup()
     await waitFor(() => expect(screen.getByTestId('summary-task-10')).toBeInTheDocument())
     expect(screen.queryByTestId('task-owner-10')).not.toBeInTheDocument()
+  })
+
+  // ── US-024: Export button and modal ──────────────────────────────────────
+
+  it('renders export button on project detail page', async () => {
+    setup()
+    await waitFor(() => expect(screen.getByTestId('project-summary-name')).toBeInTheDocument())
+    expect(screen.getByTestId('export-btn')).toBeInTheDocument()
+  })
+
+  it('opens export modal when export button is clicked', async () => {
+    setup()
+    await waitFor(() => expect(screen.getByTestId('export-btn')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('export-btn'))
+    expect(screen.getByTestId('export-modal')).toBeInTheDocument()
+  })
+
+  it('export modal contains format and scope selectors', async () => {
+    setup()
+    await waitFor(() => expect(screen.getByTestId('export-btn')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('export-btn'))
+    // Format radios
+    expect(screen.getByTestId('export-format-csv')).toBeInTheDocument()
+    expect(screen.getByTestId('export-format-json')).toBeInTheDocument()
+    // Scope radios
+    expect(screen.getByTestId('export-scope-all')).toBeInTheDocument()
+    expect(screen.getByTestId('export-scope-month')).toBeInTheDocument()
+  })
+
+  it('shows year and month inputs only when Specific Month scope is selected', async () => {
+    setup()
+    await waitFor(() => expect(screen.getByTestId('export-btn')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('export-btn'))
+    // Month inputs not shown by default (All Time is default scope)
+    expect(screen.queryByTestId('export-year-input')).not.toBeInTheDocument()
+    // Select Specific Month
+    fireEvent.click(screen.getByTestId('export-scope-month'))
+    expect(screen.getByTestId('export-year-input')).toBeInTheDocument()
+    expect(screen.getByTestId('export-month-input')).toBeInTheDocument()
+  })
+
+  it('cancel button closes the export modal', async () => {
+    setup()
+    await waitFor(() => expect(screen.getByTestId('export-btn')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('export-btn'))
+    expect(screen.getByTestId('export-modal')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('export-cancel-btn'))
+    expect(screen.queryByTestId('export-modal')).not.toBeInTheDocument()
+  })
+
+  it('clicking Download calls exportProject and triggers blob download', async () => {
+    // Resolve with a Blob response as the real API would
+    projectApi.exportProject = vi.fn().mockResolvedValue({ data: new Blob(['csv'], { type: 'text/csv' }) })
+    setup()
+
+    await waitFor(() => expect(screen.getByTestId('export-btn')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('export-btn'))
+    fireEvent.click(screen.getByTestId('export-submit-btn'))
+
+    await waitFor(() => expect(projectApi.exportProject).toHaveBeenCalled())
+    expect(URL.createObjectURL).toHaveBeenCalled()
+    expect(URL.revokeObjectURL).toHaveBeenCalled()
+    // Modal closes after successful download
+    await waitFor(() => expect(screen.queryByTestId('export-modal')).not.toBeInTheDocument())
+  })
+
+  it('export with JSON format passes format=json to the API', async () => {
+    projectApi.exportProject = vi.fn().mockResolvedValue({ data: new Blob(['{}'], { type: 'application/json' }) })
+    setup()
+
+    await waitFor(() => expect(screen.getByTestId('export-btn')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('export-btn'))
+    // Switch to JSON format
+    fireEvent.click(screen.getByTestId('export-format-json'))
+    fireEvent.click(screen.getByTestId('export-submit-btn'))
+
+    await waitFor(() => expect(projectApi.exportProject).toHaveBeenCalledWith(
+      '1', 'json', null, null, null, null
+    ))
+  })
+
+  it('export with Specific Month scope passes year and month to the API', async () => {
+    projectApi.exportProject = vi.fn().mockResolvedValue({ data: new Blob(['csv'], { type: 'text/csv' }) })
+    setup()
+
+    await waitFor(() => expect(screen.getByTestId('export-btn')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('export-btn'))
+    fireEvent.click(screen.getByTestId('export-scope-month'))
+
+    // Change year and month inputs
+    fireEvent.change(screen.getByTestId('export-year-input'),  { target: { value: '2026' } })
+    fireEvent.change(screen.getByTestId('export-month-input'), { target: { value: '6' } })
+    fireEvent.click(screen.getByTestId('export-submit-btn'))
+
+    await waitFor(() => expect(projectApi.exportProject).toHaveBeenCalledWith(
+      '1', 'csv', null, null, 2026, 6
+    ))
+  })
+
+  it('shows error message when export API call fails', async () => {
+    projectApi.exportProject = vi.fn().mockRejectedValue(new Error('Network error'))
+    setup()
+
+    await waitFor(() => expect(screen.getByTestId('export-btn')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('export-btn'))
+    fireEvent.click(screen.getByTestId('export-submit-btn'))
+
+    await waitFor(() => expect(screen.getByTestId('export-error')).toBeInTheDocument())
+    expect(screen.getByTestId('export-error')).toHaveTextContent('Export failed')
+    // Modal stays open on error
+    expect(screen.getByTestId('export-modal')).toBeInTheDocument()
   })
 
 })

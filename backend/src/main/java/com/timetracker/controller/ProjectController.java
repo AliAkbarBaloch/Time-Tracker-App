@@ -6,24 +6,31 @@ import com.timetracker.dto.project.MemberResponse;
 import com.timetracker.dto.project.ProjectResponse;
 import com.timetracker.dto.project.ProjectSummaryResponse;
 import com.timetracker.dto.project.UpdateProjectRequest;
+import com.timetracker.service.ProjectExportService;
 import com.timetracker.service.ProjectService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.List;
 
 @RestController
 @RequestMapping("/api/projects")
 public class ProjectController {
 
-    private final ProjectService projectService;
+    private final ProjectService       projectService;
+    private final ProjectExportService projectExportService;
 
-    public ProjectController(ProjectService projectService) {
-        this.projectService = projectService;
+    public ProjectController(ProjectService projectService,
+                             ProjectExportService projectExportService) {
+        this.projectService       = projectService;
+        this.projectExportService = projectExportService;
     }
 
     // ── CRUD ──────────────────────────────────────────────────────────────────
@@ -108,5 +115,50 @@ public class ProjectController {
     public List<MemberResponse> listMembers(@AuthenticationPrincipal UserDetails principal,
                                              @PathVariable Long id) {
         return projectService.listMembers(principal.getUsername(), id);
+    }
+
+    // ── Export (US-024) ───────────────────────────────────────────────────────
+
+    /**
+     * Download all tasks in the project subtree as CSV (default) or JSON.
+     *
+     * Params:
+     *   format  — "csv" (default) or "json"
+     *   from/to — ISO-8601 instant strings for an explicit date range
+     *   year + month — convenience params for a calendar-month export (1-indexed month)
+     *
+     * Responds with Content-Disposition: attachment so the browser triggers a download.
+     * Non-members receive 404 so project existence is not leaked.
+     */
+    @GetMapping("/{id}/export")
+    public ResponseEntity<String> exportProject(
+            @AuthenticationPrincipal UserDetails principal,
+            @PathVariable Long id,
+            @RequestParam(defaultValue = "csv") String format,
+            @RequestParam(required = false) String from,
+            @RequestParam(required = false) String to,
+            @RequestParam(required = false) Integer year,
+            @RequestParam(required = false) Integer month) {
+        Instant fromInstant = resolveFrom(from, year, month);
+        Instant toInstant   = resolveTo(to, year, month);
+        return projectExportService.export(principal.getUsername(), id, format, fromInstant, toInstant);
+    }
+
+    /** Resolve the start of the export window from an ISO string or a year+month pair. */
+    private Instant resolveFrom(String from, Integer year, Integer month) {
+        if (from != null) return Instant.parse(from);
+        if (year != null && month != null) {
+            return LocalDate.of(year, month, 1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        }
+        return null;
+    }
+
+    /** Resolve the end of the export window from an ISO string or a year+month pair. */
+    private Instant resolveTo(String to, Integer year, Integer month) {
+        if (to != null) return Instant.parse(to);
+        if (year != null && month != null) {
+            return LocalDate.of(year, month, 1).plusMonths(1).atStartOfDay(ZoneOffset.UTC).toInstant();
+        }
+        return null;
     }
 }

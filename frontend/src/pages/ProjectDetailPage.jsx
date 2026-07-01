@@ -64,6 +64,15 @@ export default function ProjectDetailPage() {
   // US-023: optional per-user filter; null = show all users
   const [selectedUserId, setSelectedUserId] = useState(null)
 
+  // ── US-024: Export modal state ────────────────────────────────────────────
+  const [showExportModal, setShowExportModal] = useState(false)
+  const [exportFormat,    setExportFormat]    = useState('csv')
+  const [exportScope,     setExportScope]     = useState('all')   // 'all' | 'month'
+  const [exportYear,      setExportYear]      = useState(new Date().getFullYear())
+  const [exportMonth,     setExportMonth]     = useState(new Date().getMonth() + 1)
+  const [exportLoading,   setExportLoading]   = useState(false)
+  const [exportError,     setExportError]     = useState('')
+
   // ── US-022: Members section state ─────────────────────────────────────────
   const [members, setMembers]           = useState([])
   const [membersLoading, setMembersLoading] = useState(false)
@@ -150,6 +159,38 @@ export default function ProjectDetailPage() {
     fetchSummary()
   }
 
+  // ── US-024: Export handler ─────────────────────────────────────────────────
+
+  /**
+   * Call the export API, receive a Blob, create a temporary object URL,
+   * trigger a browser download via a hidden <a> element, then revoke the URL.
+   * This pattern avoids embedding the JWT token in the URL.
+   */
+  const handleExport = async (e) => {
+    e.preventDefault()
+    setExportLoading(true)
+    setExportError('')
+    try {
+      const year  = exportScope === 'month' ? exportYear  : null
+      const month = exportScope === 'month' ? exportMonth : null
+      const res   = await projectApi.exportProject(id, exportFormat, null, null, year, month)
+      const ext   = exportFormat === 'json' ? 'json' : 'csv'
+      const url   = URL.createObjectURL(res.data)
+      const a     = document.createElement('a')
+      a.href     = url
+      a.download = `${(summary?.name ?? id).replace(/[^a-zA-Z0-9-_]/g, '_')}-export.${ext}`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      URL.revokeObjectURL(url)
+      setShowExportModal(false)
+    } catch {
+      setExportError('Export failed. Please try again.')
+    } finally {
+      setExportLoading(false)
+    }
+  }
+
   return (
     <div className="page">
       <div className="page-header">
@@ -165,6 +206,12 @@ export default function ProjectDetailPage() {
             )}
           </>
         )}
+        {/* US-024: Export button — opens the format/scope modal */}
+        <button className="btn btn-secondary btn-sm export-btn"
+          onClick={() => { setShowExportModal(true); setExportError('') }}
+          data-testid="export-btn">
+          Export
+        </button>
       </div>
 
       {/* Date range preset bar */}
@@ -309,6 +356,93 @@ export default function ProjectDetailPage() {
             )}
           </div>
         </>
+      )}
+
+      {/* ── US-024: Export modal ─────────────────────────────────────────── */}
+      {showExportModal && (
+        <div className="modal-overlay" data-testid="export-modal">
+          <div className="modal-content">
+            <h3>Export Tasks</h3>
+            <form onSubmit={handleExport}>
+
+              {/* Format selector */}
+              <div className="form-group">
+                <label className="form-label">Format</label>
+                <div className="radio-group">
+                  <label>
+                    <input type="radio" name="exportFormat" value="csv"
+                      checked={exportFormat === 'csv'}
+                      onChange={() => setExportFormat('csv')}
+                      data-testid="export-format-csv" />
+                    CSV
+                  </label>
+                  <label>
+                    <input type="radio" name="exportFormat" value="json"
+                      checked={exportFormat === 'json'}
+                      onChange={() => setExportFormat('json')}
+                      data-testid="export-format-json" />
+                    JSON
+                  </label>
+                </div>
+              </div>
+
+              {/* Scope selector */}
+              <div className="form-group">
+                <label className="form-label">Date Range</label>
+                <div className="radio-group">
+                  <label>
+                    <input type="radio" name="exportScope" value="all"
+                      checked={exportScope === 'all'}
+                      onChange={() => setExportScope('all')}
+                      data-testid="export-scope-all" />
+                    All Time
+                  </label>
+                  <label>
+                    <input type="radio" name="exportScope" value="month"
+                      checked={exportScope === 'month'}
+                      onChange={() => setExportScope('month')}
+                      data-testid="export-scope-month" />
+                    Specific Month
+                  </label>
+                </div>
+              </div>
+
+              {/* Year + month inputs — only shown when scope = month */}
+              {exportScope === 'month' && (
+                <div className="form-group month-inputs">
+                  <input type="number" className="timer-input" value={exportYear}
+                    onChange={e => setExportYear(Number(e.target.value))}
+                    placeholder="Year" min="2000" max="2099"
+                    data-testid="export-year-input" />
+                  <input type="number" className="timer-input" value={exportMonth}
+                    onChange={e => setExportMonth(Number(e.target.value))}
+                    placeholder="Month (1-12)" min="1" max="12"
+                    data-testid="export-month-input" />
+                </div>
+              )}
+
+              {exportError && (
+                <p className="timer-error" role="alert" data-testid="export-error">
+                  {exportError}
+                </p>
+              )}
+
+              <div className="modal-actions">
+                <button type="button" className="btn btn-ghost btn-sm"
+                  onClick={() => setShowExportModal(false)}
+                  disabled={exportLoading}
+                  data-testid="export-cancel-btn">
+                  Cancel
+                </button>
+                <button type="submit" className="btn btn-primary btn-sm"
+                  disabled={exportLoading}
+                  data-testid="export-submit-btn">
+                  {exportLoading ? 'Exporting…' : 'Download'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* ── US-022: Members section ──────────────────────────────────────── */}
