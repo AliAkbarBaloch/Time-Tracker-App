@@ -1,32 +1,87 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import * as taskApi from '../api/taskApi'
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-const WEEK_DATA = [
-  { day: 'Mon', date: '23 Jun', total: '4h 30m', tasks: ['Studying React — 1h 30m', 'Reading paper — 3h'] },
-  { day: 'Tue', date: '24 Jun', total: '2h 15m', tasks: ['Experiments — 2h 15m'] },
-  { day: 'Wed', date: '25 Jun', total: '6h 00m', tasks: ['Final Project — 4h', 'Literature Review — 2h'] },
-  { day: 'Thu', date: '26 Jun', total: '3h 45m', tasks: ['Weekly Assignment — 3h 45m'] },
-  { day: 'Fri', date: '27 Jun', total: '1h 30m', tasks: ['Sprint planning — 30m', 'Part-time Job — 1h'] },
-  { day: 'Sat', date: '28 Jun', total: '',        tasks: [] },
-  { day: 'Sun', date: '29 Jun', total: '2h 00m', tasks: ['Reading paper — 2h'] },
-]
+const DAY_NAMES = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 
-const MONTH_GRID = Array.from({ length: 30 }, (_, i) => ({
-  day: i + 1,
-  total: [0, 0, 2.5, 4, 3, 0, 0, 5, 2, 3.5, 4, 1, 0, 0, 4.5, 3, 2, 6, 3.75, 1.5, 0, 0, 4, 2.25, 0, 6, 3, 1, 0, 2][i] || 0,
-}))
+function formatSeconds(totalSecs) {
+  if (!totalSecs) return '—'
+  const h = Math.floor(totalSecs / 3600)
+  const m = Math.floor((totalSecs % 3600) / 60)
+  return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`
+}
 
-function heatColor(hours) {
-  if (!hours) return '#f3f4f6'
-  if (hours < 2) return '#dbeafe'
-  if (hours < 4) return '#93c5fd'
-  if (hours < 6) return '#3b82f6'
-  return '#1d4ed8'
+function getLocalDateStr(iso) {
+  const d = new Date(iso)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+function getWeekDays(offset) {
+  const now = new Date()
+  const dow = now.getDay()
+  const mondayDiff = dow === 0 ? -6 : 1 - dow
+  return Array.from({ length: 7 }, (_, i) =>
+    new Date(now.getFullYear(), now.getMonth(), now.getDate() + mondayDiff + offset * 7 + i)
+  )
+}
+
+function weekApiRange(weekDays) {
+  const monday = weekDays[0]
+  const from = monday.toISOString()
+  const to = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + 7).toISOString()
+  return { from, to }
+}
+
+function buildWeekData(weekDays, tasks) {
+  return weekDays.map(date => {
+    const ds = getLocalDateStr(date.toISOString())
+    const dayTasks = tasks.filter(t => getLocalDateStr(t.startTime) === ds)
+    const totalSecs = dayTasks.reduce((sum, t) => {
+      if (!t.endTime) return sum
+      return sum + Math.floor((new Date(t.endTime) - new Date(t.startTime)) / 1000)
+    }, 0)
+    return { date, tasks: dayTasks, totalSecs }
+  })
+}
+
+function formatWeekLabel(weekDays) {
+  const fmt = d => `${d.getDate()} ${d.toLocaleString('default', { month: 'short' })}`
+  return `${fmt(weekDays[0])} – ${fmt(weekDays[6])}, ${weekDays[0].getFullYear()}`
+}
+
+function formatTaskDuration(startTime, endTime) {
+  if (!endTime) return '(running)'
+  const secs = Math.floor((new Date(endTime) - new Date(startTime)) / 1000)
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = secs % 60
+  return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m ${String(s).padStart(2, '0')}s`
 }
 
 export default function OverviewPage() {
-  const [view, setView]           = useState('week')
-  const [expandedDay, setExpanded] = useState(null)
+  const navigate = useNavigate()
+  const [view, setView]             = useState('week')
+  const [weekOffset, setWeekOffset] = useState(0)
+  const [tasks, setTasks]           = useState([])
+  const [loading, setLoading]       = useState(false)
+
+  const weekDays      = getWeekDays(weekOffset)
+  const weekData      = buildWeekData(weekDays, tasks)
+  const weekTotalSecs = weekData.reduce((sum, d) => sum + d.totalSecs, 0)
+
+  const fetchWeekTasks = useCallback(() => {
+    const days = getWeekDays(weekOffset)
+    const { from, to } = weekApiRange(days)
+    setLoading(true)
+    taskApi.listTasks(from, to)
+      .then(res => setTasks(res.data))
+      .catch(() => setTasks([]))
+      .finally(() => setLoading(false))
+  }, [weekOffset])
+
+  useEffect(() => {
+    if (view === 'week') fetchWeekTasks()
+  }, [view, fetchWeekTasks])
 
   return (
     <div className="page">
@@ -34,85 +89,82 @@ export default function OverviewPage() {
         <h2 className="page-title">Overview</h2>
         <div className="view-toggle">
           {['week', 'month'].map(v => (
-            <button
-              key={v}
+            <button key={v}
               className={`btn btn-ghost btn-sm ${view === v ? 'active' : ''}`}
               onClick={() => setView(v)}
+              data-testid={`view-tab-${v}`}
             >{v === 'week' ? 'Week' : 'Month'}</button>
           ))}
         </div>
-        <div className="nav-arrows">
-          <button className="btn btn-ghost btn-sm">‹ Prev</button>
-          <span className="nav-label">{view === 'week' ? 'Jun 23 – Jun 29, 2026' : 'June 2026'}</span>
-          <button className="btn btn-ghost btn-sm">Next ›</button>
-        </div>
+        {view === 'week' && (
+          <div className="nav-arrows">
+            <button className="btn btn-ghost btn-sm"
+              onClick={() => setWeekOffset(o => o - 1)}
+              data-testid="prev-week-btn">‹ Prev</button>
+            <span className="nav-label" data-testid="week-label">
+              {formatWeekLabel(weekDays)}
+            </span>
+            <button className="btn btn-ghost btn-sm"
+              onClick={() => setWeekOffset(o => o + 1)}
+              data-testid="next-week-btn">Next ›</button>
+          </div>
+        )}
       </div>
 
       {view === 'week' && (
-        <div className="week-grid">
-          {WEEK_DATA.map(d => (
-            <div
-              key={d.day}
-              className={`week-col ${d.total ? '' : 'empty'}`}
-              onClick={() => setExpanded(expandedDay === d.day ? null : d.day)}
-            >
-              <div className="week-day-name">{d.day}</div>
-              <div className="week-date">{d.date}</div>
-              <div className="week-total">{d.total || '—'}</div>
-              {expandedDay === d.day && d.tasks.length > 0 && (
-                <ul className="week-tasks">
-                  {d.tasks.map((t, i) => <li key={i}>{t}</li>)}
-                </ul>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {view === 'month' && (
         <>
-          <div className="month-grid">
-            {DAYS.map(d => <div key={d} className="month-header-cell">{d}</div>)}
-            {/* offset for June starting on Monday */}
-            {MONTH_GRID.map(({ day, total }) => (
-              <div
-                key={day}
-                className="month-cell"
-                style={{ background: heatColor(total) }}
-              >
-                <span className="month-day-num">{day}</span>
-                {total > 0 && <span className="month-cell-time">{total}h</span>}
+          {loading && <p className="empty-state" data-testid="week-loading">Loading…</p>}
+          <div className="week-grid" data-testid="week-view">
+            {weekData.map(({ date, tasks: dayTasks, totalSecs }, i) => (
+              <div key={i}
+                className={`week-col${totalSecs === 0 ? ' empty' : ''}`}
+                data-testid={`week-col-${i}`}>
+                <div className="week-day-name">{DAY_NAMES[i]}</div>
+                <div className="week-date">
+                  {date.getDate()} {date.toLocaleString('default', { month: 'short' })}
+                </div>
+                <div className="week-total" data-testid={`day-total-${i}`}>
+                  {formatSeconds(totalSecs)}
+                </div>
+                {dayTasks.length > 0 && (
+                  <ul className="week-tasks" data-testid={`day-tasks-${i}`}>
+                    {dayTasks.map(t => (
+                      <li key={t.id}
+                        className="week-task-item"
+                        data-testid={`week-task-${t.id}`}
+                        onClick={() => navigate('/tasks')}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={e => e.key === 'Enter' && navigate('/tasks')}
+                      >
+                        <span className="week-task-desc">{t.description || '(no description)'}</span>
+                        <span className="week-task-dur">
+                          {formatTaskDuration(t.startTime, t.endTime)}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             ))}
           </div>
-          <div className="legend">
-            <span>Less</span>
-            {['#f3f4f6','#dbeafe','#93c5fd','#3b82f6','#1d4ed8'].map(c => (
-              <span key={c} className="legend-dot" style={{ background: c }} />
-            ))}
-            <span>More</span>
+
+          <div className="section" style={{ marginTop: '1.5rem' }}>
+            <div className="section-header">
+              <h3>Week Total</h3>
+              <span className="section-total" data-testid="week-total">
+                {formatSeconds(weekTotalSecs)}
+              </span>
+            </div>
           </div>
         </>
       )}
 
-      {/* Weekly total bar */}
-      <div className="section" style={{ marginTop: '1.5rem' }}>
-        <div className="section-header">
-          <h3>Week Total</h3>
-          <span className="section-total">20h 00m</span>
-        </div>
-        <div className="bar-chart">
-          {WEEK_DATA.map(d => {
-            const h = parseFloat(d.total) || 0
-            return (
-              <div key={d.day} className="bar-col">
-                <div className="bar" style={{ height: `${(h / 6) * 100}%` }} />
-                <span className="bar-label">{d.day}</span>
-              </div>
-            )
-          })}
-        </div>
-      </div>
+      {view === 'month' && (
+        <p className="empty-state" data-testid="month-placeholder">
+          Monthly view — coming in the next update.
+        </p>
+      )}
     </div>
   )
 }

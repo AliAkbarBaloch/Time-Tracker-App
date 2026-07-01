@@ -64,6 +64,8 @@ A full-stack time tracking web application for individuals (students, freelancer
 | US-011 | Create a Subproject (Project Hierarchy) | Done |
 | US-012 | Edit and Delete a Project | Done |
 | US-013 | Associate Tasks with Projects | Done |
+| US-014 | View Daily Task Overview (Dashboard) | Done |
+| US-015 | View Weekly Task Overview | Done |
 
 ### What each story delivers
 
@@ -106,6 +108,13 @@ Frontend clears the JWT from localStorage. All protected API endpoints require `
 
 **US-013 – Associate Tasks with Projects**  
 Create and edit forms show a tree-indented multi-select checkbox list of the user's projects. Selecting a project on create (`POST /api/tasks`) or update (`PUT /api/tasks/{id}`) stores associations in the `task_projects` join table. `GET /api/tasks` now returns `projects: [{id, name}]` in each task response. Project `totalSeconds` updates immediately when associations change.
+
+**US-014 – View Daily Task Overview (Dashboard)**  
+The Dashboard now shows a "Today" section below the timer. It calls `GET /api/tasks?from=<midnight>&to=<next-midnight>` to fetch only today's tasks. Each task row shows its description, start time, duration, and associated projects. A live daily total (HH:MM:SS) updates every second while a task is running. The task list refreshes automatically after starting or stopping a timer.  
+Backend: `GET /api/tasks` gained optional `from`/`to` ISO-8601 query params; the service dispatches to `findByUserAndStartTimeBetweenOrderByStartTimeAsc` when both are present.
+
+**US-015 – View Weekly Task Overview**  
+The Overview page shows the current week (Monday–Sunday) as a 7-column grid. Each column displays the day name, date, per-day total, and a list of tasks for that day. A "Week Total" footer sums all days. Prev/Next buttons navigate between weeks by re-fetching from the same `GET /api/tasks?from=&to=` endpoint. Tasks are attributed to a day by the local date of their `startTime`. Clicking any task navigates to the Tasks page. The Month tab shows a placeholder for the upcoming monthly view.
 
 ---
 
@@ -193,7 +202,7 @@ This runs all unit tests (Mockito) and integration tests (MockMvc + in-memory H2
 
 Expected output:
 ```
-Tests run: 130, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 139, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -212,11 +221,12 @@ BUILD SUCCESS
 | `TaskControllerEditTest` | 5 | Update task, ownership, validation |
 | `TaskControllerDeleteTest` | 5 | Delete task, ownership, authentication |
 | `TaskControllerAssociateProjectsTest` | 8 | Create/update task with projects, invalid project ID, project totals |
+| `TaskControllerListFilterTest` | 6 | List tasks with/without date-range params, sort order, 401 |
 | `ProjectControllerTest` | 7 | Create project, duplicate name, list, hierarchy |
 | `ProjectControllerSubprojectTest` | 5 | Subproject creation, circular hierarchy guard |
 | `ProjectControllerEditDeleteTest` | 11 | Edit project, delete with/without associations, force delete |
 | `AuthServiceTest` | 8 | Registration, login, change password (unit) |
-| `TaskServiceTest` | 24 | All task service operations including project association (unit) |
+| `TaskServiceTest` | 27 | All task service operations including project association and date filtering (unit) |
 | `ProjectServiceTest` | 18 | All project service operations (unit) |
 
 ### Frontend tests
@@ -230,7 +240,7 @@ npx vitest run
 
 Expected output:
 ```
-Tests  67 passed (67)
+Tests  100 passed (100)
 ```
 
 **Test structure:**
@@ -238,10 +248,11 @@ Tests  67 passed (67)
 | File | Tests | What it covers |
 |---|---|---|
 | `LoginPage.test.jsx` | 5 | Register, login, tabs, error states |
-| `DashboardPage.test.jsx` | 7 | Timer start/stop, active task display, errors |
+| `DashboardPage.test.jsx` | 16 | Timer start/stop, active task display, today section, daily total, running task highlight |
 | `SettingsPage.test.jsx` | 3 | Change password form, error display |
 | `TasksPage.test.jsx` | 27 | Create, edit, delete tasks; project multi-select on create/edit; project display in task row |
 | `ProjectsPage.test.jsx` | 18 | Create, edit, delete projects; tree view; collapse; force delete dialog |
+| `OverviewPage.test.jsx` | 26 | Week view columns, day/week totals, prev/next navigation, task grouping by day, task click, month placeholder |
 
 ---
 
@@ -261,7 +272,7 @@ All endpoints (except register and login) require `Authorization: Bearer <JWT>`.
 
 | Method | Path | Body | Response | Description |
 |---|---|---|---|---|
-| GET | `/api/tasks` | — | 200 `Task[]` | List all completed tasks |
+| GET | `/api/tasks` | — | 200 `Task[]` | List tasks (add `?from=<ISO>&to=<ISO>` for date-range filter) |
 | POST | `/api/tasks/start` | `{description?}` | 201 | Start a running timer |
 | POST | `/api/tasks/stop` | — | 200 | Stop the running timer |
 | GET | `/api/tasks/active` | — | 200 or 204 | Get the active timer |
