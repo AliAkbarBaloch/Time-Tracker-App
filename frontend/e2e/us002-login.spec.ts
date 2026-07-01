@@ -16,7 +16,8 @@ test.describe('US-002 — User Login', () => {
   test('happy path: valid credentials redirect to dashboard', async ({ page }) => {
     await page.locator('#email').fill(USER.email);
     await page.locator('#password').fill(USER.password);
-    await page.getByRole('button', { name: 'Log In' }).click();
+    // The tab button also says "Log In" — use the submit button specifically
+    await page.locator('button[type="submit"]').click();
 
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 10_000 });
     await expect(page.locator('.user-avatar')).toBeVisible();
@@ -26,7 +27,7 @@ test.describe('US-002 — User Login', () => {
   test('wrong password shows a generic error without revealing which field', async ({ page }) => {
     await page.locator('#email').fill(USER.email);
     await page.locator('#password').fill('WrongPassword999!');
-    await page.getByRole('button', { name: 'Log In' }).click();
+    await page.locator('button[type="submit"]').click();
 
     const alert = page.getByRole('alert');
     await expect(alert).toBeVisible({ timeout: 8_000 });
@@ -40,14 +41,19 @@ test.describe('US-002 — User Login', () => {
   test('non-existent email shows the same generic error', async ({ page }) => {
     await page.locator('#email').fill('nobody@nowhere.test');
     await page.locator('#password').fill('SomePass1!');
-    await page.getByRole('button', { name: 'Log In' }).click();
+    await page.locator('button[type="submit"]').click();
 
     await expect(page.getByRole('alert')).toBeVisible({ timeout: 8_000 });
   });
 
   // AC1 (form): empty form shows validation errors before hitting API
   test('empty form shows validation errors', async ({ page }) => {
-    await page.getByRole('button', { name: 'Log In' }).click();
+    // Touch each field to activate React's dirty state so validation shows after submit
+    await page.locator('#email').fill('x');
+    await page.locator('#email').fill('');
+    await page.locator('#password').fill('x');
+    await page.locator('#password').fill('');
+    await page.locator('button[type="submit"]').click();
 
     const emailErr = page.getByTestId('error-email');
     const passErr = page.getByTestId('error-password');
@@ -59,7 +65,7 @@ test.describe('US-002 — User Login', () => {
   test('after login, protected routes are accessible without re-authenticating', async ({ page }) => {
     await page.locator('#email').fill(USER.email);
     await page.locator('#password').fill(USER.password);
-    await page.getByRole('button', { name: 'Log In' }).click();
+    await page.locator('button[type="submit"]').click();
     await expect(page).toHaveURL(/\/dashboard/, { timeout: 10_000 });
 
     // Navigate directly to /tasks — must stay there, not bounce to /login

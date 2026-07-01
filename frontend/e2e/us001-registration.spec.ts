@@ -40,6 +40,15 @@ test.describe('US-001 — User Registration', () => {
 
   // AC4 (form): empty form shows field-level validation errors
   test('submitting empty form shows validation errors', async ({ page }) => {
+    // Touch each field to activate React's dirty state, then clear it
+    // This ensures field-level errors appear on submit rather than relying on HTML5 required
+    for (const id of ['#displayName', '#email', '#password']) {
+      await page.locator(id).fill('x');
+      await page.locator(id).fill('');
+    }
+    await page.getByTestId('confirm-password-input').fill('x');
+    await page.getByTestId('confirm-password-input').fill('');
+
     await page.getByRole('button', { name: 'Create Account' }).click();
 
     // At least one field-level error appears

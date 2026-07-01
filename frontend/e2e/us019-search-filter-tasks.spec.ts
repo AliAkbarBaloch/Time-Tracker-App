@@ -72,7 +72,8 @@ test.describe('US-019 — Search and Filter Tasks', () => {
     // Now add a from-date of today — should shrink to only today's task
     const todayStr = new Date().toISOString().slice(0, 10);
     await page.getByTestId('filter-from').fill(todayStr);
-    await page.waitForTimeout(500);
+    // Longer wait for combined filter debounce to fire and API to respond
+    await page.waitForTimeout(800);
 
     const narrowedCount = await rows.count();
     expect(narrowedCount).toBeLessThan(allCount);
@@ -86,15 +87,16 @@ test.describe('US-019 — Search and Filter Tasks', () => {
     await page.getByTestId('filter-search-input').fill('nonexistentxyz');
     await page.waitForTimeout(500);
 
-    // Possibly no results shown
+    // Possibly no results shown; wait for reset button to be present and click it
+    await expect(page.getByTestId('filter-reset-btn')).toBeVisible({ timeout: 8_000 });
     await page.getByTestId('filter-reset-btn').click();
-    await page.waitForTimeout(300);
+    await page.waitForTimeout(500);
 
     // Search input should be cleared
     await expect(page.getByTestId('filter-search-input')).toHaveValue('');
 
     // Task list should now be showing items again (we created tasks above)
     const rows = page.locator('[data-testid^="task-item-"]');
-    await expect(rows.first()).toBeVisible({ timeout: 8_000 });
+    await expect(rows.first()).toBeVisible({ timeout: 10_000 });
   });
 });

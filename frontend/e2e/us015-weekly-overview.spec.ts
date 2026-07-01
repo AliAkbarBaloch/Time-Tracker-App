@@ -76,9 +76,12 @@ test.describe('US-015 — View Weekly Task Overview', () => {
     const weekHeading = page.getByTestId('week-view').locator('h2, h3, [data-testid="week-label"]').first();
     const beforeText = await weekHeading.textContent();
 
+    // Ensure the button is visible before clicking — it may render after the view loads
+    await expect(page.getByTestId('prev-week-btn')).toBeVisible({ timeout: 8_000 });
     await page.getByTestId('prev-week-btn').click();
 
-    // Heading should change to show the previous week
+    // Wait for the heading to actually change (async re-render)
+    await expect(weekHeading).not.toHaveText(beforeText ?? '', { timeout: 8_000 });
     const afterText = await weekHeading.textContent();
     expect(afterText).not.toBe(beforeText);
   });
