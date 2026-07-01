@@ -13,7 +13,7 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Add tasks manually** — log past work by entering a description, start time, and end time directly.
 - **Edit and delete tasks** — correct mistakes or remove entries at any time.
 - **Organize with projects** — create projects (and nested subprojects) and link any task to one or more projects. Each project automatically tracks its total time, including time from subprojects.
-- **Daily overview** — the Dashboard shows today's tasks and a live running total so you always know how much you have worked today.
+- **Dashboard summary** — the Dashboard shows Today and This Week totals, the currently running task, and the top 5 projects ranked by time this week — all from a single `GET /api/dashboard/summary` call.
 - **Weekly overview** — the Overview page shows all seven days of the selected week in a grid, with per-day totals, a week total, and prev/next navigation to browse past or future weeks.
 - **Monthly overview** — the Overview page's Month tab shows a full calendar grid of the selected month. Each day cell displays its tracked total; clicking a day opens a panel listing that day's tasks with durations. Prev/next navigation and a monthly total are included.
 - **Project time summary** — click any project name to open its detail page. A date-range picker (Today, This Week, This Month, All Time, Custom) filters the aggregation window. The page shows the project's rolled-up total (across the full subproject tree, with deduplication for shared tasks), each direct subproject's individual total, and a sorted task list with durations.
@@ -115,11 +115,11 @@ cd backend
 What this does:
 - Downloads all Maven dependencies on first run (may take 1–2 minutes)
 - Compiles the source code
-- Runs all 154 unit and integration tests against an in-memory H2 database
+- Runs all 188 unit and integration tests against an in-memory H2 database
 
 Expected output at the end:
 ```
-Tests run: 169, Failures: 0, Errors: 0, Skipped: 0
+Tests run: 188, Failures: 0, Errors: 0, Skipped: 0
 BUILD SUCCESS
 ```
 
@@ -170,7 +170,7 @@ npx vitest run
 Expected output:
 ```
 Test Files  10 passed (10)
-     Tests  171 passed (171)
+     Tests  174 passed (174)
 ```
 
 ### Step 7 — Start the frontend dev server
@@ -247,6 +247,8 @@ cd backend
 | `TaskServiceTest` | 32 | All task service operations including project association, date filtering, keyword search, projectId filter (unit) |
 | `ProjectServiceTest` | 18 | All project service operations (unit) |
 | `ProjectSummaryControllerTest` | 9 | GET /projects/{id}/summary — date range, deduplication, subproject totals, 401/404 |
+| `DashboardControllerTest` | 10 | GET /api/dashboard/summary — today/week totals, running task, top projects, cross-user isolation, 401 |
+| `DashboardServiceTest` | 9 | Dashboard service unit — empty state, today/week aggregation, running task, top 5 limit, subtree time, user not found |
 
 ### Frontend
 
@@ -258,7 +260,7 @@ npx vitest run
 | Test file | Count | What it covers |
 |---|---|---|
 | `LoginPage.test.jsx` | 5 | Register, login, tabs, error states |
-| `DashboardPage.test.jsx` | 16 | Timer start/stop, active task display, today section, daily total, running task highlight |
+| `DashboardPage.test.jsx` | 19 | Timer start/stop, active task display, summary cards (today/week), top projects list, running task info, refresh after timer actions |
 | `SettingsPage.test.jsx` | 3 | Change password form, error display |
 | `TasksPage.test.jsx` | 27 | Create, edit, delete tasks; project multi-select on create/edit; project display in task row |
 | `ProjectsPage.test.jsx` | 18 | Create, edit, delete projects; tree view; collapse; force delete dialog |
@@ -277,6 +279,25 @@ All endpoints except `/api/auth/register` and `/api/auth/login` require the head
 Authorization: Bearer <your-JWT-token>
 ```
 
+### Dashboard
+
+| Method | Path | Response | Notes |
+|---|---|---|---|
+| GET | `/api/dashboard/summary` | 200 `DashboardSummaryResponse` | Single call returning today/week totals, running task, and top 5 projects by week time |
+
+Dashboard summary response shape:
+```json
+{
+  "todaySeconds": 3600,
+  "weekSeconds": 14400,
+  "runningTask": { "id": 5, "description": "Study", "startTime": "...", "endTime": null, "running": true, "projects": [] },
+  "topProjects": [
+    { "id": 2, "name": "Thesis", "weekSeconds": 10800 },
+    { "id": 3, "name": "Side Project", "weekSeconds": 3600 }
+  ]
+}
+```
+
 ### Auth
 
 | Method | Path | Request body | Response | Notes |
@@ -289,7 +310,7 @@ Authorization: Bearer <your-JWT-token>
 
 | Method | Path | Request body | Response | Notes |
 |---|---|---|---|---|
-| GET | `/api/tasks` | — | 200 `Task[]` | Add `?from=<ISO>&to=<ISO>&search=<keyword>&projectId=<id>` for filtering |
+| GET | `/api/tasks` | — | 200 `Task[]` | Optional: `?from=<ISO>&to=<ISO>` (date range), `?search=<text>` (description contains), `?projectId=<id>` (project + subtree) |
 | GET | `/api/tasks/active` | — | 200 or 204 | 204 = no active timer |
 | POST | `/api/tasks/start` | `{description?}` | 201 | Returns the new running task |
 | POST | `/api/tasks/stop` | — | 200 | Returns the stopped task |
