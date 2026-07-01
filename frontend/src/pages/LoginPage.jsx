@@ -6,6 +6,7 @@ export default function LoginPage() {
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [error, setError] = useState('')
   const [fieldErrors, setFieldErrors] = useState({})
@@ -14,10 +15,29 @@ export default function LoginPage() {
   const { register, login } = useAuth()
   const navigate = useNavigate()
 
+  function switchMode(next) {
+    setMode(next)
+    setError('')
+    setFieldErrors({})
+    setConfirmPassword('')
+  }
+
   async function handleSubmit(e) {
     e.preventDefault()
     setError('')
     setFieldErrors({})
+
+    if (mode === 'register') {
+      if (password.length < 8) {
+        setFieldErrors({ password: 'Password must be at least 8 characters.' })
+        return
+      }
+      if (password !== confirmPassword) {
+        setFieldErrors({ confirmPassword: 'Passwords do not match.' })
+        return
+      }
+    }
+
     setLoading(true)
     try {
       if (mode === 'register') {
@@ -50,11 +70,11 @@ export default function LoginPage() {
         <div className="tab-bar">
           <button
             className={`tab-btn ${mode === 'login' ? 'active' : ''}`}
-            onClick={() => { setMode('login'); setError(''); setFieldErrors({}) }}
+            onClick={() => switchMode('login')}
           >Log In</button>
           <button
             className={`tab-btn ${mode === 'register' ? 'active' : ''}`}
-            onClick={() => { setMode('register'); setError(''); setFieldErrors({}) }}
+            onClick={() => switchMode('register')}
           >Register</button>
         </div>
 
@@ -108,6 +128,24 @@ export default function LoginPage() {
               <p className="field-error" role="alert" data-testid="error-password">{fieldErrors.password}</p>
             )}
           </div>
+          {mode === 'register' && (
+            <div className="form-group">
+              <label htmlFor="confirmPassword">Confirm Password</label>
+              <input
+                id="confirmPassword"
+                type="password"
+                placeholder="••••••••"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                className={fieldErrors.confirmPassword ? 'input-error' : ''}
+                required
+                data-testid="confirm-password-input"
+              />
+              {fieldErrors.confirmPassword && (
+                <p className="field-error" role="alert" data-testid="error-confirmPassword">{fieldErrors.confirmPassword}</p>
+              )}
+            </div>
+          )}
           <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
             {loading ? 'Please wait…' : mode === 'login' ? 'Log In' : 'Create Account'}
           </button>

@@ -179,7 +179,7 @@ npx vitest run
 Expected output:
 ```
 Test Files  10 passed (10)
-     Tests  186 passed (186)
+     Tests  189 passed (189)
 ```
 
 ### Step 7 — Start the frontend dev server
@@ -273,7 +273,7 @@ npx vitest run
 
 | Test file | Count | What it covers |
 |---|---|---|
-| `LoginPage.test.jsx` | 12 | Register, login, tabs, error states; field-level inline errors under each input (email, password, displayName); clears on tab switch; general banner for non-validation errors |
+| `LoginPage.test.jsx` | 17 | Register, login, tabs, error states; confirm-password field shown in register mode; client-side validation (password ≥ 8 chars, passwords match) blocks API call; field-level inline errors under each input (email, password, displayName, confirmPassword); clears on tab switch; general banner for non-validation errors |
 | `DashboardPage.test.jsx` | 19 | Timer start/stop, active task display, summary cards (today/week), top projects list, running task info, refresh after timer actions |
 | `SettingsPage.test.jsx` | 3 | Change password form, error display |
 | `TasksPage.test.jsx` | 30 | Create, edit, delete tasks; project multi-select on create/edit; project display in task row; field-level error extraction from 400 responses; Add Task button reachable in 1 click |
