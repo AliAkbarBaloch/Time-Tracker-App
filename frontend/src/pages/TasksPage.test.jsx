@@ -604,3 +604,61 @@ describe('TasksPage — search and filter', () => {
     })
   })
 })
+
+// ── NFR-003 Usability: actionable error messages ───────────────────────────
+describe('TasksPage — usability error messages', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    projectApi.listProjects.mockResolvedValue({ data: [] })
+  })
+
+  it('shows error from data.errors when create task returns 400 validation error', async () => {
+    taskApi.listTasks.mockResolvedValueOnce({ data: [] })
+    taskApi.createTask.mockRejectedValueOnce({
+      response: { status: 400, data: { errors: { startTime: 'Start time is required' } } }
+    })
+
+    setup()
+    await waitFor(() => screen.getByTestId('add-task-btn'))
+    fireEvent.click(screen.getByTestId('add-task-btn'))
+
+    const startVal = new Date(Date.now() - 7200000).toISOString().slice(0, 16)
+    const endVal   = new Date(Date.now() - 3600000).toISOString().slice(0, 16)
+    fireEvent.change(screen.getByTestId('task-start-input'), { target: { value: startVal } })
+    fireEvent.change(screen.getByTestId('task-end-input'),   { target: { value: endVal } })
+    fireEvent.click(screen.getByTestId('submit-task-btn'))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Start time is required')
+    )
+  })
+
+  it('shows error from data.errors when update task returns 400 validation error', async () => {
+    taskApi.listTasks.mockResolvedValueOnce({
+      data: [{ id: 50, description: 'Err task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
+    })
+    taskApi.updateTask.mockRejectedValueOnce({
+      response: { status: 400, data: { errors: { endTime: 'End time is required' } } }
+    })
+
+    setup()
+    await waitFor(() => screen.getByTestId('edit-btn-50'))
+    fireEvent.click(screen.getByTestId('edit-btn-50'))
+    fireEvent.click(screen.getByTestId('save-edit-btn'))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('End time is required')
+    )
+  })
+
+  it('add task button is reachable with one click from task list (≤ 2 clicks rule)', async () => {
+    taskApi.listTasks.mockResolvedValueOnce({ data: [] })
+    setup()
+    // Add Task button visible on page load — 1 click to reach the form
+    await waitFor(() =>
+      expect(screen.getByTestId('add-task-btn')).toBeInTheDocument()
+    )
+    fireEvent.click(screen.getByTestId('add-task-btn'))
+    expect(screen.getByTestId('add-task-form')).toBeInTheDocument()
+  })
+})

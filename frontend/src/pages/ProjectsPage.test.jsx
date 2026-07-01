@@ -295,4 +295,50 @@ describe('ProjectsPage', () => {
     fireEvent.click(screen.getByTestId('confirm-force-delete-btn'))
     await waitFor(() => expect(projectApi.deleteProject).toHaveBeenCalledWith(1, true))
   })
+
+  // ── NFR-003 Usability: actionable error messages from 400 responses ───────
+
+  it('shows validation error message extracted from data.errors on create 400', async () => {
+    projectApi.listProjects.mockResolvedValueOnce({ data: [] })
+    projectApi.createProject.mockRejectedValueOnce({
+      response: { status: 400, data: { errors: { name: 'Project name is too long' } } }
+    })
+
+    setup()
+    await waitFor(() => screen.getByTestId('new-project-btn'))
+    fireEvent.click(screen.getByTestId('new-project-btn'))
+    // Must fill name so the Create button is enabled
+    fireEvent.change(screen.getByTestId('project-name-input'), { target: { value: 'Some Name' } })
+    fireEvent.click(screen.getByTestId('create-project-btn'))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Project name is too long')
+    )
+  })
+
+  it('shows validation error extracted from data.errors on update 400', async () => {
+    projectApi.listProjects.mockResolvedValueOnce({ data: [PROJECT] })
+    projectApi.updateProject.mockRejectedValueOnce({
+      response: { status: 400, data: { errors: { name: 'Name cannot be blank' } } }
+    })
+
+    setup()
+    await waitFor(() => screen.getByTestId('edit-project-btn-1'))
+    fireEvent.click(screen.getByTestId('edit-project-btn-1'))
+    // The edit form has the existing name pre-filled; save triggers the API call
+    fireEvent.click(screen.getByTestId('save-project-edit-btn'))
+
+    await waitFor(() =>
+      expect(screen.getByRole('alert')).toHaveTextContent('Name cannot be blank')
+    )
+  })
+
+  it('add task button is available directly without intermediate step (≤ 2 clicks)', async () => {
+    projectApi.listProjects.mockResolvedValueOnce({ data: [] })
+    setup()
+    // New Project button is visible on page load — 1 click away (no prior step needed)
+    await waitFor(() =>
+      expect(screen.getByTestId('new-project-btn')).toBeInTheDocument()
+    )
+  })
 })
