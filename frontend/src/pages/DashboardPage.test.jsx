@@ -5,11 +5,12 @@ import DashboardPage from './DashboardPage'
 import { AuthProvider } from '../context/AuthContext'
 import { TimerProvider } from '../context/TimerContext'
 import * as taskApi from '../api/taskApi'
+import * as dashboardApi from '../api/dashboardApi'
 
 vi.mock('../api/taskApi')
+vi.mock('../api/dashboardApi')
 
-const PAST_START = new Date(Date.now() - 7200000).toISOString()
-const PAST_END   = new Date(Date.now() - 3600000).toISOString()
+const EMPTY_SUMMARY = { todaySeconds: 0, weekSeconds: 0, runningTask: null, topProjects: [] }
 
 function setup() {
   return render(
@@ -27,8 +28,10 @@ describe('DashboardPage', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     localStorage.clear()
-    taskApi.listTasks.mockResolvedValue({ data: [] })
+    dashboardApi.getDashboardSummary.mockResolvedValue({ data: EMPTY_SUMMARY })
   })
+
+  // ── Timer controls ────────────────────────────────────────
 
   it('shows Start button when no active task', async () => {
     taskApi.getActiveTask.mockResolvedValueOnce({ status: 204, data: null })
@@ -56,11 +59,9 @@ describe('DashboardPage', () => {
     taskApi.startTask.mockResolvedValueOnce({
       data: { id: 2, description: null, startTime: new Date().toISOString(), endTime: null, running: true, projects: [] }
     })
-
     setup()
     await waitFor(() => screen.getByTestId('start-btn'))
     fireEvent.click(screen.getByTestId('start-btn'))
-
     await waitFor(() => expect(taskApi.startTask).toHaveBeenCalledWith(null))
     await waitFor(() => expect(screen.getByTestId('stop-btn')).toBeInTheDocument())
   })
@@ -71,25 +72,21 @@ describe('DashboardPage', () => {
       data: { id: 3, description: null, startTime: new Date().toISOString(), endTime: null, running: true, projects: [] }
     })
     taskApi.stopTask.mockResolvedValueOnce({ data: {} })
-
     setup()
     await waitFor(() => screen.getByTestId('stop-btn'))
     fireEvent.click(screen.getByTestId('stop-btn'))
-
     await waitFor(() => expect(taskApi.stopTask).toHaveBeenCalled())
     await waitFor(() => expect(screen.getByTestId('start-btn')).toBeInTheDocument())
   })
 
-  it('shows error when start fails with 409', async () => {
+  it('shows error when start fails', async () => {
     taskApi.getActiveTask.mockResolvedValueOnce({ status: 204, data: null })
     taskApi.startTask.mockRejectedValueOnce({
       response: { data: { message: 'A timer is already running.' } }
     })
-
     setup()
     await waitFor(() => screen.getByTestId('start-btn'))
     fireEvent.click(screen.getByTestId('start-btn'))
-
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent('already running')
     )
@@ -100,12 +97,10 @@ describe('DashboardPage', () => {
     taskApi.startTask.mockResolvedValueOnce({
       data: { id: 4, description: 'Coding', startTime: new Date().toISOString(), endTime: null, running: true, projects: [] }
     })
-
     setup()
     await waitFor(() => screen.getByTestId('start-btn'))
     fireEvent.change(screen.getByPlaceholderText('What are you working on?'), { target: { value: 'Coding' } })
     fireEvent.click(screen.getByTestId('start-btn'))
-
     await waitFor(() => expect(taskApi.startTask).toHaveBeenCalledWith('Coding'))
   })
 
@@ -117,141 +112,160 @@ describe('DashboardPage', () => {
     taskApi.stopTask.mockRejectedValueOnce({
       response: { data: { message: 'No timer is currently running.' } }
     })
-
     setup()
     await waitFor(() => screen.getByTestId('stop-btn'))
     fireEvent.click(screen.getByTestId('stop-btn'))
-
     await waitFor(() =>
       expect(screen.getByRole('alert')).toHaveTextContent('No timer')
     )
   })
 
-  // --- Today section (US-014) ---
+  // ── Summary cards ─────────────────────────────────────────
 
-  it('renders today section', async () => {
+  it('renders dashboard summary section', async () => {
     taskApi.getActiveTask.mockResolvedValueOnce({ status: 204, data: null })
     setup()
     await waitFor(() =>
-      expect(screen.getByTestId('today-section')).toBeInTheDocument()
+      expect(screen.getByTestId('dashboard-summary')).toBeInTheDocument()
     )
   })
 
-  it('shows empty state when no tasks today', async () => {
+  it('shows today seconds as 00:00:00 when no tasks today', async () => {
     taskApi.getActiveTask.mockResolvedValueOnce({ status: 204, data: null })
-    taskApi.listTasks.mockResolvedValue({ data: [] })
     setup()
     await waitFor(() =>
-      expect(screen.getByTestId('today-empty')).toBeInTheDocument()
+      expect(screen.getByTestId('today-seconds')).toHaveTextContent('00:00:00')
     )
   })
 
-  it('renders tasks for today with description and duration', async () => {
+  it('shows week seconds as 00:00:00 when no tasks this week', async () => {
     taskApi.getActiveTask.mockResolvedValueOnce({ status: 204, data: null })
-    taskApi.listTasks.mockResolvedValue({
-      data: [{ id: 10, description: 'Study', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
+    setup()
+    await waitFor(() =>
+      expect(screen.getByTestId('week-seconds')).toHaveTextContent('00:00:00')
+    )
+  })
+
+  it('displays non-zero today seconds from summary', async () => {
+    taskApi.getActiveTask.mockResolvedValueOnce({ status: 204, data: null })
+    dashboardApi.getDashboardSummary.mockResolvedValueOnce({
+      data: { todaySeconds: 3600, weekSeconds: 7200, runningTask: null, topProjects: [] }
     })
     setup()
     await waitFor(() =>
-      expect(screen.getByTestId('today-task-10')).toBeInTheDocument()
+      expect(screen.getByTestId('today-seconds')).toHaveTextContent('01:00:00')
     )
-    expect(screen.getByText('Study')).toBeInTheDocument()
   })
 
-  it('shows non-zero daily total when tasks exist', async () => {
+  it('displays non-zero week seconds from summary', async () => {
     taskApi.getActiveTask.mockResolvedValueOnce({ status: 204, data: null })
-    taskApi.listTasks.mockResolvedValue({
-      data: [{ id: 11, description: 'Work', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
+    dashboardApi.getDashboardSummary.mockResolvedValueOnce({
+      data: { todaySeconds: 0, weekSeconds: 7200, runningTask: null, topProjects: [] }
+    })
+    setup()
+    await waitFor(() =>
+      expect(screen.getByTestId('week-seconds')).toHaveTextContent('02:00:00')
+    )
+  })
+
+  // ── Top projects ──────────────────────────────────────────
+
+  it('shows empty state when no top projects', async () => {
+    taskApi.getActiveTask.mockResolvedValueOnce({ status: 204, data: null })
+    setup()
+    await waitFor(() =>
+      expect(screen.getByTestId('top-projects-empty')).toBeInTheDocument()
+    )
+  })
+
+  it('renders top projects list when summary has projects', async () => {
+    taskApi.getActiveTask.mockResolvedValueOnce({ status: 204, data: null })
+    dashboardApi.getDashboardSummary.mockResolvedValueOnce({
+      data: {
+        todaySeconds: 0,
+        weekSeconds: 3600,
+        runningTask: null,
+        topProjects: [
+          { id: 1, name: 'Alpha', weekSeconds: 3600 },
+          { id: 2, name: 'Beta',  weekSeconds: 1800 }
+        ]
+      }
     })
     setup()
     await waitFor(() => {
-      const total = screen.getByTestId('daily-total')
-      expect(total.textContent).not.toBe('00:00:00')
+      expect(screen.getByTestId('top-project-1')).toBeInTheDocument()
+      expect(screen.getByTestId('top-project-2')).toBeInTheDocument()
     })
+    expect(screen.getByText('Alpha')).toBeInTheDocument()
+    expect(screen.getByText('Beta')).toBeInTheDocument()
   })
 
-  it('highlights running task in today list with running class', async () => {
+  it('does not show top-projects-empty when projects exist', async () => {
+    taskApi.getActiveTask.mockResolvedValueOnce({ status: 204, data: null })
+    dashboardApi.getDashboardSummary.mockResolvedValueOnce({
+      data: { todaySeconds: 0, weekSeconds: 0, runningTask: null, topProjects: [{ id: 5, name: 'X', weekSeconds: 600 }] }
+    })
+    setup()
+    await waitFor(() => expect(screen.getByTestId('top-project-5')).toBeInTheDocument())
+    expect(screen.queryByTestId('top-projects-empty')).not.toBeInTheDocument()
+  })
+
+  // ── Running task info ─────────────────────────────────────
+
+  it('shows running task info block when summary has runningTask', async () => {
     taskApi.getActiveTask.mockResolvedValueOnce({
       status: 200,
-      data: { id: 20, description: 'Active', startTime: new Date(Date.now() - 5000).toISOString(), endTime: null, running: true, projects: [] }
+      data: { id: 99, description: 'Deep work', startTime: new Date().toISOString(), endTime: null, running: true, projects: [] }
     })
-    taskApi.listTasks.mockResolvedValue({
-      data: [{ id: 20, description: 'Active', startTime: new Date(Date.now() - 5000).toISOString(), endTime: null, running: true, projects: [] }]
-    })
-    setup()
-    await waitFor(() => {
-      const row = screen.getByTestId('today-task-20')
-      expect(row.className).toContain('task-row--running')
-    })
-  })
-
-  it('shows elapsed time for running task duration in today list', async () => {
-    taskApi.getActiveTask.mockResolvedValueOnce({
-      status: 200,
-      data: { id: 21, description: 'Active', startTime: new Date(Date.now() - 5000).toISOString(), endTime: null, running: true, projects: [] }
-    })
-    taskApi.listTasks.mockResolvedValue({
-      data: [{ id: 21, description: 'Active', startTime: new Date(Date.now() - 5000).toISOString(), endTime: null, running: true, projects: [] }]
+    dashboardApi.getDashboardSummary.mockResolvedValueOnce({
+      data: { todaySeconds: 0, weekSeconds: 0, runningTask: { id: 99, description: 'Deep work' }, topProjects: [] }
     })
     setup()
-    await waitFor(() => {
-      const dur = screen.getByTestId('today-task-duration-21')
-      expect(dur.textContent).not.toBe('—')
-    })
+    await waitFor(() =>
+      expect(screen.getByTestId('running-task-info')).toBeInTheDocument()
+    )
+    expect(screen.getByTestId('running-task-name')).toHaveTextContent('Deep work')
   })
 
-  it('refreshes today tasks after timer is started', async () => {
+  it('does not show running task info when runningTask is null', async () => {
+    taskApi.getActiveTask.mockResolvedValueOnce({ status: 204, data: null })
+    setup()
+    await waitFor(() =>
+      expect(screen.getByTestId('dashboard-summary')).toBeInTheDocument()
+    )
+    expect(screen.queryByTestId('running-task-info')).not.toBeInTheDocument()
+  })
+
+  // ── Refresh after timer actions ───────────────────────────
+
+  it('refreshes summary after timer started', async () => {
     taskApi.getActiveTask.mockResolvedValueOnce({ status: 204, data: null })
     taskApi.startTask.mockResolvedValueOnce({
-      data: { id: 30, description: 'New task', startTime: new Date().toISOString(), endTime: null, running: true, projects: [] }
+      data: { id: 30, description: 'New', startTime: new Date().toISOString(), endTime: null, running: true, projects: [] }
     })
-    taskApi.listTasks
-      .mockResolvedValueOnce({ data: [] })
-      .mockResolvedValueOnce({
-        data: [{ id: 30, description: 'New task', startTime: new Date().toISOString(), endTime: null, running: true, projects: [] }]
-      })
+    dashboardApi.getDashboardSummary
+      .mockResolvedValueOnce({ data: EMPTY_SUMMARY })
+      .mockResolvedValueOnce({ data: EMPTY_SUMMARY })
 
     setup()
     await waitFor(() => screen.getByTestId('start-btn'))
     fireEvent.click(screen.getByTestId('start-btn'))
-
-    await waitFor(() =>
-      expect(screen.getByTestId('today-task-30')).toBeInTheDocument()
-    )
+    await waitFor(() => expect(dashboardApi.getDashboardSummary).toHaveBeenCalledTimes(2))
   })
 
-  it('refreshes today tasks after timer is stopped', async () => {
+  it('refreshes summary after timer stopped', async () => {
     taskApi.getActiveTask.mockResolvedValueOnce({
       status: 200,
-      data: { id: 40, description: 'Running', startTime: PAST_START, endTime: null, running: true, projects: [] }
+      data: { id: 40, description: 'Running', startTime: new Date().toISOString(), endTime: null, running: true, projects: [] }
     })
     taskApi.stopTask.mockResolvedValueOnce({ data: {} })
-    taskApi.listTasks
-      .mockResolvedValueOnce({
-        data: [{ id: 40, description: 'Running', startTime: PAST_START, endTime: null, running: true, projects: [] }]
-      })
-      .mockResolvedValueOnce({
-        data: [{ id: 40, description: 'Running', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
-      })
+    dashboardApi.getDashboardSummary
+      .mockResolvedValueOnce({ data: EMPTY_SUMMARY })
+      .mockResolvedValueOnce({ data: EMPTY_SUMMARY })
 
     setup()
     await waitFor(() => screen.getByTestId('stop-btn'))
     fireEvent.click(screen.getByTestId('stop-btn'))
-
-    await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalledTimes(2))
-  })
-
-  it('shows task project names in today list', async () => {
-    taskApi.getActiveTask.mockResolvedValueOnce({ status: 204, data: null })
-    taskApi.listTasks.mockResolvedValue({
-      data: [{
-        id: 50, description: 'Study', startTime: PAST_START, endTime: PAST_END, running: false,
-        projects: [{ id: 100, name: 'Thesis' }]
-      }]
-    })
-    setup()
-    await waitFor(() =>
-      expect(screen.getByText('Thesis')).toBeInTheDocument()
-    )
+    await waitFor(() => expect(dashboardApi.getDashboardSummary).toHaveBeenCalledTimes(2))
   })
 })
