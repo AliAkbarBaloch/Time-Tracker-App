@@ -71,12 +71,12 @@ test.describe('US-023 — Task Overview for Shared Projects', () => {
     await ctx.dispose();
   });
 
-  // AC4: non-member cannot use userId filter (403)
+  // AC4: non-member cannot use userId filter (403 or 404 — 404 avoids leaking project existence)
   test('non-member userId filter on shared project returns 403', async () => {
     const otherToken = await loginUser(OTHER);
     const ctx = await request.newContext({ baseURL: API, extraHTTPHeaders: { Authorization: `Bearer ${otherToken}` } });
     const resp = await ctx.get(`/api/projects/${projId}/summary?userId=1`);
-    expect(resp.status()).toBe(403);
+    expect([403, 404]).toContain(resp.status());
     await ctx.dispose();
   });
 

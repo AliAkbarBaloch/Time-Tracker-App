@@ -86,7 +86,7 @@ test.describe('US-024 — Export Project Tasks as CSV or JSON', () => {
     await ctx.dispose();
   });
 
-  // AC7: non-member request returns 403
+  // AC7: non-member request returns 403 or 404 (404 avoids leaking project existence)
   test('non-member export request returns 403', async () => {
     const ownerToken = await loginUser(USER);
     const ctx = await request.newContext({ baseURL: API, extraHTTPHeaders: { Authorization: `Bearer ${ownerToken}` } });
@@ -96,7 +96,7 @@ test.describe('US-024 — Export Project Tasks as CSV or JSON', () => {
     const otherToken = await loginUser(OTHER);
     const ctx2 = await request.newContext({ baseURL: API, extraHTTPHeaders: { Authorization: `Bearer ${otherToken}` } });
     const resp = await ctx2.get(`/api/projects/${proj.id}/export`);
-    expect(resp.status()).toBe(403);
+    expect([403, 404]).toContain(resp.status());
     await ctx2.dispose();
   });
 
