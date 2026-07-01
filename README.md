@@ -350,6 +350,13 @@ Tests connect to `http://localhost:3000` (frontend) and `http://localhost:8080` 
 | `nfr003-usability.spec.ts` | NFR-003 | Start timer in 1 click, add task form in 2 clicks, topbar-timer in viewport on all pages, field-level errors on empty form, layout intact at 1024/1280/1440px |
 | `nfr004-local-deployability.spec.ts` | NFR-004 | GET /api/health → 200, frontend SPA accessible, H2 console not exposed, API resolves to localhost, data persists across browser contexts |
 | `us021-data-persistence.spec.ts` | US-021 | Tasks/projects visible after logout+re-login, subproject hierarchy persists, task-project associations persist, User B cannot see User A's tasks |
+| `us022-project-sharing.spec.ts` | US-022 | Invited member sees project + shared badge, unknown email → 404, duplicate invite → 409, non-member → 403, removed member loses access, members list returns name/email/role, invite-form error |
+| `us023-shared-project-overview.spec.ts` | US-023 | Summary returns contributions array, ?userId filter scopes tasks, non-member userId → 403, combined total >= individual, contributors-section and user-filter visible |
+| `us024-export-project-tasks.spec.ts` | US-024 | CSV has Content-Disposition attachment, JSON has project+tasks structure, CSV has required columns, month filter works, non-member → 403, export modal with format/scope selectors |
+| `us025-time-zones.spec.ts` | US-025 | Default timezone UTC, PUT updates timezone, invalid IANA → 400, stored timestamps unchanged after tz change, settings selector saves and confirms |
+| `us026-project-budgets.spec.ts` | US-026 | budgetHours stored on create, summary returns all budget fields, ON_TRACK / OVER_BUDGET status, no bar without budget, bar visible with budget, null removes budget |
+| `us027-task-templates.spec.ts` | US-027 | Create returns in list, start-from-template creates running task, double-start → 409, cross-user 403/404, update+delete own template, dashboard section + Start button per card |
+| `us028-productivity-analytics.spec.ts` | US-028 | Heatmap returns today's entry, weekly-pattern 7 entries MON–SUN, both 401 without JWT, data scoped to user, heatmap ≥ 364 cells, 7 day bars, year selector updates without reload |
 
 ### Frontend
 
