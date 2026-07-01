@@ -17,6 +17,7 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 - **Weekly overview** — the Overview page shows all seven days of the selected week in a grid, with per-day totals, a week total, and prev/next navigation to browse past or future weeks.
 - **Monthly overview** — the Overview page's Month tab shows a full calendar grid of the selected month. Each day cell displays its tracked total; clicking a day opens a panel listing that day's tasks with durations. Prev/next navigation and a monthly total are included.
 - **Project time summary** — click any project name to open its detail page. A date-range picker (Today, This Week, This Month, All Time, Custom) filters the aggregation window. The page shows the project's rolled-up total (across the full subproject tree, with deduplication for shared tasks), each direct subproject's individual total, and a sorted task list with durations.
+- **Persistent timer** — a running timer survives page refreshes, tab closes, and browser restarts. On every page load the app calls `GET /api/tasks/active` to recompute elapsed time from `startTime` in the database. No browser storage is used for timer state. A live-updating banner in the top navigation bar shows the running task description and elapsed time on every page.
 - **Change password** — update your account password securely at any time from the Settings page.
 
 **What is expected (remaining stories):**
@@ -59,7 +60,7 @@ TimeTracker is a full-stack web application that lets individuals — students, 
 └── frontend/                         # React + Vite SPA
     └── src/
         ├── api/                      # authApi.js, taskApi.js, projectApi.js (Axios)
-        ├── context/                  # AuthContext (JWT storage + auth state)
+        ├── context/                  # AuthContext (JWT storage + auth state), TimerContext (shared active task state)
         ├── pages/                    # LoginPage, DashboardPage, TasksPage, ProjectsPage, ProjectDetailPage, OverviewPage, SettingsPage
         └── components/               # Layout (topbar + navigation), ProtectedRoute
 ```
@@ -167,8 +168,8 @@ npx vitest run
 
 Expected output:
 ```
-Test Files  9 passed (9)
-     Tests  147 passed (147)
+Test Files  10 passed (10)
+     Tests  161 passed (161)
 ```
 
 ### Step 7 — Start the frontend dev server
@@ -192,8 +193,8 @@ All `/api/*` requests from the browser are automatically proxied to the backend 
 1. Open **http://localhost:3000** in your browser.
 2. Click **Register** and create a new account (email + password + display name).
 3. You are logged in automatically. From here you can:
-   - Press **Start** on the Dashboard to begin a timer.
-   - Press **Stop** to finish the timer. The task appears in the "Today" section immediately.
+   - Press **Start** on the Dashboard to begin a timer. A live banner with the elapsed time appears in the top navigation bar immediately and stays visible on every page.
+   - Press **Stop** to finish the timer. The task appears in the "Today" section immediately. Try refreshing the page while the timer is running — the elapsed time is recomputed from the database and continues from where it left off.
    - Open **Tasks** in the navigation to add tasks manually, edit, or delete them.
    - Open **Projects** to create projects and subprojects, then link tasks to them via the checkbox list in the task form. Click any project name to open its detail page with time totals and a date-range picker.
    - Open **Overview** to see your weekly breakdown. Use the prev/next arrows to navigate weeks.
@@ -261,6 +262,7 @@ npx vitest run
 | `ProjectsPage.test.jsx` | 18 | Create, edit, delete projects; tree view; collapse; force delete dialog |
 | `OverviewPage.test.jsx` | 48 | Week view (day/week totals, nav, task grouping, click); month view (calendar cells, day totals, month total, selected-day panel, nav, loading) |
 | `ProjectDetailPage.test.jsx` | 27 | Date-range presets, custom range form, project name/desc/total, subproject totals, task list, running task, error states, back navigation |
+| `Layout.test.jsx` | 14 | Topbar timer visible/hidden, elapsed from startTime, timer on all pages, API called once on mount |
 
 ---
 
