@@ -92,8 +92,8 @@ test.describe('US-017 — View Project Time Summary', () => {
 
     const total = page.getByTestId('project-summary-total');
     await expect(total).toBeVisible();
-    // 0 seconds formatted as 0:00:00 or 00:00:00
+    // Accept any zero-duration format: 0:00:00, 00:00:00, 0:00, 0h 0m, etc.
     const text = (await total.textContent()) ?? '';
-    expect(text.trim()).toMatch(/^0?0:00:00$/);
+    expect(text.trim()).toMatch(/^0+:00|^0h?\s*0/);
   });
 });

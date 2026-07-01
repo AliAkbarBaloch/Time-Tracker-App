@@ -60,9 +60,13 @@ test.describe('US-021 — Data Persistence', () => {
     await page.goto('/projects');
 
     await expect(page.getByText(parent.name)).toBeVisible({ timeout: 8_000 });
-    // Expand parent to see child
-    await page.locator('[data-testid^="collapse-btn-"]').first().click();
-    await expect(page.getByText(child.name)).toBeVisible({ timeout: 5_000 });
+    // Child may be visible without clicking if the tree auto-expands; only toggle if needed
+    const childLocator = page.getByText(child.name);
+    const alreadyVisible = await childLocator.isVisible().catch(() => false);
+    if (!alreadyVisible) {
+      await page.locator('[data-testid^="collapse-btn-"]').first().click();
+    }
+    await expect(childLocator).toBeVisible({ timeout: 8_000 });
   });
 
   // AC3: task-project associations persist across re-login

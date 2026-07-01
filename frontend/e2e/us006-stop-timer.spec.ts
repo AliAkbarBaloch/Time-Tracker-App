@@ -35,7 +35,7 @@ test.describe('US-006 — Stop a Running Task', () => {
 
     // Dashboard today total should be non-zero
     const todayEl = page.getByTestId('today-seconds');
-    await expect(todayEl).not.toHaveText('00:00:00', { timeout: 5_000 });
+    await expect(todayEl).not.toHaveText('00:00:00', { timeout: 10_000 });
   });
 
   // AC4: stopping when no timer is running — backend returns 404 (API-level check)

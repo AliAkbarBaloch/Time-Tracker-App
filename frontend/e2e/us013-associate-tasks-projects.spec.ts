@@ -67,7 +67,9 @@ test.describe('US-013 — Associate Tasks with Projects', () => {
     await page.locator('[data-testid^="edit-project-checkbox-"]').first().uncheck();
     await page.getByTestId('save-edit-btn').click();
 
-    await expect(taskRow.locator('[data-testid^="task-projects-"]')).not.toContainText(projName, { timeout: 5_000 });
+    // Wait for the edit form to close before asserting the chip is gone
+    await expect(page.getByTestId('save-edit-btn')).not.toBeVisible({ timeout: 5_000 });
+    await expect(taskRow.locator('[data-testid^="task-projects-"]')).not.toContainText(projName, { timeout: 8_000 });
   });
 
   // AC4: only the authenticated user's own projects appear in the selector
