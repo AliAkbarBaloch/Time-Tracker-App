@@ -11,13 +11,16 @@ test.describe('US-005 — Start a Time Tracking Task', () => {
   test.beforeEach(async ({ page }) => {
     await setupAuth(page, USER);
     await page.goto('/dashboard');
-    // Stop any timer left running by a previous test to avoid DOM instability
+    // Stop any timer left running by a previous test to avoid DOM instability.
+    // After stopping, reload the page so React mounts fresh with no active timer —
+    // the stop transition causes rapid re-renders (setActiveTask null → setElapsed reset)
+    // that briefly detach start-btn from the DOM, causing click() to time out.
     if (await page.getByTestId('stop-btn').isVisible().catch(() => false)) {
       await page.getByTestId('stop-btn').click();
       await expect(page.getByTestId('stop-btn')).not.toBeVisible({ timeout: 5_000 });
-      // Wait for all stop-triggered API calls and re-renders to settle before the test proceeds
-      await page.waitForLoadState('networkidle', { timeout: 5_000 }).catch(() => {});
+      await page.reload();
     }
+    await expect(page.getByTestId('start-btn')).toBeVisible({ timeout: 8_000 });
   });
 
   // AC1: clicking Start creates a running task and shows elapsed time
