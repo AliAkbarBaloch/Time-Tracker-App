@@ -3,8 +3,9 @@ import * as taskApi from '../api/taskApi'
 
 const TimerContext = createContext(null)
 
-function formatElapsed(startTime) {
-  const secs = Math.max(0, Math.floor((Date.now() - new Date(startTime).getTime()) / 1000))
+function formatElapsed(startTime, totalPreviousSeconds) {
+  const currentSecs = Math.max(0, Math.floor((Date.now() - new Date(startTime).getTime()) / 1000))
+  const secs = currentSecs + (totalPreviousSeconds || 0)
   const h = String(Math.floor(secs / 3600)).padStart(2, '0')
   const m = String(Math.floor((secs % 3600) / 60)).padStart(2, '0')
   const s = String(secs % 60).padStart(2, '0')
@@ -25,7 +26,7 @@ export function TimerProvider({ children }) {
   // Live clock driven purely by startTime from DB
   useEffect(() => {
     if (!activeTask) { setElapsed('00:00:00'); return }
-    const tick = () => setElapsed(formatElapsed(activeTask.startTime))
+    const tick = () => setElapsed(formatElapsed(activeTask.startTime, activeTask.totalPreviousSeconds))
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)

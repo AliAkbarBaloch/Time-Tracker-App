@@ -29,4 +29,6 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
 
     @Query("SELECT t FROM Task t LEFT JOIN FETCH t.projects WHERE t.id = :id AND t.user = :user")
     Optional<Task> findByIdAndUser(@Param("id") Long id, @Param("user") User user);
+
+    List<Task> findByUserAndDescriptionAndEndTimeIsNotNull(User user, String description);
 }

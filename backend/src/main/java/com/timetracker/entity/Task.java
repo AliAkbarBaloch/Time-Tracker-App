@@ -41,6 +41,9 @@ public class Task {
     @Column(nullable = false, updatable = false)
     private Instant createdAt = Instant.now();
 
+    @Column(nullable = false)
+    private long totalPreviousSeconds = 0L;
+
     public Task() {}
 
     public Long getId() { return id; }
@@ -50,12 +53,14 @@ public class Task {
     public User getUser() { return user; }
     public Set<Project> getProjects() { return projects; }
     public Instant getCreatedAt() { return createdAt; }
+    public long getTotalPreviousSeconds() { return totalPreviousSeconds; }
 
     public void setDescription(String description) { this.description = description; }
     public void setStartTime(Instant startTime) { this.startTime = startTime; }
     public void setEndTime(Instant endTime) { this.endTime = endTime; }
     public void setUser(User user) { this.user = user; }
     public void setProjects(Set<Project> projects) { this.projects = projects; }
+    public void setTotalPreviousSeconds(long totalPreviousSeconds) { this.totalPreviousSeconds = totalPreviousSeconds; }
 
     public boolean isRunning() { return endTime == null; }
 }
