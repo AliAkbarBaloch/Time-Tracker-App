@@ -11,7 +11,8 @@ public record TaskResponse(
         Instant startTime,
         Instant endTime,
         boolean running,
-        List<ProjectInfo> projects
+        List<ProjectInfo> projects,
+        long totalPreviousSeconds
 ) {
     public record ProjectInfo(Long id, String name) {}
 
@@ -26,7 +27,8 @@ public record TaskResponse(
                 task.getStartTime(),
                 task.getEndTime(),
                 task.isRunning(),
-                projectList
+                projectList,
+                task.getTotalPreviousSeconds()
         );
     }
 }

@@ -48,6 +48,11 @@ public class TaskService {
 
     @Transactional
     public TaskResponse startTask(String userEmail, StartTaskRequest request, List<Long> projectIds) {
+        return startTask(userEmail, request, projectIds, 0L);
+    }
+
+    @Transactional
+    public TaskResponse startTask(String userEmail, StartTaskRequest request, List<Long> projectIds, long totalPreviousSeconds) {
         User user = loadUser(userEmail);
 
         taskRepository.findByUserAndEndTimeIsNull(user).ifPresent(running -> {
@@ -66,6 +71,7 @@ public class TaskService {
         task.setStartTime(Instant.now());
         task.setDescription(request != null ? request.description() : null);
         task.setProjects(projects);
+        task.setTotalPreviousSeconds(totalPreviousSeconds);
 
         return TaskResponse.from(taskRepository.save(task));
     }

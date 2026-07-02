@@ -11,6 +11,7 @@ import com.timetracker.entity.User;
 import com.timetracker.exception.ProjectNotFoundException;
 import com.timetracker.exception.TemplateNotFoundException;
 import com.timetracker.repository.ProjectRepository;
+import com.timetracker.repository.TaskRepository;
 import com.timetracker.repository.TaskTemplateRepository;
 import com.timetracker.repository.UserRepository;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
@@ -28,15 +29,18 @@ public class TaskTemplateService {
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;
     private final TaskService taskService;
+    private final TaskRepository taskRepository;
 
     public TaskTemplateService(TaskTemplateRepository templateRepository,
                                UserRepository userRepository,
                                ProjectRepository projectRepository,
-                               TaskService taskService) {
+                               TaskService taskService,
+                               TaskRepository taskRepository) {
         this.templateRepository = templateRepository;
         this.userRepository     = userRepository;
         this.projectRepository  = projectRepository;
         this.taskService        = taskService;
+        this.taskRepository     = taskRepository;
     }
 
     @Transactional
@@ -95,7 +99,14 @@ public class TaskTemplateService {
                 .toList();
 
         String desc = template.getDescription() != null ? template.getDescription() : template.getName();
-        return taskService.startTask(userEmail, new StartTaskRequest(desc), projectIds);
+
+        long accumulated = taskRepository.findByUserAndDescriptionAndEndTimeIsNotNull(user, desc)
+                .stream()
+                .mapToLong(t -> t.getEndTime().getEpochSecond() - t.getStartTime().getEpochSecond())
+                .filter(s -> s > 0)
+                .sum();
+
+        return taskService.startTask(userEmail, new StartTaskRequest(desc), projectIds, accumulated);
     }
 
     private Set<Project> resolveProjects(List<Long> projectIds, User user) {
