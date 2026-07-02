@@ -199,7 +199,7 @@ class ProjectServiceTest {
         when(projectRepository.save(any(Project.class))).thenAnswer(inv -> inv.getArgument(0));
 
         ProjectResponse resp = projectService.updateProject("alice@example.com", 1L,
-                new UpdateProjectRequest("New Name", "New desc", null));
+                new UpdateProjectRequest("New Name", "New desc", null, null));
 
         assertThat(resp.name()).isEqualTo("New Name");
         assertThat(resp.description()).isEqualTo("New desc");
@@ -214,7 +214,7 @@ class ProjectServiceTest {
         when(projectRepository.findByUser(user)).thenReturn(List.of(project, other));
 
         assertThatThrownBy(() -> projectService.updateProject("alice@example.com", 1L,
-                new UpdateProjectRequest("Beta", null, null)))
+                new UpdateProjectRequest("Beta", null, null, null)))
                 .isInstanceOf(ProjectNameAlreadyExistsException.class);
         verify(projectRepository, never()).save(any());
     }
@@ -228,7 +228,7 @@ class ProjectServiceTest {
 
         assertThatNoException().isThrownBy(() ->
                 projectService.updateProject("alice@example.com", 1L,
-                        new UpdateProjectRequest("Alpha", "updated desc", null)));
+                        new UpdateProjectRequest("Alpha", "updated desc", null, null)));
     }
 
     @Test
@@ -236,7 +236,7 @@ class ProjectServiceTest {
         when(projectRepository.findByIdAndUser(99L, user)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> projectService.updateProject("alice@example.com", 99L,
-                new UpdateProjectRequest("X", null, null)))
+                new UpdateProjectRequest("X", null, null, null)))
                 .isInstanceOf(ProjectNotFoundException.class);
     }
 

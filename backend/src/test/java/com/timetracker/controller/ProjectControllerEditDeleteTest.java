@@ -90,7 +90,7 @@ class ProjectControllerEditDeleteTest {
         mockMvc.perform(put("/api/projects/" + projectId)
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Renamed", "new desc", null))))
+                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Renamed", "new desc", null, null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name", is("Renamed")))
                 .andExpect(jsonPath("$.description", is("new desc")));
@@ -107,7 +107,7 @@ class ProjectControllerEditDeleteTest {
         mockMvc.perform(put("/api/projects/" + projectId)
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Other", null, null))))
+                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Other", null, null, null))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.message", containsString("already exists")));
     }
@@ -117,7 +117,7 @@ class ProjectControllerEditDeleteTest {
         mockMvc.perform(put("/api/projects/" + projectId)
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Original", "updated desc", null))))
+                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Original", "updated desc", null, null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name", is("Original")));
     }
@@ -127,7 +127,7 @@ class ProjectControllerEditDeleteTest {
         mockMvc.perform(put("/api/projects/" + projectId)
                 .header("Authorization", "Bearer " + otherJwt)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Stolen", null, null))))
+                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("Stolen", null, null, null))))
                 .andExpect(status().isNotFound());
     }
 
@@ -135,7 +135,7 @@ class ProjectControllerEditDeleteTest {
     void updateProject_withoutToken_returns401() throws Exception {
         mockMvc.perform(put("/api/projects/" + projectId)
                 .contentType(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("X", null, null))))
+                .content(objectMapper.writeValueAsString(new UpdateProjectRequest("X", null, null, null))))
                 .andExpect(status().isUnauthorized());
     }
 
