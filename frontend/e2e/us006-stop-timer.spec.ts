@@ -30,6 +30,9 @@ test.describe('US-006 — Stop a Running Task', () => {
     await page.getByTestId('start-btn').click();
     await expect(page.getByTestId('stop-btn')).toBeVisible({ timeout: 8_000 });
 
+    // Wait at least 1 second so the stopped task has a non-zero duration
+    await page.waitForTimeout(1_200);
+
     await page.getByTestId('stop-btn').click();
     await expect(page.getByTestId('start-btn')).toBeVisible({ timeout: 8_000 });
 

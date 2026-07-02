@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, request } from '@playwright/test';
 import { PRIMARY_USER, registerUser, setupAuth } from './helpers/auth';
 
 const USER = { ...PRIMARY_USER, email: `us005${Date.now()}@e2e.test` };
@@ -9,13 +9,18 @@ test.describe('US-005 — Start a Time Tracking Task', () => {
   });
 
   test.beforeEach(async ({ page }) => {
-    await setupAuth(page, USER);
+    const token = await setupAuth(page, USER);
+    // Stop any running timer via API before loading the dashboard so the page
+    // always mounts with no active task and start-btn is stable from the first render.
+    const ctx = await request.newContext({
+      baseURL: process.env.API_BASE ?? 'http://localhost:8080',
+      extraHTTPHeaders: { Authorization: `Bearer ${token}` },
+    });
+    await ctx.post('/api/tasks/stop').catch(() => {}); // 404 if nothing running — ignore
+    await ctx.dispose();
+
     await page.goto('/dashboard');
-    // Stop any timer left running by a previous test to avoid DOM instability
-    if (await page.getByTestId('stop-btn').isVisible().catch(() => false)) {
-      await page.getByTestId('stop-btn').click();
-      await expect(page.getByTestId('stop-btn')).not.toBeVisible({ timeout: 5_000 });
-    }
+    await expect(page.getByTestId('start-btn')).toBeVisible({ timeout: 8_000 });
   });
 
   // AC1: clicking Start creates a running task and shows elapsed time

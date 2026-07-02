@@ -448,6 +448,40 @@ class TaskServiceTest {
         assertThat(result).isEmpty();
     }
 
+    @Test
+    void listTasks_withFromOnly_callsGreaterThanEqualQuery() {
+        Instant from = Instant.now().minusSeconds(86400);
+        Task t = new Task(); t.setUser(user);
+        t.setStartTime(Instant.now().minusSeconds(3600));
+        t.setEndTime(Instant.now().minusSeconds(1800));
+        when(taskRepository.findByUserAndStartTimeGreaterThanEqualOrderByStartTimeAsc(user, from))
+                .thenReturn(List.of(t));
+
+        List<TaskResponse> result = taskService.listTasks("alice@example.com", from, null);
+
+        assertThat(result).hasSize(1);
+        verify(taskRepository).findByUserAndStartTimeGreaterThanEqualOrderByStartTimeAsc(user, from);
+        verify(taskRepository, never()).findByUserOrderByStartTimeDesc(any());
+        verify(taskRepository, never()).findByUserAndStartTimeBetweenOrderByStartTimeAsc(any(), any(), any());
+    }
+
+    @Test
+    void listTasks_withToOnly_callsLessThanEqualQuery() {
+        Instant to = Instant.now();
+        Task t = new Task(); t.setUser(user);
+        t.setStartTime(Instant.now().minusSeconds(3600));
+        t.setEndTime(Instant.now().minusSeconds(1800));
+        when(taskRepository.findByUserAndStartTimeLessThanEqualOrderByStartTimeAsc(user, to))
+                .thenReturn(List.of(t));
+
+        List<TaskResponse> result = taskService.listTasks("alice@example.com", null, to);
+
+        assertThat(result).hasSize(1);
+        verify(taskRepository).findByUserAndStartTimeLessThanEqualOrderByStartTimeAsc(user, to);
+        verify(taskRepository, never()).findByUserOrderByStartTimeDesc(any());
+        verify(taskRepository, never()).findByUserAndStartTimeBetweenOrderByStartTimeAsc(any(), any(), any());
+    }
+
     // --- listTasks with search keyword ---
 
     @Test

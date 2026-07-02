@@ -197,6 +197,12 @@ public class TaskService {
         if (from != null && to != null) {
             tasks = new ArrayList<>(taskRepository
                     .findByUserAndStartTimeBetweenOrderByStartTimeAsc(taskOwner, from, to));
+        } else if (from != null) {
+            tasks = new ArrayList<>(taskRepository
+                    .findByUserAndStartTimeGreaterThanEqualOrderByStartTimeAsc(taskOwner, from));
+        } else if (to != null) {
+            tasks = new ArrayList<>(taskRepository
+                    .findByUserAndStartTimeLessThanEqualOrderByStartTimeAsc(taskOwner, to));
         } else {
             tasks = new ArrayList<>(taskRepository.findByUserOrderByStartTimeDesc(taskOwner));
         }
