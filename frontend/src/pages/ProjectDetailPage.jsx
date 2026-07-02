@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import * as projectApi from '../api/projectApi'
 import { formatInZone, todayInTz, localDateToUtcIso } from '../utils/dateUtils'
@@ -369,6 +369,12 @@ export default function ProjectDetailPage() {
             <div className="section-header">
               <h3>Tasks</h3>
               <span className="muted">{summary.tasks.length} task{summary.tasks.length !== 1 ? 's' : ''}</span>
+              <Link
+                className="btn btn-primary btn-sm"
+                to={`/tasks?projectId=${id}&addTask=true`}
+                data-testid="add-task-to-project-btn">
+                + Add Task
+              </Link>
             </div>
             {summary.tasks.length === 0 ? (
               <p className="empty-state" data-testid="empty-tasks">
@@ -504,7 +510,7 @@ export default function ProjectDetailPage() {
               className="timer-input"
               placeholder="Invite by email…"
               value={inviteEmail}
-              onChange={e => setInviteEmail(e.target.value)}
+              onChange={e => { setInviteEmail(e.target.value); setInviteError('') }}
               required
               disabled={inviteLoading}
               data-testid="invite-email-input"

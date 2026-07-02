@@ -662,3 +662,43 @@ describe('TasksPage — usability error messages', () => {
     expect(screen.getByTestId('add-task-form')).toBeInTheDocument()
   })
 })
+
+// ── URL param pre-fill ────────────────────────────────────────────────────────
+describe('TasksPage — URL param pre-fill', () => {
+  function setupWithUrl(url) {
+    return render(
+      <MemoryRouter initialEntries={[url]}>
+        <AuthProvider>
+          <TasksPage />
+        </AuthProvider>
+      </MemoryRouter>
+    )
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
+    taskApi.listTasks.mockResolvedValue({ data: [] })
+  })
+
+  it('seeds project filter dropdown from ?projectId= URL param', async () => {
+    setupWithUrl('/tasks?projectId=100')
+    await waitFor(() =>
+      expect(screen.getByTestId('filter-project-select')).toBeInTheDocument()
+    )
+    expect(screen.getByTestId('filter-project-select')).toHaveValue('100')
+  })
+
+  it('auto-opens add-task form and pre-checks project when ?projectId=&addTask=true', async () => {
+    setupWithUrl('/tasks?projectId=101&addTask=true')
+    await waitFor(() =>
+      expect(screen.getByTestId('add-task-form')).toBeInTheDocument()
+    )
+    // Project 101 checkbox should be pre-checked
+    await waitFor(() =>
+      expect(screen.getByTestId('create-project-checkbox-101')).toBeChecked()
+    )
+    // Project 100 checkbox should not be checked
+    expect(screen.getByTestId('create-project-checkbox-100')).not.toBeChecked()
+  })
+})
