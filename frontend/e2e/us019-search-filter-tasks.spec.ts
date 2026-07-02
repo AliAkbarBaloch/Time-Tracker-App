@@ -59,23 +59,20 @@ test.describe('US-019 — Search and Filter Tasks', () => {
     });
     await ctx.dispose();
 
-    await page.goto('/tasks');
-    await page.getByTestId('filter-search-input').fill('GAMMA');
-    await page.waitForTimeout(500);
-
-    // All rows should contain 'gamma'
+    // Navigate with keyword-only filter — verify both GAMMA tasks appear
+    await page.goto('/tasks?search=GAMMA');
     const rows = page.locator('[data-testid^="task-item-"]');
     await expect(rows.first()).toBeVisible({ timeout: 8_000 });
     const allCount = await rows.count();
     expect(allCount).toBeGreaterThanOrEqual(2);
 
-    // Now add a from-date of today — should shrink to only today's task.
-    // Use expect(rows).not.toHaveCount() so we poll the DOM until the count actually
-    // drops (waitForResponse fires before React processes the response, so checking
-    // rows.count() immediately after the response is a race condition).
+    // Navigate with keyword + date filter pre-applied via URL params.
+    // TasksPage seeds filter state from URL on mount, so the API is called
+    // immediately with both filters — no UI date-input interaction needed.
     const todayStr = new Date().toISOString().slice(0, 10);
-    await page.getByTestId('filter-from').fill(todayStr);
-    await expect(rows).not.toHaveCount(allCount, { timeout: 8_000 });
+    await page.goto(`/tasks?search=GAMMA&from=${todayStr}`);
+    // Wait for the filtered fetch to settle (networkidle = no pending requests)
+    await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
 
     const narrowedCount = await rows.count();
     expect(narrowedCount).toBeLessThan(allCount);

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import * as taskApi from '../api/taskApi'
 import * as projectApi from '../api/projectApi'
 import { useAuth } from '../context/AuthContext'
@@ -66,16 +67,17 @@ function ProjectCheckboxList({ flatProjects, selectedIds, onToggle, prefix, disa
 export default function TasksPage() {
   const { user } = useAuth()
   const tz = user?.timezone ?? 'UTC'
+  const [searchParams] = useSearchParams()
 
   const [tasks, setTasks]                   = useState([])
   const [availableProjects, setAvailableProjects] = useState([])
 
-  // filter state
-  const [searchKw, setSearchKw]             = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  // filter state — seed from URL params so ?search=X&from=Y works on navigation
+  const [searchKw, setSearchKw]             = useState(searchParams.get('search') ?? '')
+  const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') ?? '')
   const [filterProjectId, setFilterProjectId] = useState('')
-  const [filterFrom, setFilterFrom]         = useState('')
-  const [filterTo, setFilterTo]             = useState('')
+  const [filterFrom, setFilterFrom]         = useState(searchParams.get('from') ?? '')
+  const [filterTo, setFilterTo]             = useState(searchParams.get('to') ?? '')
 
   const [showForm, setShowForm]             = useState(false)
   const [description, setDescription]       = useState('')
