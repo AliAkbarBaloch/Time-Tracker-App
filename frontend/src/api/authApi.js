@@ -11,6 +11,22 @@ api.interceptors.request.use(config => {
   return config
 })
 
+// On 401 from non-auth endpoints, clear stored credentials and redirect to login
+api.interceptors.response.use(
+  response => response,
+  error => {
+    if (error.response?.status === 401) {
+      const url = error.config?.url ?? ''
+      if (!url.startsWith('/auth/')) {
+        localStorage.removeItem(TOKEN_KEY)
+        localStorage.removeItem('tt_user')
+        window.location.href = '/login'
+      }
+    }
+    return Promise.reject(error)
+  }
+)
+
 export function register(email, password, displayName) {
   return api.post('/auth/register', { email, password, displayName })
 }

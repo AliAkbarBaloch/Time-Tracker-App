@@ -54,12 +54,15 @@ test.describe('US-013 — Associate Tasks with Projects', () => {
 
     await page.goto('/tasks');
     await page.getByTestId('add-task-btn').click();
+    const taskDesc = `RemoveTask ${Date.now()}`;
+    await page.getByTestId('task-desc-input').fill(taskDesc);
     await page.getByTestId('task-start-input').fill(isoLocal(-90));
     await page.getByTestId('task-end-input').fill(isoLocal(-60));
     await page.locator('[data-testid^="create-project-checkbox-"]').first().check();
     await page.getByTestId('submit-task-btn').click();
 
-    const taskRow = page.locator('[data-testid^="task-item-"]').first();
+    // Find specific task row by description
+    const taskRow = page.locator('[data-testid^="task-item-"]').filter({ hasText: taskDesc });
     await expect(taskRow).toBeVisible({ timeout: 8_000 });
 
     // Edit and uncheck the project
@@ -67,9 +70,9 @@ test.describe('US-013 — Associate Tasks with Projects', () => {
     await page.locator('[data-testid^="edit-project-checkbox-"]').first().uncheck();
     await page.getByTestId('save-edit-btn').click();
 
-    // Wait for the edit form to close before asserting the chip is gone
+    // Wait for the edit form to close; after removing all projects the chip element is absent from DOM
     await expect(page.getByTestId('save-edit-btn')).not.toBeVisible({ timeout: 5_000 });
-    await expect(taskRow.locator('[data-testid^="task-projects-"]')).not.toContainText(projName, { timeout: 8_000 });
+    await expect(taskRow.locator('[data-testid^="task-projects-"]')).not.toBeVisible({ timeout: 8_000 });
   });
 
   // AC4: only the authenticated user's own projects appear in the selector

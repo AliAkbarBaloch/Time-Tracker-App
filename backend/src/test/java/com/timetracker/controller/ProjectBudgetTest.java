@@ -176,7 +176,7 @@ class ProjectBudgetTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new UpdateProjectRequest("UpdateBudget", null, 20.0))))
+                        new UpdateProjectRequest("UpdateBudget", null, 20.0, null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.budgetHours").value(20.0));
     }
@@ -191,7 +191,7 @@ class ProjectBudgetTest {
                 .header("Authorization", "Bearer " + jwt)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(
-                        new UpdateProjectRequest("RemoveBudget", null, null))))
+                        new UpdateProjectRequest("RemoveBudget", null, null, null))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.budgetHours").doesNotExist());
     }

@@ -72,8 +72,8 @@ test.describe('US-015 — View Weekly Task Overview', () => {
 
     await expect(page.getByTestId('week-view')).toBeVisible({ timeout: 8_000 });
 
-    // Capture current week heading text before navigation
-    const weekHeading = page.getByTestId('week-view').locator('h2, h3, [data-testid="week-label"]').first();
+    // week-label is a sibling of week-view, not a child — query it directly
+    const weekHeading = page.getByTestId('week-label');
     const beforeText = await weekHeading.textContent();
 
     // Ensure the button is visible before clicking — it may render after the view loads

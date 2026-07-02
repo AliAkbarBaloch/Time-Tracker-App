@@ -28,12 +28,24 @@ export default function LoginPage() {
     setFieldErrors({})
 
     if (mode === 'register') {
-      if (password.length < 8) {
-        setFieldErrors({ password: 'Password must be at least 8 characters.' })
+      const errs = {}
+      if (!displayName.trim()) errs.displayName = 'Display name is required.'
+      if (!email.trim()) errs.email = 'Email is required.'
+      if (!password) errs.password = 'Password is required.'
+      else if (password.length < 8) errs.password = 'Password must be at least 8 characters.'
+      if (password && password !== confirmPassword) errs.confirmPassword = 'Passwords do not match.'
+      if (Object.keys(errs).length > 0) {
+        setFieldErrors(errs)
         return
       }
-      if (password !== confirmPassword) {
-        setFieldErrors({ confirmPassword: 'Passwords do not match.' })
+    }
+
+    if (mode === 'login') {
+      const errs = {}
+      if (!email.trim()) errs.email = 'Email is required.'
+      if (!password) errs.password = 'Password is required.'
+      if (Object.keys(errs).length > 0) {
+        setFieldErrors(errs)
         return
       }
     }
@@ -91,7 +103,6 @@ export default function LoginPage() {
                 value={displayName}
                 onChange={e => setDisplayName(e.target.value)}
                 className={fieldErrors.displayName ? 'input-error' : ''}
-                required
               />
               {fieldErrors.displayName && (
                 <p className="field-error" role="alert" data-testid="error-displayName">{fieldErrors.displayName}</p>
@@ -107,7 +118,6 @@ export default function LoginPage() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               className={fieldErrors.email ? 'input-error' : ''}
-              required
             />
             {fieldErrors.email && (
               <p className="field-error" role="alert" data-testid="error-email">{fieldErrors.email}</p>
@@ -122,7 +132,6 @@ export default function LoginPage() {
               value={password}
               onChange={e => setPassword(e.target.value)}
               className={fieldErrors.password ? 'input-error' : ''}
-              required
             />
             {fieldErrors.password && (
               <p className="field-error" role="alert" data-testid="error-password">{fieldErrors.password}</p>
@@ -138,7 +147,6 @@ export default function LoginPage() {
                 value={confirmPassword}
                 onChange={e => setConfirmPassword(e.target.value)}
                 className={fieldErrors.confirmPassword ? 'input-error' : ''}
-                required
                 data-testid="confirm-password-input"
               />
               {fieldErrors.confirmPassword && (

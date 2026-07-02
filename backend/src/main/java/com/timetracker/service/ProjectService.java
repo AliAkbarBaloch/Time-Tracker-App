@@ -106,6 +106,16 @@ public class ProjectService {
         project.setName(request.name());
         project.setDescription(request.description());
         project.setBudgetHours(request.budgetHours());
+
+        if (request.parentProjectId() != null) {
+            Project parent = projectRepository.findByIdAndUser(request.parentProjectId(), user)
+                    .orElseThrow(() -> new ProjectNotFoundException(request.parentProjectId()));
+            guardAgainstCircularHierarchy(project, parent);
+            project.setParent(parent);
+        } else {
+            project.setParent(null);
+        }
+
         return ProjectResponse.from(projectRepository.save(project));
     }
 
