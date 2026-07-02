@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
-import java.time.ZoneOffset;
+import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -40,12 +40,15 @@ public class DashboardService {
         User user = userRepository.findByEmail(userEmail)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: " + userEmail));
 
-        ZonedDateTime now       = ZonedDateTime.now(ZoneOffset.UTC);
-        Instant todayStart      = now.withHour(0).withMinute(0).withSecond(0).withNano(0).toInstant();
-        Instant todayEnd        = todayStart.plusSeconds(86400);
+        ZoneId userZone              = ZoneId.of(user.getTimezone());
+        ZonedDateTime now            = ZonedDateTime.now(userZone);
+        ZonedDateTime todayStartZdt  = now.toLocalDate().atStartOfDay(userZone);
+        Instant todayStart           = todayStartZdt.toInstant();
+        Instant todayEnd             = todayStartZdt.plusDays(1).toInstant();
         int dow = now.getDayOfWeek().getValue(); // 1=Mon … 7=Sun
-        Instant weekStart       = now.minusDays(dow - 1L).withHour(0).withMinute(0).withSecond(0).withNano(0).toInstant();
-        Instant weekEnd         = weekStart.plusSeconds(7L * 86400);
+        ZonedDateTime weekStartZdt   = todayStartZdt.minusDays(dow - 1L);
+        Instant weekStart            = weekStartZdt.toInstant();
+        Instant weekEnd              = weekStartZdt.plusWeeks(1).toInstant();
 
         // Running task
         TaskResponse runningTask = taskRepository.findByUserAndEndTimeIsNull(user)
