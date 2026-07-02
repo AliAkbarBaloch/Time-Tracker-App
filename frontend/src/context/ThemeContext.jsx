@@ -1,0 +1,39 @@
+import { createContext, useContext, useState, useEffect } from 'react'
+
+const ThemeCtx = createContext(null)
+
+export function ThemeProvider({ children }) {
+  const [theme, setTheme] = useState(() => {
+    try { return localStorage.getItem('tt_theme') || 'light' } catch { return 'light' }
+  })
+
+  useEffect(() => {
+    function applyTheme(t) {
+      const root = document.documentElement
+      if (t === 'system') {
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
+        root.setAttribute('data-theme', prefersDark ? 'dark' : 'light')
+      } else {
+        root.setAttribute('data-theme', t)
+      }
+    }
+
+    applyTheme(theme)
+    try { localStorage.setItem('tt_theme', theme) } catch {}
+
+    if (theme === 'system') {
+      const mq = window.matchMedia('(prefers-color-scheme: dark)')
+      const handler = () => applyTheme('system')
+      mq.addEventListener('change', handler)
+      return () => mq.removeEventListener('change', handler)
+    }
+  }, [theme])
+
+  return <ThemeCtx.Provider value={{ theme, setTheme }}>{children}</ThemeCtx.Provider>
+}
+
+export function useTheme() {
+  const ctx = useContext(ThemeCtx)
+  if (!ctx) throw new Error('useTheme must be used inside ThemeProvider')
+  return ctx
+}

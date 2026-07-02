@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import * as taskApi from '../api/taskApi'
 import * as projectApi from '../api/projectApi'
@@ -8,6 +8,15 @@ import { toDatetimeLocalInTz, formatInZone, nowInTz, localDateToUtcIso } from '.
 function formatDuration(startTime, endTime) {
   if (!endTime) return '—'
   const secs = Math.floor((new Date(endTime) - new Date(startTime)) / 1000)
+  const h = Math.floor(secs / 3600)
+  const m = Math.floor((secs % 3600) / 60)
+  const s = secs % 60
+  return h > 0
+    ? `${h}h ${String(m).padStart(2, '0')}m`
+    : `${m}m ${String(s).padStart(2, '0')}s`
+}
+
+function formatTotalSeconds(secs) {
   const h = Math.floor(secs / 3600)
   const m = Math.floor((secs % 3600) / 60)
   const s = secs % 60
@@ -226,6 +235,35 @@ export default function TasksPage() {
 
   const flatProjects = flattenProjects(availableProjects)
 
+  // Group completed tasks by description so repeated template sessions collapse into one row
+  const groupedTasks = useMemo(() => {
+    const groups = new Map()
+    const sorted = [...tasks].sort((a, b) => new Date(b.startTime) - new Date(a.startTime))
+    for (const task of sorted) {
+      const key = task.description ?? '__no_desc__'
+      if (!groups.has(key)) {
+        groups.set(key, { key, description: task.description, sessions: [], totalSeconds: 0 })
+      }
+      const group = groups.get(key)
+      group.sessions.push(task)
+      if (task.endTime) {
+        const secs = Math.floor((new Date(task.endTime) - new Date(task.startTime)) / 1000)
+        if (secs > 0) group.totalSeconds += secs
+      }
+    }
+    return [...groups.values()]
+  }, [tasks])
+
+  const [expandedGroups, setExpandedGroups] = useState(new Set())
+
+  const toggleGroup = (key) => {
+    setExpandedGroups(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key); else next.add(key)
+      return next
+    })
+  }
+
   return (
     <div className="page">
       <div className="page-header">
@@ -324,59 +362,143 @@ export default function TasksPage() {
             ? <p className="empty-state" data-testid="no-tasks-message">No tasks match the current filters.</p>
             : <p className="empty-state" data-testid="no-tasks-message">No tasks yet. Add your first task above.</p>
         )}
-        {tasks.map(t => (
-          <div key={t.id} className="task-row" data-testid={`task-item-${t.id}`}>
-            {editingId === t.id ? (
-              <form className="task-edit-form" onSubmit={e => handleUpdate(e, t.id)}
-                data-testid={`edit-form-${t.id}`}>
-                <input className="timer-input" type="text" value={editDesc}
-                  onChange={e => setEditDesc(e.target.value)} disabled={editLoading}
-                  data-testid="edit-desc-input" />
-                <input className="timer-input" type="datetime-local" value={editStart}
-                  onChange={e => setEditStart(e.target.value)} required disabled={editLoading}
-                  data-testid="edit-start-input" />
-                <input className="timer-input" type="datetime-local" value={editEnd}
-                  onChange={e => setEditEnd(e.target.value)} required disabled={editLoading}
-                  data-testid="edit-end-input" />
-                <ProjectCheckboxList
-                  flatProjects={flatProjects}
-                  selectedIds={editProjectIds}
-                  onToggle={toggleEditProject}
-                  prefix="edit"
-                  disabled={editLoading}
-                />
-                {editError && <p className="timer-error" role="alert">{editError}</p>}
-                <div className="task-actions">
-                  <button type="submit" className="btn btn-primary btn-xs"
-                    disabled={editLoading} data-testid="save-edit-btn">
-                    {editLoading ? 'Saving…' : 'Save'}
-                  </button>
-                  <button type="button" className="btn btn-ghost btn-xs"
-                    onClick={cancelEdit} data-testid="cancel-edit-btn">Cancel</button>
-                </div>
-              </form>
-            ) : (
-              <>
-                <span className="task-description">{t.description || '(no description)'}</span>
+        {groupedTasks.map(group => {
+          const isSingle = group.sessions.length === 1
+          const latestTask = group.sessions[0]
+
+          if (isSingle) {
+            const t = latestTask
+            return (
+              <div key={t.id} className="task-row" data-testid={`task-item-${t.id}`}>
+                {editingId === t.id ? (
+                  <form className="task-edit-form" onSubmit={e => handleUpdate(e, t.id)}
+                    data-testid={`edit-form-${t.id}`}>
+                    <input className="timer-input" type="text" value={editDesc}
+                      onChange={e => setEditDesc(e.target.value)} disabled={editLoading}
+                      data-testid="edit-desc-input" />
+                    <input className="timer-input" type="datetime-local" value={editStart}
+                      onChange={e => setEditStart(e.target.value)} required disabled={editLoading}
+                      data-testid="edit-start-input" />
+                    <input className="timer-input" type="datetime-local" value={editEnd}
+                      onChange={e => setEditEnd(e.target.value)} required disabled={editLoading}
+                      data-testid="edit-end-input" />
+                    <ProjectCheckboxList
+                      flatProjects={flatProjects}
+                      selectedIds={editProjectIds}
+                      onToggle={toggleEditProject}
+                      prefix="edit"
+                      disabled={editLoading}
+                    />
+                    {editError && <p className="timer-error" role="alert">{editError}</p>}
+                    <div className="task-actions">
+                      <button type="submit" className="btn btn-primary btn-xs"
+                        disabled={editLoading} data-testid="save-edit-btn">
+                        {editLoading ? 'Saving…' : 'Save'}
+                      </button>
+                      <button type="button" className="btn btn-ghost btn-xs"
+                        onClick={cancelEdit} data-testid="cancel-edit-btn">Cancel</button>
+                    </div>
+                  </form>
+                ) : (
+                  <>
+                    <span className="task-description">{t.description || '(no description)'}</span>
+                    <span className="task-time">
+                      {formatInZone(t.startTime, tz, { dateStyle: 'short', timeStyle: 'short' })}
+                    </span>
+                    <span className="task-duration">{formatDuration(t.startTime, t.endTime)}</span>
+                    {t.projects && t.projects.length > 0 && (
+                      <span className="task-projects" data-testid={`task-projects-${t.id}`}>
+                        {t.projects.map(p => p.name).join(', ')}
+                      </span>
+                    )}
+                    <div className="task-actions">
+                      <button className="btn btn-ghost btn-xs" onClick={() => startEdit(t)}
+                        data-testid={`edit-btn-${t.id}`}>Edit</button>
+                      <button className="btn btn-danger btn-xs" onClick={() => handleDelete(t.id)}
+                        data-testid={`delete-btn-${t.id}`}>Delete</button>
+                    </div>
+                  </>
+                )}
+              </div>
+            )
+          }
+
+          // Multiple sessions with the same description — show one consolidated row
+          const isExpanded = expandedGroups.has(group.key)
+          return (
+            <div key={group.key} className="task-group" data-testid={`task-group-${group.key}`}>
+              <div className="task-row task-group-header">
+                <span className="task-description">{group.description || '(no description)'}</span>
                 <span className="task-time">
-                  {formatInZone(t.startTime, tz, { dateStyle: 'short', timeStyle: 'short' })}
+                  {formatInZone(latestTask.startTime, tz, { dateStyle: 'short', timeStyle: 'short' })}
                 </span>
-                <span className="task-duration">{formatDuration(t.startTime, t.endTime)}</span>
-                {t.projects && t.projects.length > 0 && (
-                  <span className="task-projects" data-testid={`task-projects-${t.id}`}>
-                    {t.projects.map(p => p.name).join(', ')}
+                <span className="task-duration">{formatTotalSeconds(group.totalSeconds)}</span>
+                {latestTask.projects && latestTask.projects.length > 0 && (
+                  <span className="task-projects">
+                    {latestTask.projects.map(p => p.name).join(', ')}
                   </span>
                 )}
-                <div className="task-actions">
-                  <button className="btn btn-ghost btn-xs" onClick={() => startEdit(t)}
-                    data-testid={`edit-btn-${t.id}`}>Edit</button>
-                  <button className="btn btn-danger btn-xs" onClick={() => handleDelete(t.id)}
-                    data-testid={`delete-btn-${t.id}`}>Delete</button>
+                <button className="btn btn-ghost btn-xs task-sessions-toggle"
+                  onClick={() => toggleGroup(group.key)}
+                  data-testid={`task-group-toggle-${group.key}`}>
+                  {isExpanded ? '▲ Hide' : `▼ ${group.sessions.length} sessions`}
+                </button>
+              </div>
+              {isExpanded && (
+                <div className="task-group-sessions">
+                  {group.sessions.map(t => (
+                    <div key={t.id} className="task-row task-session-row"
+                      data-testid={`task-item-${t.id}`}>
+                      {editingId === t.id ? (
+                        <form className="task-edit-form" onSubmit={e => handleUpdate(e, t.id)}
+                          data-testid={`edit-form-${t.id}`}>
+                          <input className="timer-input" type="text" value={editDesc}
+                            onChange={e => setEditDesc(e.target.value)} disabled={editLoading}
+                            data-testid="edit-desc-input" />
+                          <input className="timer-input" type="datetime-local" value={editStart}
+                            onChange={e => setEditStart(e.target.value)} required disabled={editLoading}
+                            data-testid="edit-start-input" />
+                          <input className="timer-input" type="datetime-local" value={editEnd}
+                            onChange={e => setEditEnd(e.target.value)} required disabled={editLoading}
+                            data-testid="edit-end-input" />
+                          <ProjectCheckboxList
+                            flatProjects={flatProjects}
+                            selectedIds={editProjectIds}
+                            onToggle={toggleEditProject}
+                            prefix="edit"
+                            disabled={editLoading}
+                          />
+                          {editError && <p className="timer-error" role="alert">{editError}</p>}
+                          <div className="task-actions">
+                            <button type="submit" className="btn btn-primary btn-xs"
+                              disabled={editLoading} data-testid="save-edit-btn">
+                              {editLoading ? 'Saving…' : 'Save'}
+                            </button>
+                            <button type="button" className="btn btn-ghost btn-xs"
+                              onClick={cancelEdit} data-testid="cancel-edit-btn">Cancel</button>
+                          </div>
+                        </form>
+                      ) : (
+                        <>
+                          <span className="task-time task-session-time">
+                            {formatInZone(t.startTime, tz, { dateStyle: 'short', timeStyle: 'short' })}
+                          </span>
+                          <span className="task-duration">{formatDuration(t.startTime, t.endTime)}</span>
+                          <div className="task-actions">
+                            <button className="btn btn-ghost btn-xs" onClick={() => startEdit(t)}
+                              data-testid={`edit-btn-${t.id}`}>Edit</button>
+                            <button className="btn btn-danger btn-xs" onClick={() => handleDelete(t.id)}
+                              data-testid={`delete-btn-${t.id}`}>Delete</button>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  ))}
                 </div>
-              </>
-            )}
-          </div>
-        ))}
+              )}
+            </div>
+          )
+        })}
       </div>
     </div>
   )

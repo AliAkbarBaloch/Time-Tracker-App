@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import * as projectApi from '../api/projectApi'
@@ -58,10 +58,85 @@ function formatSeconds(secs) {
   return `${s}s`
 }
 
-function formatTaskDuration(startTime, endTime) {
-  if (!endTime) return '(running)'
-  const secs = Math.floor((new Date(endTime) - new Date(startTime)) / 1000)
-  return formatSeconds(secs)
+
+function ProjectTasksSection({ tasks, contributions, projectId, tz }) {
+  const isShared = contributions && contributions.length > 1
+
+  // Group tasks by description — multiple template sessions with the same name collapse into one row
+  const groupedTasks = useMemo(() => {
+    const groups = new Map()
+    const sorted = [...tasks].sort((a, b) => new Date(b.startTime) - new Date(a.startTime))
+    for (const task of sorted) {
+      const key = (task.description ?? '__no_desc__') + (isShared ? `__${task.userName ?? ''}` : '')
+      if (!groups.has(key)) {
+        groups.set(key, {
+          description: task.description,
+          latestTask: task,
+          totalSeconds: 0,
+          isRunning: false,
+          ids: [],
+        })
+      }
+      const group = groups.get(key)
+      group.ids.push(task.id)
+      if (!task.endTime) {
+        group.isRunning = true
+      } else {
+        const secs = Math.floor((new Date(task.endTime) - new Date(task.startTime)) / 1000)
+        if (secs > 0) group.totalSeconds += secs
+      }
+    }
+    return [...groups.values()]
+  }, [tasks, isShared])
+
+  return (
+    <div className="section" data-testid="tasks-section">
+      <div className="section-header">
+        <h3>Tasks</h3>
+        <span className="muted">{groupedTasks.length} task{groupedTasks.length !== 1 ? 's' : ''}</span>
+        <Link
+          className="btn btn-primary btn-sm"
+          to={`/tasks?projectId=${projectId}&addTask=true`}
+          data-testid="add-task-to-project-btn">
+          + Add Task
+        </Link>
+      </div>
+      {tasks.length === 0 ? (
+        <p className="empty-state" data-testid="empty-tasks">
+          No tasks in this period.
+        </p>
+      ) : (
+        <ul className="summary-list">
+          {groupedTasks.map(group => {
+            const t = group.latestTask
+            const isSingle = group.ids.length === 1
+            const durationText = group.isRunning
+              ? '(running)'
+              : formatSeconds(group.totalSeconds)
+            return (
+              <li key={group.ids.join('-')}
+                className="summary-list-item"
+                data-testid={isSingle ? `summary-task-${t.id}` : `summary-task-group-${t.id}`}>
+                <span className="summary-item-name">{group.description || '(no description)'}</span>
+                {isShared && t.userName && (
+                  <span className="muted task-owner" data-testid={`task-owner-${t.id}`}>
+                    {t.userName}
+                  </span>
+                )}
+                <span className="summary-item-time muted">
+                  {formatInZone(t.startTime, tz, { dateStyle: 'short' })}
+                </span>
+                <span className="summary-item-total"
+                  data-testid={isSingle ? `summary-task-duration-${t.id}` : `summary-task-group-duration-${t.id}`}>
+                  {durationText}
+                </span>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </div>
+  )
 }
 
 export default function ProjectDetailPage() {
@@ -364,45 +439,13 @@ export default function ProjectDetailPage() {
             </div>
           )}
 
-          {/* Tasks */}
-          <div className="section" data-testid="tasks-section">
-            <div className="section-header">
-              <h3>Tasks</h3>
-              <span className="muted">{summary.tasks.length} task{summary.tasks.length !== 1 ? 's' : ''}</span>
-              <Link
-                className="btn btn-primary btn-sm"
-                to={`/tasks?projectId=${id}&addTask=true`}
-                data-testid="add-task-to-project-btn">
-                + Add Task
-              </Link>
-            </div>
-            {summary.tasks.length === 0 ? (
-              <p className="empty-state" data-testid="empty-tasks">
-                No tasks in this period.
-              </p>
-            ) : (
-              <ul className="summary-list">
-                {summary.tasks.map(t => (
-                  <li key={t.id} className="summary-list-item"
-                    data-testid={`summary-task-${t.id}`}>
-                    <span className="summary-item-name">{t.description || '(no description)'}</span>
-                    {/* Show task owner name on shared projects (US-023) */}
-                    {t.userName && summary.contributions && summary.contributions.length > 1 && (
-                      <span className="muted task-owner" data-testid={`task-owner-${t.id}`}>
-                        {t.userName}
-                      </span>
-                    )}
-                    <span className="summary-item-time muted">
-                      {formatInZone(t.startTime, tz, { dateStyle: 'short' })}
-                    </span>
-                    <span className="summary-item-total" data-testid={`summary-task-duration-${t.id}`}>
-                      {formatTaskDuration(t.startTime, t.endTime)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
+          {/* Tasks — grouped by description so repeated template sessions appear as one entry */}
+          <ProjectTasksSection
+            tasks={summary.tasks}
+            contributions={summary.contributions}
+            projectId={id}
+            tz={tz}
+          />
         </>
       )}
 
