@@ -313,10 +313,8 @@ class AnalyticsServiceTest {
 
     @Test
     void getWeeklyPattern_currentYear_usesNowAsUpperBound() {
-        // Kills '>=' → '>' boundary mutation AND 'replaced with false' mutation on
-        // year >= currentYear. Both mutants route currentYear to the yearEnd branch,
-        // producing to = Jan 1 of next year. The assertion to.isBefore(yearEnd) fails
-        // for that value, so both mutations are killed.
+        // Kills negation of 'now.isBefore(yearEnd)': negated form uses yearEnd as 'to',
+        // but yearEnd is in the future so to.isBefore(yearEnd) would fail the assertion.
         when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
                 .thenReturn(Collections.emptyList());
 
@@ -334,6 +332,28 @@ class AnalyticsServiceTest {
         // 'to' must be Instant.now() (before the year boundary), not Jan 1 of next year
         assertThat(toCaptor.getValue()).isAfterOrEqualTo(beforeCall);
         assertThat(toCaptor.getValue()).isBefore(yearEnd);
+    }
+
+    @Test
+    void getWeeklyPattern_futureYear_queryBoundsForceEmptyResult() {
+        // For a year that has not started yet, 'from' is set to yearStart which is after
+        // 'to' (= now). The DB query 'startTime BETWEEN from AND to' where from > to
+        // returns no rows, giving all-zero averages.
+        // Kills negation of 'yearStart.isAfter(to)': negated form computes from = to - N*7,
+        // making from < to and potentially returning current-year tasks under the future year.
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        int futureYear = LocalDate.now().getYear() + 2;
+        analyticsService.getWeeklyPattern("alice@example.com", 4, futureYear);
+
+        ArgumentCaptor<Instant> fromCaptor = ArgumentCaptor.forClass(Instant.class);
+        ArgumentCaptor<Instant> toCaptor   = ArgumentCaptor.forClass(Instant.class);
+        verify(taskRepository).findByUserAndStartTimeBetweenOrderByStartTimeAsc(
+                eq(user), fromCaptor.capture(), toCaptor.capture());
+
+        // from must be strictly after to so the query window is impossible (future year → no data)
+        assertThat(fromCaptor.getValue()).isAfter(toCaptor.getValue());
     }
 
     @Test
