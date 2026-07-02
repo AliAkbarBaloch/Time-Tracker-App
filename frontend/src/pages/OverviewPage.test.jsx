@@ -198,7 +198,7 @@ describe('OverviewPage — week view', () => {
     )
   })
 
-  it('clicking a task calls navigate with /tasks', async () => {
+  it('clicking a task calls navigate with /tasks filtered to that day', async () => {
     const task = makeMondayTask()
     taskApi.listTasks.mockResolvedValue({ data: [task] })
     setup()
@@ -206,10 +206,12 @@ describe('OverviewPage — week view', () => {
       expect(screen.getByTestId(`week-task-${task.id}`)).toBeInTheDocument()
     )
     fireEvent.click(screen.getByTestId(`week-task-${task.id}`))
-    expect(mockNavigate).toHaveBeenCalledWith('/tasks')
+    expect(mockNavigate).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/tasks\?from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}$/)
+    )
   })
 
-  it('pressing Enter on a task row also calls navigate', async () => {
+  it('pressing Enter on a task row also calls navigate with date filter', async () => {
     const task = makeMondayTask()
     taskApi.listTasks.mockResolvedValue({ data: [task] })
     setup()
@@ -217,7 +219,9 @@ describe('OverviewPage — week view', () => {
       expect(screen.getByTestId(`week-task-${task.id}`)).toBeInTheDocument()
     )
     fireEvent.keyDown(screen.getByTestId(`week-task-${task.id}`), { key: 'Enter' })
-    expect(mockNavigate).toHaveBeenCalledWith('/tasks')
+    expect(mockNavigate).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/tasks\?from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}$/)
+    )
   })
 
   it('shows loading indicator while fetching', async () => {
@@ -423,7 +427,7 @@ describe('OverviewPage — month view', () => {
     expect(screen.getByText('Panel task')).toBeInTheDocument()
   })
 
-  it('clicking a task in the panel navigates to /tasks', async () => {
+  it('clicking a task in the panel navigates to /tasks filtered to that day', async () => {
     const task = makeMonthDay1Task()
     taskApi.listTasks.mockResolvedValue({ data: [task] })
     await switchToMonth()
@@ -433,7 +437,7 @@ describe('OverviewPage — month view', () => {
     )
     fireEvent.click(screen.getByTestId(`month-day-${ds}`))
     fireEvent.click(screen.getByTestId(`selected-day-task-${task.id}`))
-    expect(mockNavigate).toHaveBeenCalledWith('/tasks')
+    expect(mockNavigate).toHaveBeenCalledWith(`/tasks?from=${ds}&to=${ds}`)
   })
 
   it('selected day has month-cell--selected class', async () => {

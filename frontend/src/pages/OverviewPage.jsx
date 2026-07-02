@@ -52,7 +52,7 @@ function buildWeekData(weekDays, tasks, tz) {
       if (!t.endTime) return sum
       return sum + Math.floor((new Date(t.endTime) - new Date(t.startTime)) / 1000)
     }, 0)
-    return { date, tasks: dayTasks, totalSecs }
+    return { date, ds, tasks: dayTasks, totalSecs }
   })
 }
 
@@ -238,7 +238,7 @@ export default function OverviewPage() {
         <>
           {loading && <p className="empty-state" data-testid="week-loading">Loading…</p>}
           <div className="week-grid" data-testid="week-view">
-            {weekData.map(({ date, tasks: dayTasks, totalSecs }, i) => (
+            {weekData.map(({ date, ds, tasks: dayTasks, totalSecs }, i) => (
               <div key={i}
                 className={`week-col${totalSecs === 0 ? ' empty' : ''}`}
                 data-testid={`week-col-${i}`}>
@@ -255,10 +255,10 @@ export default function OverviewPage() {
                       <li key={t.id}
                         className="week-task-item"
                         data-testid={`week-task-${t.id}`}
-                        onClick={() => navigate('/tasks')}
+                        onClick={() => navigate(`/tasks?from=${ds}&to=${ds}`)}
                         role="button"
                         tabIndex={0}
-                        onKeyDown={e => e.key === 'Enter' && navigate('/tasks')}
+                        onKeyDown={e => e.key === 'Enter' && navigate(`/tasks?from=${ds}&to=${ds}`)}
                       >
                         <span className="week-task-desc">{t.description || '(no description)'}</span>
                         <span className="week-task-dur">
@@ -344,10 +344,10 @@ export default function OverviewPage() {
                     <li key={t.id}
                       className="week-task-item"
                       data-testid={`selected-day-task-${t.id}`}
-                      onClick={() => navigate('/tasks')}
+                      onClick={() => navigate(`/tasks?from=${selectedDay}&to=${selectedDay}`)}
                       role="button"
                       tabIndex={0}
-                      onKeyDown={e => e.key === 'Enter' && navigate('/tasks')}
+                      onKeyDown={e => e.key === 'Enter' && navigate(`/tasks?from=${selectedDay}&to=${selectedDay}`)}
                     >
                       <span className="week-task-desc">{t.description || '(no description)'}</span>
                       <span className="week-task-dur">{formatTaskDuration(t.startTime, t.endTime)}</span>

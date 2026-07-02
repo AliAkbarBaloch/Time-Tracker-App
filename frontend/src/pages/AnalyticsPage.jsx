@@ -96,9 +96,9 @@ export default function AnalyticsPage() {
   const pattern = patternData?.byDayOfWeek ?? DAYS.map(d => ({ day: d, avgSeconds: 0 }))
   const maxAvg = Math.max(...pattern.map(d => d.avgSeconds), 1)
 
-  // Year options: current year ± 3
+  // Year options: current year +5 / -10 so users can browse history and near future
   const yearOptions = []
-  for (let y = currentYear + 1; y >= currentYear - 3; y--) {
+  for (let y = currentYear + 5; y >= currentYear - 10; y--) {
     yearOptions.push(y)
   }
 
@@ -181,7 +181,7 @@ export default function AnalyticsPage() {
 
       {/* ── Day-of-Week Pattern ──────────────────────────────────────────────── */}
       <section className="analytics-section">
-        <h3 className="section-title">Weekly Work Pattern (last 12 weeks)</h3>
+        <h3 className="section-title">Average Hours by Day of Week <span style={{ fontWeight: 'normal', fontSize: '0.85em', color: '#666' }}>(avg per weekday, last 12 weeks)</span></h3>
         <div className="week-pattern-chart" data-testid="week-pattern-chart">
           {pattern.map(({ day, avgSeconds }) => {
             const pct = maxAvg > 0 ? (avgSeconds / maxAvg) * 100 : 0

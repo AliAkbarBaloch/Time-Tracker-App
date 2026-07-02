@@ -162,6 +162,10 @@ export default function ProjectsPage() {
   const handleCreate = async (e) => {
     e.preventDefault()
     setError('')
+    if (!name.trim()) {
+      setError('Project name is required.')
+      return
+    }
     setLoading(true)
     try {
       const budget = budgetHours ? parseFloat(budgetHours) : null
@@ -252,7 +256,7 @@ export default function ProjectsPage() {
             value={budgetHours} onChange={e => setBudgetHours(e.target.value)}
             min="0.1" step="0.5" disabled={loading}
             data-testid="budget-hours-input" />
-          <button type="submit" className="btn btn-primary" disabled={loading || !name.trim()}
+          <button type="submit" className="btn btn-primary" disabled={loading}
             data-testid="create-project-btn">
             {loading ? 'Creating…' : 'Create Project'}
           </button>

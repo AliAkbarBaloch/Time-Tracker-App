@@ -112,6 +112,10 @@ export default function DashboardPage() {
   const handleCreateTemplate = async (e) => {
     e.preventDefault()
     setTplError('')
+    if (!tplName.trim()) {
+      setTplError('Template name is required.')
+      return
+    }
     setTplLoading(true)
     try {
       await templateApi.createTemplate(tplName, tplDesc || null, tplProjectIds)
@@ -248,7 +252,7 @@ export default function DashboardPage() {
             )}
             {tplError && <p className="timer-error" role="alert">{tplError}</p>}
             <button type="submit" className="btn btn-primary"
-              disabled={tplLoading || !tplName.trim()} data-testid="create-template-btn">
+              disabled={tplLoading} data-testid="create-template-btn">
               {tplLoading ? 'Saving…' : 'Create Template'}
             </button>
           </form>
