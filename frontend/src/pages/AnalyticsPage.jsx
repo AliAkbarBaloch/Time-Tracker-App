@@ -96,20 +96,21 @@ export default function AnalyticsPage() {
   const pattern = patternData?.byDayOfWeek ?? DAYS.map(d => ({ day: d, avgSeconds: 0 }))
   const maxAvg = Math.max(...pattern.map(d => d.avgSeconds), 1)
 
-  // Year options: current year +5 / -10 so users can browse history and near future
-  const yearOptions = []
-  for (let y = currentYear + 5; y >= currentYear - 10; y--) {
-    yearOptions.push(y)
-  }
-
   return (
     <div className="page" data-testid="analytics-page">
       <div className="page-header">
         <h2 className="page-title">Productivity Analytics</h2>
-        <select className="timer-input" style={{ width: 'auto' }}
-          value={year} onChange={handleYearChange} data-testid="year-select">
-          {yearOptions.map(y => <option key={y} value={y}>{y}</option>)}
-        </select>
+        <input
+          className="timer-input"
+          type="number"
+          style={{ width: '90px' }}
+          value={year}
+          onChange={handleYearChange}
+          data-testid="year-select"
+          min="1900"
+          step="1"
+          aria-label="Select year"
+        />
       </div>
 
       {/* ── Activity Heatmap ─────────────────────────────────────────────────── */}
