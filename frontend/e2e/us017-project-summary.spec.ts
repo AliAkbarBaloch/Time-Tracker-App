@@ -71,8 +71,9 @@ test.describe('US-017 — View Project Time Summary', () => {
     await expect(page.getByTestId('project-summary-total')).toBeVisible({ timeout: 5_000 });
     expect(page.url()).toContain(`/projects/${proj.id}`);
 
-    // Switch to All Time again — total matches original
+    // Switch to All Time again — wait for re-fetch to complete, then total matches original
     await page.getByTestId('preset-btn-all-time').click();
+    await page.waitForTimeout(1_500);
     const allTimeAgain = await page.getByTestId('project-summary-total').textContent();
     expect(allTimeAgain).toBe(allTimeTotal);
   });
@@ -92,8 +93,8 @@ test.describe('US-017 — View Project Time Summary', () => {
 
     const total = page.getByTestId('project-summary-total');
     await expect(total).toBeVisible();
-    // Accept any zero-duration format: 0:00:00, 00:00:00, 0:00, 0h 0m, etc.
+    // Accept any zero-duration format: 0:00:00, 00:00:00, 0:00, 0h 0m, 0m, etc.
     const text = (await total.textContent()) ?? '';
-    expect(text.trim()).toMatch(/^0+:00|^0h?\s*0/);
+    expect(text.trim()).toMatch(/^0+:00|^0h?\s*0|^0m/);
   });
 });
