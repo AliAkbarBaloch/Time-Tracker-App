@@ -203,6 +203,51 @@ class TaskControllerSearchFilterTest {
                 .andExpect(jsonPath("$[0].description", is("June study")));
     }
 
+    @Test
+    void listTasks_fromOnly_excludesTasksBeforeFrom() throws Exception {
+        createTask("Today task",     Instant.parse("2026-06-10T09:00:00Z"),
+                                     Instant.parse("2026-06-10T10:00:00Z"), null);
+        createTask("Old task",       Instant.parse("2026-05-01T09:00:00Z"),
+                                     Instant.parse("2026-05-01T10:00:00Z"), null);
+
+        mockMvc.perform(get("/api/tasks").header("Authorization", "Bearer " + jwt)
+                .param("from", "2026-06-01T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].description", is("Today task")));
+    }
+
+    @Test
+    void listTasks_toOnly_excludesTasksAfterTo() throws Exception {
+        createTask("Old task",       Instant.parse("2026-05-01T09:00:00Z"),
+                                     Instant.parse("2026-05-01T10:00:00Z"), null);
+        createTask("Future task",    Instant.parse("2026-08-01T09:00:00Z"),
+                                     Instant.parse("2026-08-01T10:00:00Z"), null);
+
+        mockMvc.perform(get("/api/tasks").header("Authorization", "Bearer " + jwt)
+                .param("to", "2026-07-01T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].description", is("Old task")));
+    }
+
+    @Test
+    void listTasks_searchAndFromOnly_combinedAndLogic() throws Exception {
+        createTask("GAMMA today",     Instant.parse("2026-06-10T09:00:00Z"),
+                                      Instant.parse("2026-06-10T10:00:00Z"), null);
+        createTask("GAMMA yesterday", Instant.parse("2026-05-01T09:00:00Z"),
+                                      Instant.parse("2026-05-01T10:00:00Z"), null);
+        createTask("Other today",     Instant.parse("2026-06-10T11:00:00Z"),
+                                      Instant.parse("2026-06-10T12:00:00Z"), null);
+
+        mockMvc.perform(get("/api/tasks").header("Authorization", "Bearer " + jwt)
+                .param("search", "GAMMA")
+                .param("from", "2026-06-01T00:00:00Z"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$", hasSize(1)))
+                .andExpect(jsonPath("$[0].description", is("GAMMA today")));
+    }
+
     // ── Auth ──────────────────────────────────────────────────
 
     @Test
