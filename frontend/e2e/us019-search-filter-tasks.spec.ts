@@ -70,17 +70,14 @@ test.describe('US-019 — Search and Filter Tasks', () => {
     expect(allCount).toBeGreaterThanOrEqual(2);
 
     // Now add a from-date of today — should shrink to only today's task.
-    // Use the native value setter so React's onChange fires reliably on type="date" inputs.
+    // Register the response listener before filling so we don't miss a fast response.
     const todayStr = new Date().toISOString().slice(0, 10);
-    await page.getByTestId('filter-from').evaluate((el: HTMLInputElement, val: string) => {
-      (Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set as (v: string) => void).call(el, val);
-      el.dispatchEvent(new Event('input', { bubbles: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
-    }, todayStr);
-    await page.waitForResponse(
+    const filteredResponse = page.waitForResponse(
       r => r.url().includes('/api/tasks') && r.status() === 200,
       { timeout: 5_000 },
     );
+    await page.getByTestId('filter-from').fill(todayStr);
+    await filteredResponse;
 
     const narrowedCount = await rows.count();
     expect(narrowedCount).toBeLessThan(allCount);

@@ -253,14 +253,16 @@ export default function TasksPage() {
         </select>
         <input
           className="timer-input filter-date"
-          type="date"
+          type="text"
+          placeholder="From (YYYY-MM-DD)"
           value={filterFrom}
           onChange={e => setFilterFrom(e.target.value)}
           data-testid="filter-from"
         />
         <input
           className="timer-input filter-date"
-          type="date"
+          type="text"
+          placeholder="To (YYYY-MM-DD)"
           value={filterTo}
           onChange={e => setFilterTo(e.target.value)}
           data-testid="filter-to"
