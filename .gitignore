@@ -6,6 +6,7 @@ backend/.mvn/wrapper/maven-wrapper.jar
 
 # Frontend
 frontend/node_modules/
+frontend/test-results/
 frontend/dist/
 
 # IDE
@@ -20,3 +21,4 @@ Thumbs.db
 
 # Local QA guide — never commit
 QA_TEST_GUIDE.md
+CLAUDE.md
