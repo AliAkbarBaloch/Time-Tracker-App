@@ -146,7 +146,6 @@ export default function OverviewPage() {
   const [monthOffset, setMonthOffset] = useState(0)
   const [tasks, setTasks]             = useState([])
   const [loading, setLoading]         = useState(false)
-  const [selectedDay, setSelectedDay] = useState(null)
 
   // Week derived
   const weekDays      = getWeekDays(weekOffset, tz)
@@ -157,7 +156,6 @@ export default function OverviewPage() {
   const calendarCells  = getCalendarCells(monthOffset, tz)
   const dayDataMap     = buildDayDataMap(tasks, tz)
   const monthTotalSecs = Object.values(dayDataMap).reduce((sum, d) => sum + d.totalSecs, 0)
-  const selectedDayTasks = selectedDay ? (dayDataMap[selectedDay]?.tasks ?? []) : []
 
   const fetchWeekTasks = useCallback(() => {
     const days = getWeekDays(weekOffset, tz)
@@ -186,9 +184,6 @@ export default function OverviewPage() {
     if (view === 'month') fetchMonthTasks()
   }, [view, fetchMonthTasks])
 
-  useEffect(() => {
-    setSelectedDay(null)
-  }, [monthOffset])
 
   return (
     <div className="page">
@@ -242,12 +237,21 @@ export default function OverviewPage() {
               <div key={i}
                 className={`week-col${totalSecs === 0 ? ' empty' : ''}`}
                 data-testid={`week-col-${i}`}>
-                <div className="week-day-name">{DAY_NAMES[i]}</div>
-                <div className="week-date">
-                  {date.getUTCDate()} {MONTHS[date.getUTCMonth()]}
-                </div>
-                <div className="week-total" data-testid={`day-total-${i}`}>
-                  {formatSeconds(totalSecs)}
+                <div
+                  className="week-day-header"
+                  data-testid={`week-day-header-${i}`}
+                  onClick={() => navigate(`/tasks?from=${ds}&to=${ds}`)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={e => e.key === 'Enter' && navigate(`/tasks?from=${ds}&to=${ds}`)}
+                >
+                  <div className="week-day-name">{DAY_NAMES[i]}</div>
+                  <div className="week-date">
+                    {date.getUTCDate()} {MONTHS[date.getUTCMonth()]}
+                  </div>
+                  <div className="week-total" data-testid={`day-total-${i}`}>
+                    {formatSeconds(totalSecs)}
+                  </div>
                 </div>
                 {dayTasks.length > 0 && (
                   <ul className="week-tasks" data-testid={`day-tasks-${i}`}>
@@ -310,15 +314,14 @@ export default function OverviewPage() {
               const d  = String(date.getUTCDate()).padStart(2, '0')
               const ds = `${y}-${m}-${d}`
               const dayData = dayDataMap[ds]
-              const isSelected = selectedDay === ds
               return (
                 <div key={ds}
-                  className={`month-cell${isSelected ? ' month-cell--selected' : ''}${dayData ? ' month-cell--has-tasks' : ' month-cell--no-tasks'}`}
+                  className={`month-cell${dayData ? ' month-cell--has-tasks' : ' month-cell--no-tasks'}`}
                   data-testid={`month-day-${ds}`}
-                  onClick={() => setSelectedDay(isSelected ? null : ds)}
+                  onClick={() => navigate(`/tasks?from=${ds}&to=${ds}`)}
                   role="button"
                   tabIndex={0}
-                  onKeyDown={e => e.key === 'Enter' && setSelectedDay(isSelected ? null : ds)}
+                  onKeyDown={e => e.key === 'Enter' && navigate(`/tasks?from=${ds}&to=${ds}`)}
                 >
                   <span className="month-day-num">{date.getUTCDate()}</span>
                   <span className="month-cell-time" data-testid={`month-day-total-${ds}`}>
@@ -329,34 +332,6 @@ export default function OverviewPage() {
             })}
           </div>
 
-          {selectedDay && (
-            <div className="selected-day-panel" data-testid="selected-day-panel">
-              <h4 className="selected-day-title" data-testid="selected-day-title">
-                {new Date(selectedDay + 'T12:00:00').toLocaleDateString('default', {
-                  weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'
-                })}
-              </h4>
-              {selectedDayTasks.length === 0 ? (
-                <p className="empty-state" data-testid="selected-day-empty">No tasks this day.</p>
-              ) : (
-                <ul className="selected-day-tasks" data-testid="selected-day-tasks">
-                  {selectedDayTasks.map(t => (
-                    <li key={t.id}
-                      className="week-task-item"
-                      data-testid={`selected-day-task-${t.id}`}
-                      onClick={() => navigate(`/tasks?from=${selectedDay}&to=${selectedDay}`)}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={e => e.key === 'Enter' && navigate(`/tasks?from=${selectedDay}&to=${selectedDay}`)}
-                    >
-                      <span className="week-task-desc">{t.description || '(no description)'}</span>
-                      <span className="week-task-dur">{formatTaskDuration(t.startTime, t.endTime)}</span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
         </>
       )}
     </div>

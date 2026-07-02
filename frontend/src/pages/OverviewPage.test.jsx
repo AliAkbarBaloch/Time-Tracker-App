@@ -224,6 +224,24 @@ describe('OverviewPage — week view', () => {
     )
   })
 
+  it('clicking the week day header navigates to tasks for that day', async () => {
+    setup()
+    await waitFor(() => expect(screen.getByTestId('week-day-header-0')).toBeInTheDocument())
+    fireEvent.click(screen.getByTestId('week-day-header-0'))
+    expect(mockNavigate).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/tasks\?from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}$/)
+    )
+  })
+
+  it('pressing Enter on week day header navigates to tasks for that day', async () => {
+    setup()
+    await waitFor(() => expect(screen.getByTestId('week-day-header-0')).toBeInTheDocument())
+    fireEvent.keyDown(screen.getByTestId('week-day-header-0'), { key: 'Enter' })
+    expect(mockNavigate).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/tasks\?from=\d{4}-\d{2}-\d{2}&to=\d{4}-\d{2}-\d{2}$/)
+    )
+  })
+
   it('shows loading indicator while fetching', async () => {
     let resolve
     taskApi.listTasks.mockReturnValueOnce(new Promise(r => { resolve = r }))
@@ -390,72 +408,18 @@ describe('OverviewPage — month view', () => {
     )
   })
 
-  it('clicking a day cell opens the selected-day-panel', async () => {
+  it('clicking a day cell navigates to /tasks filtered to that day', async () => {
     await switchToMonth()
     const ds = getCurrentMonthDay1Str()
     fireEvent.click(screen.getByTestId(`month-day-${ds}`))
-    expect(screen.getByTestId('selected-day-panel')).toBeInTheDocument()
-  })
-
-  it('clicking the same day again closes the selected-day-panel', async () => {
-    await switchToMonth()
-    const ds = getCurrentMonthDay1Str()
-    fireEvent.click(screen.getByTestId(`month-day-${ds}`))
-    expect(screen.getByTestId('selected-day-panel')).toBeInTheDocument()
-    fireEvent.click(screen.getByTestId(`month-day-${ds}`))
-    expect(screen.queryByTestId('selected-day-panel')).not.toBeInTheDocument()
-  })
-
-  it('shows empty message in panel when selected day has no tasks', async () => {
-    await switchToMonth()
-    const ds = getCurrentMonthDay1Str()
-    fireEvent.click(screen.getByTestId(`month-day-${ds}`))
-    expect(screen.getByTestId('selected-day-empty')).toBeInTheDocument()
-  })
-
-  it('shows tasks for selected day in the panel', async () => {
-    const task = makeMonthDay1Task({ description: 'Panel task' })
-    taskApi.listTasks.mockResolvedValue({ data: [task] })
-    await switchToMonth()
-    const ds = getCurrentMonthDay1Str()
-    await waitFor(() =>
-      expect(screen.getByTestId(`month-day-total-${ds}`).textContent).toBe('1h 00m')
-    )
-    fireEvent.click(screen.getByTestId(`month-day-${ds}`))
-    expect(screen.getByTestId('selected-day-tasks')).toBeInTheDocument()
-    expect(screen.getByTestId(`selected-day-task-${task.id}`)).toBeInTheDocument()
-    expect(screen.getByText('Panel task')).toBeInTheDocument()
-  })
-
-  it('clicking a task in the panel navigates to /tasks filtered to that day', async () => {
-    const task = makeMonthDay1Task()
-    taskApi.listTasks.mockResolvedValue({ data: [task] })
-    await switchToMonth()
-    const ds = getCurrentMonthDay1Str()
-    await waitFor(() =>
-      expect(screen.getByTestId(`month-day-total-${ds}`).textContent).toBe('1h 00m')
-    )
-    fireEvent.click(screen.getByTestId(`month-day-${ds}`))
-    fireEvent.click(screen.getByTestId(`selected-day-task-${task.id}`))
     expect(mockNavigate).toHaveBeenCalledWith(`/tasks?from=${ds}&to=${ds}`)
   })
 
-  it('selected day has month-cell--selected class', async () => {
+  it('pressing Enter on a day cell navigates to /tasks filtered to that day', async () => {
     await switchToMonth()
     const ds = getCurrentMonthDay1Str()
-    fireEvent.click(screen.getByTestId(`month-day-${ds}`))
-    expect(screen.getByTestId(`month-day-${ds}`).className).toContain('month-cell--selected')
-  })
-
-  it('selected-day-panel disappears when navigating to another month', async () => {
-    await switchToMonth()
-    const ds = getCurrentMonthDay1Str()
-    fireEvent.click(screen.getByTestId(`month-day-${ds}`))
-    expect(screen.getByTestId('selected-day-panel')).toBeInTheDocument()
-    fireEvent.click(screen.getByTestId('prev-month-btn'))
-    await waitFor(() =>
-      expect(screen.queryByTestId('selected-day-panel')).not.toBeInTheDocument()
-    )
+    fireEvent.keyDown(screen.getByTestId(`month-day-${ds}`), { key: 'Enter' })
+    expect(mockNavigate).toHaveBeenCalledWith(`/tasks?from=${ds}&to=${ds}`)
   })
 
   it('shows loading indicator while fetching month tasks', async () => {
@@ -473,12 +437,6 @@ describe('OverviewPage — month view', () => {
     )
   })
 
-  it('pressing Enter on a day cell opens the panel', async () => {
-    await switchToMonth()
-    const ds = getCurrentMonthDay1Str()
-    fireEvent.keyDown(screen.getByTestId(`month-day-${ds}`), { key: 'Enter' })
-    expect(screen.getByTestId('selected-day-panel')).toBeInTheDocument()
-  })
 
   it('day cell with tasks has month-cell--has-tasks class', async () => {
     const task = makeMonthDay1Task()

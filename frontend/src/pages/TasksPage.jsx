@@ -103,8 +103,10 @@ export default function TasksPage() {
   }, [searchKw])
 
   const fetchTasks = useCallback(() => {
-    const from = filterFrom ? new Date(filterFrom).toISOString() : null
-    const to   = filterTo   ? new Date(filterTo + 'T23:59:59').toISOString() : null
+    const fromDate = filterFrom ? new Date(filterFrom) : null
+    const from = fromDate && !isNaN(fromDate.getTime()) ? fromDate.toISOString() : null
+    const toDate = filterTo ? new Date(filterTo + 'T23:59:59') : null
+    const to = toDate && !isNaN(toDate.getTime()) ? toDate.toISOString() : null
     taskApi.listTasks(from, to, debouncedSearch || null, filterProjectId || null)
       .then(res => setTasks(res.data))
       .catch(() => {})
@@ -255,16 +257,16 @@ export default function TasksPage() {
         </select>
         <input
           className="timer-input filter-date"
-          type="text"
-          placeholder="Start date (YYYY-MM-DD)"
+          type="date"
+          aria-label="Start date"
           value={filterFrom}
           onChange={e => setFilterFrom(e.target.value)}
           data-testid="filter-from"
         />
         <input
           className="timer-input filter-date"
-          type="text"
-          placeholder="End date (YYYY-MM-DD)"
+          type="date"
+          aria-label="End date"
           value={filterTo}
           onChange={e => setFilterTo(e.target.value)}
           data-testid="filter-to"
