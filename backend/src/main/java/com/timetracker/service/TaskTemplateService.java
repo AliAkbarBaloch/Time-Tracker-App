@@ -94,7 +94,8 @@ public class TaskTemplateService {
                 .map(Project::getId)
                 .toList();
 
-        return taskService.startTask(userEmail, new StartTaskRequest(template.getDescription()), projectIds);
+        String desc = template.getDescription() != null ? template.getDescription() : template.getName();
+        return taskService.startTask(userEmail, new StartTaskRequest(desc), projectIds);
     }
 
     private Set<Project> resolveProjects(List<Long> projectIds, User user) {

@@ -259,6 +259,25 @@ class TaskTemplateServiceTest {
     }
 
     @Test
+    void startFromTemplate_nullDescription_usesTemplateName() {
+        TaskTemplate template = savedTemplate("Stand-Up", null);
+        when(templateRepository.findByIdAndUser(2L, user)).thenReturn(Optional.of(template));
+
+        Task started = new Task();
+        started.setDescription("Stand-Up");
+        started.setStartTime(Instant.now());
+        started.setProjects(new HashSet<>());
+        when(taskService.startTask(eq("alice@example.com"), any(StartTaskRequest.class), any()))
+                .thenReturn(TaskResponse.from(started));
+
+        service.startFromTemplate("alice@example.com", 2L);
+
+        verify(taskService).startTask(eq("alice@example.com"),
+                argThat(r -> "Stand-Up".equals(r.description())),
+                any());
+    }
+
+    @Test
     void startFromTemplate_templateNotFound_throws() {
         when(templateRepository.findByIdAndUser(99L, user)).thenReturn(Optional.empty());
 
