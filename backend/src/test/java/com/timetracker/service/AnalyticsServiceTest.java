@@ -312,6 +312,31 @@ class AnalyticsServiceTest {
     }
 
     @Test
+    void getWeeklyPattern_currentYear_usesNowAsUpperBound() {
+        // Kills '>=' → '>' boundary mutation AND 'replaced with false' mutation on
+        // year >= currentYear. Both mutants route currentYear to the yearEnd branch,
+        // producing to = Jan 1 of next year. The assertion to.isBefore(yearEnd) fails
+        // for that value, so both mutations are killed.
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        int currentYear = LocalDate.now().getYear();
+        Instant beforeCall = Instant.now();
+        analyticsService.getWeeklyPattern("alice@example.com", 4, currentYear);
+
+        ArgumentCaptor<Instant> fromCaptor = ArgumentCaptor.forClass(Instant.class);
+        ArgumentCaptor<Instant> toCaptor   = ArgumentCaptor.forClass(Instant.class);
+        verify(taskRepository).findByUserAndStartTimeBetweenOrderByStartTimeAsc(
+                eq(user), fromCaptor.capture(), toCaptor.capture());
+
+        ZoneId utc = ZoneId.of("UTC");
+        Instant yearEnd = ZonedDateTime.of(currentYear + 1, 1, 1, 0, 0, 0, 0, utc).toInstant();
+        // 'to' must be Instant.now() (before the year boundary), not Jan 1 of next year
+        assertThat(toCaptor.getValue()).isAfterOrEqualTo(beforeCall);
+        assertThat(toCaptor.getValue()).isBefore(yearEnd);
+    }
+
+    @Test
     void getWeeklyPattern_pastYear_usesYearEndAsUpperBound() {
         // For a past year the 'to' instant must be Jan 1 of year+1 (not Instant.now()).
         // Kills the year >= currentYear branch inversion.
