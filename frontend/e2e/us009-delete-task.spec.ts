@@ -27,12 +27,9 @@ test.describe('US-009 — Delete a Task', () => {
     await page.getByTestId('submit-task-btn').click();
     await expect(page.getByText('To be deleted')).toBeVisible({ timeout: 8_000 });
 
-    // Click delete; if a confirmation dialog appears, confirm it
+    // Accept native window.confirm dialog automatically, then click delete
+    page.on('dialog', d => d.accept());
     await page.locator('[data-testid^="delete-btn-"]').first().click();
-    const confirmBtn = page.locator('[data-testid="confirm-delete-btn"], button:has-text("Delete"), button:has-text("Confirm"), button:has-text("Yes")');
-    if (await confirmBtn.isVisible({ timeout: 1_500 }).catch(() => false)) {
-      await confirmBtn.click();
-    }
 
     await expect(page.getByText('To be deleted')).not.toBeVisible({ timeout: 8_000 });
   });
@@ -48,11 +45,8 @@ test.describe('US-009 — Delete a Task', () => {
     await page.getByTestId('submit-task-btn').click();
     await expect(page.locator('[data-testid^="task-item-"]').first()).toBeVisible({ timeout: 8_000 });
 
+    page.on('dialog', d => d.accept());
     await page.locator('[data-testid^="delete-btn-"]').first().click();
-    const confirmBtn2 = page.locator('[data-testid="confirm-delete-btn"], button:has-text("Delete"), button:has-text("Confirm"), button:has-text("Yes")');
-    if (await confirmBtn2.isVisible({ timeout: 1_500 }).catch(() => false)) {
-      await confirmBtn2.click();
-    }
 
     await expect(page.getByTestId('no-tasks-message')).toBeVisible({ timeout: 8_000 });
   });

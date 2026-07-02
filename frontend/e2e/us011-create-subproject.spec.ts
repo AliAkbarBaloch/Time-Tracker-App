@@ -27,14 +27,8 @@ test.describe('US-011 — Create a Subproject', () => {
     await page.getByTestId('parent-project-select').selectOption({ label: parentName });
     await page.getByTestId('create-project-btn').click();
 
-    // Child may already be visible if the tree auto-expands after creation.
-    // If not visible, click the expand/collapse button to reveal it.
-    const childLocator = page.getByText(childName);
-    const alreadyVisible = await childLocator.isVisible().catch(() => false);
-    if (!alreadyVisible) {
-      await page.locator(`[data-testid^="collapse-btn-"]`).first().click();
-    }
-    await expect(childLocator).toBeVisible({ timeout: 8_000 });
+    // Tree auto-expands after creation; just wait for child to appear
+    await expect(page.getByText(childName)).toBeVisible({ timeout: 10_000 });
   });
 
   // AC4: circular parent relationships rejected by API
