@@ -66,12 +66,15 @@ test.describe('US-019 — Search and Filter Tasks', () => {
     const allCount = await rows.count();
     expect(allCount).toBeGreaterThanOrEqual(2);
 
-    // Navigate with keyword + date filter pre-applied via URL params.
-    // TasksPage seeds filter state from URL on mount, so the API is called
-    // immediately with both filters — no UI date-input interaction needed.
+    // Navigate away first so TasksPage fully unmounts.
+    // React Router v6 does NOT remount a component when only search params change
+    // on the same route — useState initialisers don't re-run, so filterFrom would
+    // stay '' if we navigated directly from /tasks?search=GAMMA to the filtered URL.
     const todayStr = new Date().toISOString().slice(0, 10);
+    await page.goto('/dashboard');
     await page.goto(`/tasks?search=GAMMA&from=${todayStr}`);
-    // Wait for the filtered fetch to settle (networkidle = no pending requests)
+    // networkidle = no open network connections for ≥ 500 ms, which means the
+    // filtered fetch has completed and React has re-rendered the filtered list.
     await page.waitForLoadState('networkidle', { timeout: 8_000 }).catch(() => {});
 
     const narrowedCount = await rows.count();
