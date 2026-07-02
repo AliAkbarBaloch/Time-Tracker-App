@@ -21,6 +21,7 @@ import org.springframework.test.web.servlet.MvcResult;
 import java.util.List;
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -265,5 +266,36 @@ class TaskTemplateTest {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(objectMapper.writeValueAsString(Map.of("name", ""))))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void startFromTemplate_accumulatesTimeFromPreviousSessions() throws Exception {
+        Long templateId = createTemplate(jwt, "Focus", "Deep work", null);
+
+        // First session: start → sleep 1s → stop so duration ≥ 1s (passes the > 0 filter)
+        mockMvc.perform(post("/api/task-templates/" + templateId + "/start")
+                .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.totalPreviousSeconds").value(0));
+
+        Thread.sleep(1100);
+
+        mockMvc.perform(post("/api/tasks/stop")
+                .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk());
+
+        // Second session: totalPreviousSeconds must equal the first session's duration (> 0)
+        MvcResult r = mockMvc.perform(post("/api/task-templates/" + templateId + "/start")
+                .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isCreated())
+                .andReturn();
+
+        long prev = objectMapper.readTree(r.getResponse().getContentAsString())
+                .get("totalPreviousSeconds").asLong();
+        assertThat(prev).isGreaterThan(0L);
+
+        mockMvc.perform(post("/api/tasks/stop")
+                .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk());
     }
 }

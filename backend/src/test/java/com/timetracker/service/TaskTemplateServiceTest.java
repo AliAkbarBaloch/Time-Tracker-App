@@ -12,6 +12,7 @@ import com.timetracker.entity.User;
 import com.timetracker.exception.ProjectNotFoundException;
 import com.timetracker.exception.TemplateNotFoundException;
 import com.timetracker.repository.ProjectRepository;
+import com.timetracker.repository.TaskRepository;
 import com.timetracker.repository.TaskTemplateRepository;
 import com.timetracker.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -24,6 +25,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -31,6 +33,7 @@ import java.util.Set;
 
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -40,6 +43,7 @@ class TaskTemplateServiceTest {
     @Mock UserRepository         userRepository;
     @Mock ProjectRepository      projectRepository;
     @Mock TaskService             taskService;
+    @Mock TaskRepository          taskRepository;
     @InjectMocks TaskTemplateService service;
 
     private User    user;
@@ -241,40 +245,45 @@ class TaskTemplateServiceTest {
         TaskTemplate template = savedTemplate("Stand-Up", "Morning sync");
         template.setProjects(Set.of(project));
         when(templateRepository.findByIdAndUser(1L, user)).thenReturn(Optional.of(template));
+        when(taskRepository.findByUserAndDescriptionAndEndTimeIsNotNull(user, "Morning sync"))
+                .thenReturn(Collections.emptyList());
 
         Task started = new Task();
         started.setDescription("Morning sync");
         started.setStartTime(Instant.now());
         started.setProjects(Set.of(project));
         TaskResponse mockResponse = TaskResponse.from(started);
-        when(taskService.startTask(eq("alice@example.com"), any(StartTaskRequest.class), any()))
+        when(taskService.startTask(eq("alice@example.com"), any(StartTaskRequest.class), any(), anyLong()))
                 .thenReturn(mockResponse);
 
         TaskResponse result = service.startFromTemplate("alice@example.com", 1L);
 
-        assertThat(result).isNotNull(); // kills L97: returned null mutation
+        assertThat(result).isNotNull();
         verify(taskService).startTask(eq("alice@example.com"),
                 argThat(r -> "Morning sync".equals(r.description())),
-                argThat(ids -> ids.contains(10L)));
+                argThat(ids -> ids.contains(10L)),
+                eq(0L));
     }
 
     @Test
     void startFromTemplate_nullDescription_usesTemplateName() {
         TaskTemplate template = savedTemplate("Stand-Up", null);
         when(templateRepository.findByIdAndUser(2L, user)).thenReturn(Optional.of(template));
+        when(taskRepository.findByUserAndDescriptionAndEndTimeIsNotNull(user, "Stand-Up"))
+                .thenReturn(Collections.emptyList());
 
         Task started = new Task();
         started.setDescription("Stand-Up");
         started.setStartTime(Instant.now());
         started.setProjects(new HashSet<>());
-        when(taskService.startTask(eq("alice@example.com"), any(StartTaskRequest.class), any()))
+        when(taskService.startTask(eq("alice@example.com"), any(StartTaskRequest.class), any(), anyLong()))
                 .thenReturn(TaskResponse.from(started));
 
         service.startFromTemplate("alice@example.com", 2L);
 
         verify(taskService).startTask(eq("alice@example.com"),
                 argThat(r -> "Stand-Up".equals(r.description())),
-                any());
+                any(), anyLong());
     }
 
     @Test
@@ -284,6 +293,41 @@ class TaskTemplateServiceTest {
         assertThatThrownBy(() -> service.startFromTemplate("alice@example.com", 99L))
                 .isInstanceOf(TemplateNotFoundException.class);
 
-        verify(taskService, never()).startTask(any(), any(), any());
+        verify(taskService, never()).startTask(any(), any(), any(), anyLong());
+    }
+
+    @Test
+    void startFromTemplate_accumulatesPreviousSessionSeconds() {
+        // Kills negation of the accumulated > 0 path: two previous sessions totalling 90s
+        TaskTemplate template = savedTemplate("Deep Work", "Focus session");
+        when(templateRepository.findByIdAndUser(5L, user)).thenReturn(Optional.of(template));
+
+        Task prev1 = new Task();
+        prev1.setUser(user);
+        prev1.setStartTime(Instant.parse("2026-07-01T08:00:00Z"));
+        prev1.setEndTime(Instant.parse("2026-07-01T08:01:00Z")); // 60s
+        prev1.setProjects(new HashSet<>());
+
+        Task prev2 = new Task();
+        prev2.setUser(user);
+        prev2.setStartTime(Instant.parse("2026-07-01T09:00:00Z"));
+        prev2.setEndTime(Instant.parse("2026-07-01T09:00:30Z")); // 30s
+        prev2.setProjects(new HashSet<>());
+
+        when(taskRepository.findByUserAndDescriptionAndEndTimeIsNotNull(user, "Focus session"))
+                .thenReturn(List.of(prev1, prev2));
+
+        Task started = new Task();
+        started.setDescription("Focus session");
+        started.setStartTime(Instant.now());
+        started.setProjects(new HashSet<>());
+        started.setTotalPreviousSeconds(90L);
+        when(taskService.startTask(eq("alice@example.com"), any(StartTaskRequest.class), any(), eq(90L)))
+                .thenReturn(TaskResponse.from(started));
+
+        TaskResponse result = service.startFromTemplate("alice@example.com", 5L);
+
+        verify(taskService).startTask(eq("alice@example.com"), any(), any(), eq(90L));
+        assertThat(result.totalPreviousSeconds()).isEqualTo(90L);
     }
 }

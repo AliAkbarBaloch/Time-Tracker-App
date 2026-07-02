@@ -578,6 +578,31 @@ class TaskServiceTest {
     }
 
     @Test
+    void startTask_withAccumulatedSeconds_setsFieldOnTask() {
+        // Kills removed setTotalPreviousSeconds mutation
+        when(taskRepository.findByUserAndEndTimeIsNull(user)).thenReturn(Optional.empty());
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        taskService.startTask("alice@example.com", new StartTaskRequest("coding"), List.of(), 3600L);
+
+        ArgumentCaptor<Task> captor = ArgumentCaptor.forClass(Task.class);
+        verify(taskRepository).save(captor.capture());
+        assertThat(captor.getValue().getTotalPreviousSeconds()).isEqualTo(3600L);
+    }
+
+    @Test
+    void startTask_noAccumulatedSeconds_defaultsToZero() {
+        when(taskRepository.findByUserAndEndTimeIsNull(user)).thenReturn(Optional.empty());
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        taskService.startTask("alice@example.com", new StartTaskRequest("meeting"));
+
+        ArgumentCaptor<Task> captor = ArgumentCaptor.forClass(Task.class);
+        verify(taskRepository).save(captor.capture());
+        assertThat(captor.getValue().getTotalPreviousSeconds()).isEqualTo(0L);
+    }
+
+    @Test
     void createTask_capturesUserAndDescription() {
         // Kills L101-102: removed setUser/setDescription mutations
         Instant start = Instant.now().minusSeconds(3600);
