@@ -393,6 +393,27 @@ describe('ProjectDetailPage', () => {
     expect(screen.getByTestId('invite-error')).toHaveTextContent('No registered user found')
   })
 
+  it('clears invite error when user types in the email input', async () => {
+    projectApi.inviteMember.mockRejectedValueOnce({
+      response: { data: { message: 'No registered user found' } }
+    })
+    setup()
+    await waitFor(() => expect(screen.getByTestId('invite-form')).toBeInTheDocument())
+    fireEvent.change(screen.getByTestId('invite-email-input'), { target: { value: 'bad@x.com' } })
+    fireEvent.click(screen.getByTestId('invite-submit-btn'))
+    await waitFor(() => expect(screen.getByTestId('invite-error')).toBeInTheDocument())
+
+    fireEvent.change(screen.getByTestId('invite-email-input'), { target: { value: 'good@x.com' } })
+    expect(screen.queryByTestId('invite-error')).not.toBeInTheDocument()
+  })
+
+  it('renders Add Task button linking to /tasks with project pre-selected', async () => {
+    setup()
+    await waitFor(() => expect(screen.getByTestId('add-task-to-project-btn')).toBeInTheDocument())
+    const btn = screen.getByTestId('add-task-to-project-btn')
+    expect(btn).toHaveAttribute('href', '/tasks?projectId=1&addTask=true')
+  })
+
   it('shows remove button only for MEMBER rows when current user is OWNER', async () => {
     setup()
     await waitFor(() => expect(screen.getByTestId(`member-row-${BOB_ID}`)).toBeInTheDocument())
