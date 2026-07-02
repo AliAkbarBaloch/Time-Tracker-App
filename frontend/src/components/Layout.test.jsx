@@ -3,6 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { AuthProvider } from '../context/AuthContext'
 import { TimerProvider } from '../context/TimerContext'
+import { ThemeProvider } from '../context/ThemeContext'
 import Layout from './Layout'
 import * as taskApi from '../api/taskApi'
 
@@ -27,13 +28,15 @@ function makeActiveTask(overrides = {}) {
 
 function setup() {
   return render(
-    <MemoryRouter initialEntries={['/dashboard']}>
-      <AuthProvider>
-        <TimerProvider>
-          <Layout />
-        </TimerProvider>
-      </AuthProvider>
-    </MemoryRouter>
+    <ThemeProvider>
+      <MemoryRouter initialEntries={['/dashboard']}>
+        <AuthProvider>
+          <TimerProvider>
+            <Layout />
+          </TimerProvider>
+        </AuthProvider>
+      </MemoryRouter>
+    </ThemeProvider>
   )
 }
 
@@ -120,13 +123,15 @@ describe('Layout — topbar timer (US-018)', () => {
   it('topbar timer is visible on the Overview page (not just Dashboard)', async () => {
     taskApi.getActiveTask.mockResolvedValue({ status: 200, data: makeActiveTask() })
     render(
-      <MemoryRouter initialEntries={['/overview']}>
-        <AuthProvider>
-          <TimerProvider>
-            <Layout />
-          </TimerProvider>
-        </AuthProvider>
-      </MemoryRouter>
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/overview']}>
+          <AuthProvider>
+            <TimerProvider>
+              <Layout />
+            </TimerProvider>
+          </AuthProvider>
+        </MemoryRouter>
+      </ThemeProvider>
     )
     await waitFor(() => expect(screen.getByTestId('topbar-timer')).toBeInTheDocument())
   })
@@ -134,13 +139,15 @@ describe('Layout — topbar timer (US-018)', () => {
   it('topbar timer is visible on the Projects page', async () => {
     taskApi.getActiveTask.mockResolvedValue({ status: 200, data: makeActiveTask() })
     render(
-      <MemoryRouter initialEntries={['/projects']}>
-        <AuthProvider>
-          <TimerProvider>
-            <Layout />
-          </TimerProvider>
-        </AuthProvider>
-      </MemoryRouter>
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/projects']}>
+          <AuthProvider>
+            <TimerProvider>
+              <Layout />
+            </TimerProvider>
+          </AuthProvider>
+        </MemoryRouter>
+      </ThemeProvider>
     )
     await waitFor(() => expect(screen.getByTestId('topbar-timer')).toBeInTheDocument())
   })
@@ -148,13 +155,15 @@ describe('Layout — topbar timer (US-018)', () => {
   it('topbar timer is visible on the Tasks page', async () => {
     taskApi.getActiveTask.mockResolvedValue({ status: 200, data: makeActiveTask() })
     render(
-      <MemoryRouter initialEntries={['/tasks']}>
-        <AuthProvider>
-          <TimerProvider>
-            <Layout />
-          </TimerProvider>
-        </AuthProvider>
-      </MemoryRouter>
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/tasks']}>
+          <AuthProvider>
+            <TimerProvider>
+              <Layout />
+            </TimerProvider>
+          </AuthProvider>
+        </MemoryRouter>
+      </ThemeProvider>
     )
     await waitFor(() => expect(screen.getByTestId('topbar-timer')).toBeInTheDocument())
   })

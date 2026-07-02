@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as projectApi from '../api/projectApi'
+import { useToast } from '../context/ToastContext'
 
 function formatDuration(totalSeconds) {
   if (!totalSeconds) return '0m'
@@ -20,22 +21,17 @@ function flattenProjects(projects, depth = 0) {
   return result
 }
 
-/** Colour-coded budget progress bar (US-026). Only renders when budgetHours is set. */
 function BudgetBar({ projectId, budgetHours, totalSeconds }) {
   if (!budgetHours || budgetHours <= 0) return null
   const usedHours = totalSeconds / 3600
   const pct = (usedHours / budgetHours) * 100
   const status = pct >= 100 ? 'OVER_BUDGET' : pct >= 80 ? 'WARNING' : 'ON_TRACK'
   const color = status === 'OVER_BUDGET' ? '#ef4444' : status === 'WARNING' ? '#f97316' : '#22c55e'
-  const displayPct = Math.min(pct, 100)
   return (
     <div className="budget-bar-wrap" data-testid={`budget-bar-${projectId}`}>
       <div className="budget-bar-track">
-        <div
-          className="budget-bar-fill"
-          data-testid={`budget-bar-fill-${projectId}`}
-          style={{ width: `${displayPct}%`, background: color }}
-        />
+        <div className="budget-bar-fill" data-testid={`budget-bar-fill-${projectId}`}
+          style={{ width: `${Math.min(pct, 100)}%`, background: color }} />
       </div>
       <span className="budget-bar-label" data-testid={`budget-bar-label-${projectId}`}>
         {pct.toFixed(0)}% of {budgetHours}h
@@ -43,6 +39,25 @@ function BudgetBar({ projectId, budgetHours, totalSeconds }) {
           <span className="budget-badge-over" data-testid={`budget-over-badge-${projectId}`}> Over budget</span>
         )}
       </span>
+    </div>
+  )
+}
+
+function EmptyProjects() {
+  return (
+    <div className="empty-illustrated">
+      <svg width="96" height="80" viewBox="0 0 96 80" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <rect x="8" y="28" width="80" height="44" rx="6" fill="var(--surf-3)" stroke="var(--bd-mid)" strokeWidth="1.5"/>
+        <path d="M8 40h80" stroke="var(--bd-mid)" strokeWidth="1.5"/>
+        <rect x="8" y="16" width="36" height="16" rx="4" fill="var(--surf-2)" stroke="var(--bd-mid)" strokeWidth="1.5"/>
+        <rect x="20" y="48" width="30" height="6" rx="3" fill="var(--surf-3)"/>
+        <rect x="20" y="60" width="20" height="4" rx="2" fill="var(--surf-3)"/>
+        <circle cx="72" cy="58" r="12" fill="var(--accent-dim)" stroke="var(--accent-bd)" strokeWidth="1.5"/>
+        <line x1="72" y1="53" x2="72" y2="63" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round"/>
+        <line x1="67" y1="58" x2="77" y2="58" stroke="var(--accent)" strokeWidth="2" strokeLinecap="round"/>
+      </svg>
+      <span className="empty-illustrated-title">No projects yet</span>
+      <span className="empty-illustrated-sub">Create your first project to start tracking time across tasks.</span>
     </div>
   )
 }
@@ -58,11 +73,9 @@ function ProjectTree({ projects, depth = 0, editingId, editName, editDesc, editB
       {projects.map(p => (
         <li key={p.id} className="project-tree-item">
           {editingId === p.id ? (
-            <form
-              className="project-edit-form"
+            <form className="project-edit-form"
               onSubmit={e => { e.preventDefault(); onSaveEdit(p.id) }}
-              data-testid={`edit-form-${p.id}`}
-            >
+              data-testid={`edit-form-${p.id}`}>
               <input className="timer-input" type="text" value={editName}
                 onChange={e => onEditName(e.target.value)} required disabled={editLoading}
                 data-testid="edit-project-name-input" />
@@ -129,9 +142,27 @@ function ProjectTree({ projects, depth = 0, editingId, editName, editDesc, editB
   )
 }
 
+function ProjectsSkeleton() {
+  return (
+    <div className="skeleton-projects">
+      {[80, 60, 70].map((w, i) => (
+        <div key={i} className="skeleton-project-item">
+          <div className="skeleton" style={{ width: `${w}%`, height: 14, borderRadius: 6 }} />
+          <div className="skeleton" style={{ width: 52, height: 14, borderRadius: 6, marginLeft: 'auto', flexShrink: 0 }} />
+          <div className="skeleton" style={{ width: 60, height: 26, borderRadius: 6, flexShrink: 0 }} />
+          <div className="skeleton" style={{ width: 52, height: 26, borderRadius: 6, flexShrink: 0 }} />
+        </div>
+      ))}
+    </div>
+  )
+}
+
 export default function ProjectsPage() {
   const navigate = useNavigate()
+  const toast = useToast()
+
   const [projects, setProjects]               = useState([])
+  const [fetching, setFetching]               = useState(true)
   const [showForm, setShowForm]               = useState(false)
   const [name, setName]                       = useState('')
   const [description, setDescription]         = useState('')
@@ -140,7 +171,6 @@ export default function ProjectsPage() {
   const [loading, setLoading]                 = useState(false)
   const [error, setError]                     = useState('')
 
-  // edit state
   const [editingId, setEditingId]     = useState(null)
   const [editName, setEditName]       = useState('')
   const [editDesc, setEditDesc]       = useState('')
@@ -148,13 +178,13 @@ export default function ProjectsPage() {
   const [editError, setEditError]     = useState('')
   const [editLoading, setEditLoading] = useState(false)
 
-  // delete warning state
   const [deleteWarning, setDeleteWarning] = useState(null)
 
   const fetchProjects = useCallback(() => {
     projectApi.listProjects()
       .then(res => setProjects(res.data))
       .catch(() => {})
+      .finally(() => setFetching(false))
   }, [])
 
   useEffect(() => { fetchProjects() }, [fetchProjects])
@@ -174,6 +204,7 @@ export default function ProjectsPage() {
       setName(''); setDescription(''); setParentProjectId(''); setBudgetHours('')
       setShowForm(false)
       fetchProjects()
+      toast.success('Project created successfully')
     } catch (err) {
       const data = err.response?.data
       setError(data?.message || Object.values(data?.errors || {}).join(', ') || 'Failed to create project')
@@ -200,6 +231,7 @@ export default function ProjectsPage() {
       await projectApi.updateProject(id, editName, editDesc || null, budget)
       setEditingId(null)
       fetchProjects()
+      toast.success('Project updated')
     } catch (err) {
       const data = err.response?.data
       setEditError(data?.message || Object.values(data?.errors || {}).join(', ') || 'Failed to update project.')
@@ -213,12 +245,13 @@ export default function ProjectsPage() {
       await projectApi.deleteProject(id, force)
       setDeleteWarning(null)
       fetchProjects()
+      toast.success('Project deleted')
     } catch (err) {
       const data = err.response?.data
       if (err.response?.status === 409 && !force) {
         setDeleteWarning({ id, taskCount: data?.taskCount ?? 0, subprojectCount: data?.subprojectCount ?? 0 })
       } else {
-        alert(data?.message || 'Failed to delete project.')
+        toast.error(data?.message || 'Failed to delete project')
       }
     }
   }
@@ -238,7 +271,7 @@ export default function ProjectsPage() {
 
       {showForm && (
         <form className="project-form" onSubmit={handleCreate} data-testid="project-form">
-          <input className="timer-input" type="text" placeholder="Project name" value={name}
+          <input className="timer-input" type="text" placeholder="Project name (required)" value={name}
             onChange={e => setName(e.target.value)} required disabled={loading}
             data-testid="project-name-input" />
           <input className="timer-input" type="text" placeholder="Description (optional)"
@@ -279,10 +312,11 @@ export default function ProjectsPage() {
       )}
 
       <div className="project-list" data-testid="project-list">
-        {projects.length === 0 && !showForm && (
-          <p className="empty-state">No projects yet. Create your first project above.</p>
-        )}
-        {projects.length > 0 && (
+        {fetching ? (
+          <ProjectsSkeleton />
+        ) : projects.length === 0 && !showForm ? (
+          <EmptyProjects />
+        ) : (
           <ProjectTree projects={projects}
             editingId={editingId} editName={editName} editDesc={editDesc}
             editBudget={editBudget} editError={editError} editLoading={editLoading}
