@@ -16,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.ArgumentCaptor;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.temporal.ChronoUnit;
@@ -174,7 +175,7 @@ class AnalyticsServiceTest {
         when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
                 .thenReturn(Collections.emptyList());
 
-        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 12);
+        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 12, LocalDate.now().getYear());
 
         assertThat(result.weeks()).isEqualTo(12);
         assertThat(result.byDayOfWeek()).hasSize(7);
@@ -186,7 +187,7 @@ class AnalyticsServiceTest {
         when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
                 .thenReturn(Collections.emptyList());
 
-        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 4);
+        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 4, LocalDate.now().getYear());
 
         assertThat(result.byDayOfWeek().get(0).day()).isEqualTo("MON");
         assertThat(result.byDayOfWeek().get(6).day()).isEqualTo("SUN");
@@ -208,7 +209,7 @@ class AnalyticsServiceTest {
         when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
                 .thenReturn(List.of(t));
 
-        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 1);
+        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 1, LocalDate.now().getYear());
 
         // 3600s total / 1 week = 3600 avg on that day of week
         double total = result.byDayOfWeek().stream().mapToDouble(e -> e.avgSeconds()).sum();
@@ -220,7 +221,7 @@ class AnalyticsServiceTest {
         when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
                 .thenReturn(List.of(runningTask()));
 
-        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 1);
+        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 1, LocalDate.now().getYear());
 
         assertThat(result.byDayOfWeek()).allMatch(e -> e.avgSeconds() == 0.0);
     }
@@ -230,7 +231,7 @@ class AnalyticsServiceTest {
         when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
                 .thenReturn(Collections.emptyList());
 
-        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 0);
+        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 0, LocalDate.now().getYear());
 
         assertThat(result.byDayOfWeek()).allMatch(e -> e.avgSeconds() == 0.0);
     }
@@ -239,7 +240,7 @@ class AnalyticsServiceTest {
     void getWeeklyPattern_userNotFound_throws() {
         when(userRepository.findByEmail("ghost@example.com")).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> analyticsService.getWeeklyPattern("ghost@example.com", 12))
+        assertThatThrownBy(() -> analyticsService.getWeeklyPattern("ghost@example.com", 12, LocalDate.now().getYear()))
                 .isInstanceOf(org.springframework.security.core.userdetails.UsernameNotFoundException.class);
     }
 
@@ -271,7 +272,7 @@ class AnalyticsServiceTest {
         when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
                 .thenReturn(Collections.emptyList());
 
-        analyticsService.getWeeklyPattern("alice@example.com", 4);
+        analyticsService.getWeeklyPattern("alice@example.com", 4, LocalDate.now().getYear());
 
         ArgumentCaptor<Instant> fromCaptor = ArgumentCaptor.forClass(Instant.class);
         ArgumentCaptor<Instant> toCaptor   = ArgumentCaptor.forClass(Instant.class);
@@ -293,20 +294,43 @@ class AnalyticsServiceTest {
         when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
                 .thenReturn(List.of(t));
 
-        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 1);
+        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 1, LocalDate.now().getYear());
 
         assertThat(result.byDayOfWeek()).allMatch(e -> e.avgSeconds() == 0.0);
     }
 
     @Test
     void getWeeklyPattern_averageDividedByWeekCount() {
-        // Kills L98: total*weeks mutation — 7200/2=3600 but 7200*2=14400
+        // Kills total*weeks mutation — 7200/2=3600 but 7200*2=14400
         Task t = task("2026-04-08T08:00:00Z", "2026-04-08T10:00:00Z"); // 7200s on Wednesday
         when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
                 .thenReturn(List.of(t));
 
-        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 2);
+        WeeklyPatternResponse result = analyticsService.getWeeklyPattern("alice@example.com", 2, LocalDate.now().getYear());
 
         assertThat(result.byDayOfWeek().get(2).avgSeconds()).isEqualTo(3600.0); // index 2 = WED
+    }
+
+    @Test
+    void getWeeklyPattern_pastYear_usesYearEndAsUpperBound() {
+        // For a past year the 'to' instant must be Jan 1 of year+1 (not Instant.now()).
+        // Kills the year >= currentYear branch inversion.
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        analyticsService.getWeeklyPattern("alice@example.com", 4, 2020);
+
+        ArgumentCaptor<Instant> fromCaptor = ArgumentCaptor.forClass(Instant.class);
+        ArgumentCaptor<Instant> toCaptor   = ArgumentCaptor.forClass(Instant.class);
+        verify(taskRepository).findByUserAndStartTimeBetweenOrderByStartTimeAsc(
+                eq(user), fromCaptor.capture(), toCaptor.capture());
+
+        ZoneId utc = ZoneId.of("UTC");
+        // 'to' must be the first instant of 2021 (= end of 2020)
+        assertThat(toCaptor.getValue())
+                .isEqualTo(ZonedDateTime.of(2021, 1, 1, 0, 0, 0, 0, utc).toInstant());
+        // 'from' must be exactly 4*7 = 28 days before 'to'
+        assertThat(fromCaptor.getValue())
+                .isEqualTo(toCaptor.getValue().minus(28, ChronoUnit.DAYS));
     }
 }

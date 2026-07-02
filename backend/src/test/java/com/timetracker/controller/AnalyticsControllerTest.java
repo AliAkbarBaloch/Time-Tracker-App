@@ -200,4 +200,18 @@ class AnalyticsControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.byDayOfWeek[*].avgSeconds", everyItem(is(0.0))));
     }
+
+    @Test
+    void weeklyPattern_pastYear_excludesCurrentYearTask() throws Exception {
+        // Task added right now (current year) must NOT appear when querying a past year
+        Instant start = Instant.now().minusSeconds(3600);
+        Instant end   = Instant.now().minusSeconds(60);
+        addTask(jwt, start, end);
+
+        int pastYear = LocalDate.now().getYear() - 1;
+        mockMvc.perform(get("/api/analytics/weekly-pattern?weeks=12&year=" + pastYear)
+                .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.byDayOfWeek[*].avgSeconds", everyItem(is(0.0))));
+    }
 }
