@@ -66,18 +66,21 @@ public class AnalyticsService {
 
     /**
      * Returns average tracked seconds per day of week (MON–SUN) over the last N weeks
-     * of the given year. For the current year the window ends at now; for past years it
-     * ends at the last instant of that year (00:00 Jan 1 of year+1 in the user's zone).
+     * of the given year. The window ends at min(now, end-of-year) so current year ends
+     * today, past years end at Dec 31, and future years produce an empty range (from > to)
+     * which returns all-zero results naturally.
      */
     public WeeklyPatternResponse getWeeklyPattern(String userEmail, int weeks, int year) {
         User user = loadUser(userEmail);
         ZoneId zone = ZoneId.of(user.getTimezone());
 
-        int currentYear = ZonedDateTime.now(zone).getYear();
-        Instant to = year >= currentYear
-                ? Instant.now()
-                : ZonedDateTime.of(year + 1, 1, 1, 0, 0, 0, 0, zone).toInstant();
-        Instant from = to.minus((long) weeks * 7, ChronoUnit.DAYS);
+        Instant now       = Instant.now();
+        Instant yearStart = ZonedDateTime.of(year, 1, 1, 0, 0, 0, 0, zone).toInstant();
+        Instant yearEnd   = ZonedDateTime.of(year + 1, 1, 1, 0, 0, 0, 0, zone).toInstant();
+        Instant to        = now.isBefore(yearEnd) ? now : yearEnd;
+        Instant from      = yearStart.isAfter(to)
+                ? yearStart
+                : to.minus((long) weeks * 7, ChronoUnit.DAYS);
 
         List<Task> tasks = taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(user, from, to);
 
