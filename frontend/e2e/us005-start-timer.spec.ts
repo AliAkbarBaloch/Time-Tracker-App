@@ -15,6 +15,8 @@ test.describe('US-005 — Start a Time Tracking Task', () => {
     if (await page.getByTestId('stop-btn').isVisible().catch(() => false)) {
       await page.getByTestId('stop-btn').click();
       await expect(page.getByTestId('stop-btn')).not.toBeVisible({ timeout: 5_000 });
+      // Wait for the post-stop re-render to settle before the test proceeds
+      await page.waitForTimeout(400);
     }
   });
 

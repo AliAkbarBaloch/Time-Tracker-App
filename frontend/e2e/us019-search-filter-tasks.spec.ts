@@ -69,11 +69,18 @@ test.describe('US-019 — Search and Filter Tasks', () => {
     const allCount = await rows.count();
     expect(allCount).toBeGreaterThanOrEqual(2);
 
-    // Now add a from-date of today — should shrink to only today's task
+    // Now add a from-date of today — should shrink to only today's task.
+    // Use the native value setter so React's onChange fires reliably on type="date" inputs.
     const todayStr = new Date().toISOString().slice(0, 10);
-    await page.getByTestId('filter-from').fill(todayStr);
-    // Longer wait for combined filter debounce to fire and API to respond
-    await page.waitForTimeout(800);
+    await page.getByTestId('filter-from').evaluate((el: HTMLInputElement, val: string) => {
+      (Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value')!.set as (v: string) => void).call(el, val);
+      el.dispatchEvent(new Event('input', { bubbles: true }));
+      el.dispatchEvent(new Event('change', { bubbles: true }));
+    }, todayStr);
+    await page.waitForResponse(
+      r => r.url().includes('/api/tasks') && r.status() === 200,
+      { timeout: 5_000 },
+    );
 
     const narrowedCount = await rows.count();
     expect(narrowedCount).toBeLessThan(allCount);
@@ -81,7 +88,18 @@ test.describe('US-019 — Search and Filter Tasks', () => {
 
   // AC4: reset button restores the unfiltered task list
   test('reset button restores the full task list', async ({ page }) => {
-    await setupAuth(page, USER);
+    const token = await setupAuth(page, USER);
+
+    // Create a task explicitly so this test does not rely on previous tests' tasks
+    const ctx = await request.newContext({
+      baseURL: process.env.API_BASE ?? 'http://localhost:8080',
+      extraHTTPHeaders: { Authorization: `Bearer ${token}` },
+    });
+    await ctx.post('/api/tasks', {
+      data: { description: 'Reset test task', startTime: isoAgo(3600000), endTime: isoAgo(1800000) },
+    });
+    await ctx.dispose();
+
     await page.goto('/tasks');
 
     await page.getByTestId('filter-search-input').fill('nonexistentxyz');
@@ -89,13 +107,19 @@ test.describe('US-019 — Search and Filter Tasks', () => {
 
     // Possibly no results shown; wait for reset button to be present and click it
     await expect(page.getByTestId('filter-reset-btn')).toBeVisible({ timeout: 8_000 });
+
+    // Wait for the reset-triggered re-fetch to complete before asserting the list
+    const refetch = page.waitForResponse(
+      r => r.url().includes('/api/tasks') && r.status() === 200,
+      { timeout: 5_000 },
+    );
     await page.getByTestId('filter-reset-btn').click();
-    await page.waitForTimeout(500);
+    await refetch.catch(() => {});
 
     // Search input should be cleared
     await expect(page.getByTestId('filter-search-input')).toHaveValue('');
 
-    // Task list should now be showing items again (we created tasks above)
+    // Task list should now be showing items again
     const rows = page.locator('[data-testid^="task-item-"]');
     await expect(rows.first()).toBeVisible({ timeout: 10_000 });
   });
