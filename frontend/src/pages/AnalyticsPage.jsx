@@ -64,21 +64,23 @@ export default function AnalyticsPage() {
       .finally(() => setLoading(false))
   }, [])
 
-  const fetchPattern = useCallback(() => {
-    getWeeklyPattern(12)
+  const fetchPattern = useCallback((y) => {
+    getWeeklyPattern(12, y)
       .then(res => setPatternData(res.data))
       .catch(() => {})
   }, [])
 
   useEffect(() => {
     fetchHeatmap(year)
-    fetchPattern()
+    fetchPattern(year)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleYearChange = (e) => {
     const y = parseInt(e.target.value, 10)
+    if (isNaN(y)) return
     setYear(y)
     fetchHeatmap(y)
+    fetchPattern(y)
   }
 
   // Build heatmap cells
@@ -182,7 +184,7 @@ export default function AnalyticsPage() {
 
       {/* ── Day-of-Week Pattern ──────────────────────────────────────────────── */}
       <section className="analytics-section">
-        <h3 className="section-title">Average Hours by Day of Week <span style={{ fontWeight: 'normal', fontSize: '0.85em', color: '#666' }}>(avg per weekday, last 12 weeks)</span></h3>
+        <h3 className="section-title">Average Hours by Day of Week <span style={{ fontWeight: 'normal', fontSize: '0.85em', color: '#666' }}>(avg per weekday, last 12 weeks of {year})</span></h3>
         <div className="week-pattern-chart" data-testid="week-pattern-chart">
           {pattern.map(({ day, avgSeconds }) => {
             const pct = maxAvg > 0 ? (avgSeconds / maxAvg) * 100 : 0

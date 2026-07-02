@@ -65,14 +65,18 @@ public class AnalyticsService {
     }
 
     /**
-     * Returns average tracked seconds per day of week (MON–SUN) over the last N weeks.
-     * Day-of-week grouping uses the user's preferred timezone.
+     * Returns average tracked seconds per day of week (MON–SUN) over the last N weeks
+     * of the given year. For the current year the window ends at now; for past years it
+     * ends at the last instant of that year (00:00 Jan 1 of year+1 in the user's zone).
      */
-    public WeeklyPatternResponse getWeeklyPattern(String userEmail, int weeks) {
+    public WeeklyPatternResponse getWeeklyPattern(String userEmail, int weeks, int year) {
         User user = loadUser(userEmail);
         ZoneId zone = ZoneId.of(user.getTimezone());
 
-        Instant to   = Instant.now();
+        int currentYear = ZonedDateTime.now(zone).getYear();
+        Instant to = year >= currentYear
+                ? Instant.now()
+                : ZonedDateTime.of(year + 1, 1, 1, 0, 0, 0, 0, zone).toInstant();
         Instant from = to.minus((long) weeks * 7, ChronoUnit.DAYS);
 
         List<Task> tasks = taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(user, from, to);

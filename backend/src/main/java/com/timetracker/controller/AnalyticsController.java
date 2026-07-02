@@ -31,7 +31,9 @@ public class AnalyticsController {
 
     @GetMapping("/weekly-pattern")
     public WeeklyPatternResponse getWeeklyPattern(@AuthenticationPrincipal UserDetails principal,
-                                                  @RequestParam(defaultValue = "12") int weeks) {
-        return analyticsService.getWeeklyPattern(principal.getUsername(), weeks);
+                                                  @RequestParam(defaultValue = "12") int weeks,
+                                                  @RequestParam(required = false) Integer year) {
+        int y = year != null ? year : LocalDate.now().getYear();
+        return analyticsService.getWeeklyPattern(principal.getUsername(), weeks, y);
     }
 }
