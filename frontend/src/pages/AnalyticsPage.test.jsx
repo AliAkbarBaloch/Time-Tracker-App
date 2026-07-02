@@ -91,6 +91,25 @@ describe('AnalyticsPage — US-028', () => {
     })
   })
 
+  it('re-fetches weekly pattern with the selected year when year changes', async () => {
+    setup()
+    await waitFor(() => screen.getByTestId('year-select'))
+
+    analyticsApi.getWeeklyPattern.mockResolvedValue(makePattern(1800))
+    fireEvent.change(screen.getByTestId('year-select'), { target: { value: '2024' } })
+
+    await waitFor(() => {
+      expect(analyticsApi.getWeeklyPattern).toHaveBeenCalledWith(12, 2024)
+    })
+  })
+
+  it('subtitle shows the selected year in the weekly pattern section', async () => {
+    setup()
+    await waitFor(() => screen.getByTestId('analytics-page'))
+    const currentYear = new Date().getFullYear()
+    expect(screen.getByText(new RegExp(`last 12 weeks of ${currentYear}`))).toBeInTheDocument()
+  })
+
   it('renders the weekly pattern chart', async () => {
     setup()
     await waitFor(() => {
