@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, fireEvent } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { AuthProvider } from '../context/AuthContext'
 import { TimerProvider } from '../context/TimerContext'
@@ -13,6 +13,16 @@ const mockNavigate = vi.fn()
 vi.mock('react-router-dom', async () => {
   const actual = await vi.importActual('react-router-dom')
   return { ...actual, useNavigate: () => mockNavigate }
+})
+
+// matchMedia is not implemented in jsdom — provide a safe stub
+Object.defineProperty(window, 'matchMedia', {
+  writable: true,
+  value: vi.fn(() => ({
+    matches: false,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  })),
 })
 
 function makeActiveTask(overrides = {}) {
@@ -192,5 +202,141 @@ describe('Layout — topbar timer (US-018)', () => {
     expect(screen.getByText('Tasks')).toBeInTheDocument()
     expect(screen.getByText('Projects')).toBeInTheDocument()
     expect(screen.getByText('Overview')).toBeInTheDocument()
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Theme toggle
+// ─────────────────────────────────────────────────────────────────────────────
+describe('Layout — theme toggle', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    document.documentElement.removeAttribute('data-theme')
+  })
+
+  it('renders Light, Dark and Auto theme buttons', () => {
+    taskApi.getActiveTask.mockResolvedValue({ status: 204, data: null })
+    render(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <AuthProvider>
+            <TimerProvider>
+              <Layout />
+            </TimerProvider>
+          </AuthProvider>
+        </MemoryRouter>
+      </ThemeProvider>
+    )
+    expect(screen.getByTitle('Light mode')).toBeInTheDocument()
+    expect(screen.getByTitle('Dark mode')).toBeInTheDocument()
+    expect(screen.getByTitle('Follow system preference')).toBeInTheDocument()
+  })
+
+  it('clicking Dark sets data-theme="dark" on <html>', () => {
+    taskApi.getActiveTask.mockResolvedValue({ status: 204, data: null })
+    render(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <AuthProvider>
+            <TimerProvider>
+              <Layout />
+            </TimerProvider>
+          </AuthProvider>
+        </MemoryRouter>
+      </ThemeProvider>
+    )
+    fireEvent.click(screen.getByTitle('Dark mode'))
+    expect(document.documentElement.getAttribute('data-theme')).toBe('dark')
+  })
+
+  it('clicking Light sets data-theme="light" on <html>', () => {
+    taskApi.getActiveTask.mockResolvedValue({ status: 204, data: null })
+    localStorage.setItem('tt_theme', 'dark')
+    render(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <AuthProvider>
+            <TimerProvider>
+              <Layout />
+            </TimerProvider>
+          </AuthProvider>
+        </MemoryRouter>
+      </ThemeProvider>
+    )
+    fireEvent.click(screen.getByTitle('Light mode'))
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+  })
+
+  it('clicking Auto (system) sets data-theme based on OS preference', () => {
+    taskApi.getActiveTask.mockResolvedValue({ status: 204, data: null })
+    render(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <AuthProvider>
+            <TimerProvider>
+              <Layout />
+            </TimerProvider>
+          </AuthProvider>
+        </MemoryRouter>
+      </ThemeProvider>
+    )
+    fireEvent.click(screen.getByTitle('Follow system preference'))
+    // matchMedia stub returns matches:false → light
+    expect(document.documentElement.getAttribute('data-theme')).toBe('light')
+  })
+})
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Mobile hamburger & overlay
+// ─────────────────────────────────────────────────────────────────────────────
+describe('Layout — mobile hamburger', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+  })
+
+  function setupMobile() {
+    return render(
+      <ThemeProvider>
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <AuthProvider>
+            <TimerProvider>
+              <Layout />
+            </TimerProvider>
+          </AuthProvider>
+        </MemoryRouter>
+      </ThemeProvider>
+    )
+  }
+
+  it('sidebar starts without "open" class', () => {
+    taskApi.getActiveTask.mockResolvedValue({ status: 204, data: null })
+    setupMobile()
+    expect(document.querySelector('.sidebar')).not.toHaveClass('open')
+  })
+
+  it('clicking hamburger adds "open" class to sidebar', () => {
+    taskApi.getActiveTask.mockResolvedValue({ status: 204, data: null })
+    setupMobile()
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }))
+    expect(document.querySelector('.sidebar')).toHaveClass('open')
+  })
+
+  it('clicking hamburger again removes "open" class (toggle)', () => {
+    taskApi.getActiveTask.mockResolvedValue({ status: 204, data: null })
+    setupMobile()
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }))
+    fireEvent.click(screen.getByRole('button', { name: /close menu/i }))
+    expect(document.querySelector('.sidebar')).not.toHaveClass('open')
+  })
+
+  it('clicking the sidebar overlay closes the sidebar', () => {
+    taskApi.getActiveTask.mockResolvedValue({ status: 204, data: null })
+    setupMobile()
+    fireEvent.click(screen.getByRole('button', { name: /open menu/i }))
+    expect(document.querySelector('.sidebar')).toHaveClass('open')
+    fireEvent.click(document.querySelector('.sidebar-overlay'))
+    expect(document.querySelector('.sidebar')).not.toHaveClass('open')
   })
 })

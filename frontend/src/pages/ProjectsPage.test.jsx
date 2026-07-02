@@ -362,6 +362,21 @@ describe('ProjectsPage', () => {
     expect(screen.queryByTestId('shared-badge-6')).not.toBeInTheDocument()
   })
 
+  it('shows loading skeleton while data is fetching', () => {
+    projectApi.listProjects.mockReturnValue(new Promise(() => {}))
+    const { container } = setup()
+    expect(container.querySelector('.skeleton-projects')).not.toBeNull()
+  })
+
+  it('typing in description field updates form state', async () => {
+    projectApi.listProjects.mockResolvedValueOnce({ data: [] })
+    setup()
+    await waitFor(() => screen.getByTestId('new-project-btn'))
+    fireEvent.click(screen.getByTestId('new-project-btn'))
+    fireEvent.change(screen.getByTestId('project-desc-input'), { target: { value: 'A short description' } })
+    expect(screen.getByTestId('project-desc-input')).toHaveValue('A short description')
+  })
+
 })
 
 // ── US-026: Budget progress bar (separate describe to get clean mock state) ──
