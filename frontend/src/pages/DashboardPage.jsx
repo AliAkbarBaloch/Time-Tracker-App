@@ -25,7 +25,7 @@ function flattenProjects(projects, depth = 0) {
 }
 
 export default function DashboardPage() {
-  const { activeTask, elapsed, startTask, stopTask } = useTimer()
+  const { activeTask, elapsed, startTask, stopTask, refreshActiveTask } = useTimer()
   const [taskDesc, setTaskDesc] = useState('')
   const [error, setError]       = useState('')
   const [loading, setLoading]   = useState(false)
@@ -165,6 +165,7 @@ export default function DashboardPage() {
     setError('')
     try {
       await templateApi.startTemplate(id)
+      await refreshActiveTask()
       fetchSummary()
     } catch (err) {
       setError(err.response?.data?.message || 'Failed to start template')
@@ -308,11 +309,20 @@ export default function DashboardPage() {
                         {t.name}
                       </span>
                       <div className="task-actions">
-                        <button className="btn btn-primary btn-xs"
-                          onClick={() => handleStartTemplate(t.id)}
-                          data-testid={`template-start-btn-${t.id}`}>
-                          ▶ Start
-                        </button>
+                        {activeTask && activeTask.description === (t.description || t.name) ? (
+                          <button className="btn btn-success btn-xs"
+                            data-testid={`template-running-indicator-${t.id}`}
+                            disabled>
+                            ● Running
+                          </button>
+                        ) : (
+                          <button className="btn btn-primary btn-xs"
+                            onClick={() => handleStartTemplate(t.id)}
+                            disabled={!!activeTask}
+                            data-testid={`template-start-btn-${t.id}`}>
+                            ▶ Start
+                          </button>
+                        )}
                         <button className="btn btn-ghost btn-xs"
                           onClick={() => startEditTemplate(t)}
                           data-testid={`template-edit-btn-${t.id}`}>

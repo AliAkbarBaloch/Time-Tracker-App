@@ -106,7 +106,7 @@ test.describe('US-028 — Productivity Analytics', () => {
     await expect(page.getByTestId('heatmap-grid')).toBeVisible({ timeout: 8_000 });
 
     const prevYear = String(new Date().getFullYear() - 1);
-    await page.getByTestId('year-select').selectOption(prevYear);
+    await page.getByTestId('year-select').fill(prevYear);
 
     // Still on /analytics (no navigation)
     expect(page.url()).toContain('/analytics');

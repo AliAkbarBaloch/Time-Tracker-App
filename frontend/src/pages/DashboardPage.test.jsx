@@ -325,6 +325,48 @@ describe('DashboardPage — Task Templates (US-027)', () => {
     await waitFor(() => expect(dashboardApi.getDashboardSummary).toHaveBeenCalledTimes(2))
   })
 
+  it('refreshes topbar immediately after starting template without page reload', async () => {
+    const startedTask = { id: 10, description: 'Code Review', startTime: new Date().toISOString(), endTime: null, running: true, projects: [] }
+    templateApi.listTemplates.mockResolvedValue({
+      data: [{ id: 2, name: 'Code Review', description: null, projects: [], createdAt: new Date().toISOString() }]
+    })
+    templateApi.startTemplate.mockResolvedValueOnce({ data: startedTask })
+    taskApi.getActiveTask
+      .mockResolvedValueOnce({ status: 204, data: null })
+      .mockResolvedValueOnce({ status: 200, data: startedTask })
+
+    setup()
+    await waitFor(() => screen.getByTestId('template-start-btn-2'))
+    fireEvent.click(screen.getByTestId('template-start-btn-2'))
+
+    await waitFor(() => screen.getByTestId('template-running-indicator-2'))
+    expect(screen.queryByTestId('template-start-btn-2')).not.toBeInTheDocument()
+  })
+
+  it('shows running indicator on template card when active task description matches template name', async () => {
+    const activeTask = { id: 5, description: 'Stand-Up', startTime: new Date().toISOString(), endTime: null, running: true, projects: [] }
+    taskApi.getActiveTask.mockResolvedValueOnce({ status: 200, data: activeTask })
+    templateApi.listTemplates.mockResolvedValue({
+      data: [{ id: 3, name: 'Stand-Up', description: null, projects: [], createdAt: new Date().toISOString() }]
+    })
+
+    setup()
+    await waitFor(() => screen.getByTestId('template-running-indicator-3'))
+    expect(screen.queryByTestId('template-start-btn-3')).not.toBeInTheDocument()
+  })
+
+  it('disables Start button on template cards when a different timer is already running', async () => {
+    const activeTask = { id: 6, description: 'Different task', startTime: new Date().toISOString(), endTime: null, running: true, projects: [] }
+    taskApi.getActiveTask.mockResolvedValueOnce({ status: 200, data: activeTask })
+    templateApi.listTemplates.mockResolvedValue({
+      data: [{ id: 4, name: 'Stand-Up', description: null, projects: [], createdAt: new Date().toISOString() }]
+    })
+
+    setup()
+    await waitFor(() => screen.getByTestId('template-start-btn-4'))
+    expect(screen.getByTestId('template-start-btn-4')).toBeDisabled()
+  })
+
   it('New Template button toggles create form', async () => {
     templateApi.listTemplates.mockResolvedValue({ data: [] })
     setup()

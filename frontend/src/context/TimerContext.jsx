@@ -43,8 +43,18 @@ export function TimerProvider({ children }) {
     return data
   }, [])
 
+  const refreshActiveTask = useCallback(async () => {
+    try {
+      const res = await taskApi.getActiveTask()
+      if (res?.status === 200) setActiveTask(res.data)
+      else setActiveTask(null)
+    } catch {
+      // ignore
+    }
+  }, [])
+
   return (
-    <TimerContext.Provider value={{ activeTask, elapsed, startTask, stopTask }}>
+    <TimerContext.Provider value={{ activeTask, elapsed, startTask, stopTask, refreshActiveTask }}>
       {children}
     </TimerContext.Provider>
   )
