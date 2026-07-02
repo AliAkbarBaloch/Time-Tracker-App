@@ -75,7 +75,7 @@ export default function TasksPage() {
   // filter state — seed from URL params so ?search=X&from=Y works on navigation
   const [searchKw, setSearchKw]             = useState(searchParams.get('search') ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') ?? '')
-  const [filterProjectId, setFilterProjectId] = useState('')
+  const [filterProjectId, setFilterProjectId] = useState(searchParams.get('projectId') ?? '')
   const [filterFrom, setFilterFrom]         = useState(searchParams.get('from') ?? '')
   const [filterTo, setFilterTo]             = useState(searchParams.get('to') ?? '')
 
@@ -83,7 +83,10 @@ export default function TasksPage() {
   const [description, setDescription]       = useState('')
   const [startTime, setStartTime]           = useState('')
   const [endTime, setEndTime]               = useState('')
-  const [createProjectIds, setCreateProjectIds] = useState([])
+  const initProjectId = searchParams.get('projectId')
+  const [createProjectIds, setCreateProjectIds] = useState(
+    initProjectId ? [parseInt(initProjectId, 10)] : []
+  )
   const [loading, setLoading]               = useState(false)
   const [error, setError]                   = useState('')
 
@@ -120,6 +123,15 @@ export default function TasksPage() {
 
   useEffect(() => { fetchTasks() }, [fetchTasks])
   useEffect(() => { fetchProjects() }, [fetchProjects])
+
+  // Auto-open add-task form when navigated from a project page (?addTask=true)
+  useEffect(() => {
+    if (searchParams.get('addTask') === 'true') {
+      setShowForm(true)
+      setStartTime(nowInTz(tz))
+      setEndTime(nowInTz(tz))
+    }
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const toggleCreateProject = (id) => {
     setCreateProjectIds(ids => ids.includes(id) ? ids.filter(i => i !== id) : [...ids, id])
