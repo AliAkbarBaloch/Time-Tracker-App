@@ -87,7 +87,7 @@ class TaskControllerSearchFilterTest {
 
         mockMvc.perform(get("/api/tasks").header("Authorization", "Bearer " + jwt))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)));
+                .andExpect(jsonPath("$.content", hasSize(2)));
     }
 
     // ── Keyword search ────────────────────────────────────────
@@ -101,8 +101,8 @@ class TaskControllerSearchFilterTest {
         mockMvc.perform(get("/api/tasks").header("Authorization", "Bearer " + jwt)
                 .param("search", "research"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].description", is("Read research paper")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].description", is("Read research paper")));
     }
 
     @Test
@@ -113,7 +113,7 @@ class TaskControllerSearchFilterTest {
         mockMvc.perform(get("/api/tasks").header("Authorization", "Bearer " + jwt)
                 .param("search", "research"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)));
+                .andExpect(jsonPath("$.content", hasSize(1)));
     }
 
     @Test
@@ -124,7 +124,7 @@ class TaskControllerSearchFilterTest {
         mockMvc.perform(get("/api/tasks").header("Authorization", "Bearer " + jwt)
                 .param("search", "nonexistent"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
+                .andExpect(jsonPath("$.content", hasSize(0)));
     }
 
     // ── Project filter ────────────────────────────────────────
@@ -138,8 +138,8 @@ class TaskControllerSearchFilterTest {
         mockMvc.perform(get("/api/tasks").header("Authorization", "Bearer " + jwt)
                 .param("projectId", projectId.toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].description", is("Thesis task")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].description", is("Thesis task")));
     }
 
     @Test
@@ -159,8 +159,8 @@ class TaskControllerSearchFilterTest {
         mockMvc.perform(get("/api/tasks").header("Authorization", "Bearer " + jwt)
                 .param("projectId", projectId.toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].description", is("Subproject task")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].description", is("Subproject task")));
     }
 
     @Test
@@ -183,8 +183,8 @@ class TaskControllerSearchFilterTest {
                 .param("search", "reading")
                 .param("projectId", projectId.toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].description", is("Thesis reading")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].description", is("Thesis reading")));
     }
 
     @Test
@@ -199,8 +199,8 @@ class TaskControllerSearchFilterTest {
                 .param("from", "2026-06-01T00:00:00Z")
                 .param("to",   "2026-07-01T00:00:00Z"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].description", is("June study")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].description", is("June study")));
     }
 
     @Test
@@ -213,8 +213,8 @@ class TaskControllerSearchFilterTest {
         mockMvc.perform(get("/api/tasks").header("Authorization", "Bearer " + jwt)
                 .param("from", "2026-06-01T00:00:00Z"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].description", is("Today task")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].description", is("Today task")));
     }
 
     @Test
@@ -227,8 +227,8 @@ class TaskControllerSearchFilterTest {
         mockMvc.perform(get("/api/tasks").header("Authorization", "Bearer " + jwt)
                 .param("to", "2026-07-01T00:00:00Z"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].description", is("Old task")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].description", is("Old task")));
     }
 
     @Test
@@ -244,8 +244,8 @@ class TaskControllerSearchFilterTest {
                 .param("search", "GAMMA")
                 .param("from", "2026-06-01T00:00:00Z"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].description", is("GAMMA today")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].description", is("GAMMA today")));
     }
 
     // ── Auth ──────────────────────────────────────────────────

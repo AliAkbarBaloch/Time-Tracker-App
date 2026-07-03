@@ -19,6 +19,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.Instant;
 
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -115,6 +116,6 @@ class TaskControllerDeleteTest {
         mockMvc.perform(get("/api/tasks")
                 .header("Authorization", "Bearer " + jwt))
                 .andExpect(status().isOk())
-                .andExpect(content().json("[]"));
+                .andExpect(jsonPath("$.content", hasSize(0)));
     }
 }

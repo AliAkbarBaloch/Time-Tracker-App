@@ -63,10 +63,11 @@ test.describe('US-025 — Time Zones', () => {
 
     // Fetch tasks and confirm startTime unchanged
     const listResp = await ctx.get('/api/tasks');
-    const tasks = await listResp.json();
-    const found = tasks.find((t: { id: number }) => t.id === task.id);
+    const body = await listResp.json();
+    const taskList: Array<{ id: number; startTime: string }> = body.content ?? body;
+    const found = taskList.find(t => t.id === task.id);
     expect(found).toBeDefined();
-    expect(found.startTime).toBe(originalStart);
+    expect(found!.startTime).toBe(originalStart);
 
     // Reset
     await ctx.put('/api/users/profile', { data: { timezone: 'UTC' } });

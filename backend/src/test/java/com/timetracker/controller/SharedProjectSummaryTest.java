@@ -292,8 +292,8 @@ class SharedProjectSummaryTest {
                 .param("userId",    bobId.toString())
                 .header("Authorization", "Bearer " + aliceJwt))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].description", is("Bob task")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].description", is("Bob task")));
     }
 
     /**

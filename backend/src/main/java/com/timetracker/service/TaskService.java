@@ -1,6 +1,7 @@
 package com.timetracker.service;
 
 import com.timetracker.dto.task.CreateTaskRequest;
+import com.timetracker.dto.task.PageResponse;
 import com.timetracker.dto.task.StartTaskRequest;
 import com.timetracker.dto.task.TaskResponse;
 import com.timetracker.dto.task.UpdateTaskRequest;
@@ -230,6 +231,19 @@ public class TaskService {
         }
 
         return tasks.stream().map(TaskResponse::from).toList();
+    }
+
+    public PageResponse<TaskResponse> listTasksPaged(String userEmail, Instant from, Instant to,
+                                                      String search, Long projectId, Long userId,
+                                                      int page, int size) {
+        List<TaskResponse> all = listTasks(userEmail, from, to, search, projectId, userId);
+        int clampedSize = Math.max(1, Math.min(size, 100));
+        int totalElements = all.size();
+        int totalPages = totalElements == 0 ? 1 : (int) Math.ceil((double) totalElements / clampedSize);
+        int clampedPage = Math.max(0, Math.min(page, totalPages - 1));
+        int fromIdx = clampedPage * clampedSize;
+        int toIdx = Math.min(fromIdx + clampedSize, totalElements);
+        return new PageResponse<>(all.subList(fromIdx, toIdx), totalElements, totalPages, clampedPage, clampedSize);
     }
 
     private Set<Long> collectSubtreeProjectIds(Project project) {

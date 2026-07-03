@@ -186,8 +186,8 @@ class TaskControllerAssociateProjectsTest {
         mockMvc.perform(get("/api/tasks")
                 .header("Authorization", "Bearer " + jwt))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].projects", hasSize(1)))
-                .andExpect(jsonPath("$[0].projects[0].name", is("Thesis")));
+                .andExpect(jsonPath("$.content[0].projects", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].projects[0].name", is("Thesis")));
     }
 
     @Test

@@ -25,6 +25,10 @@ const PROJECT_WITH_CHILD = [
   }
 ]
 
+function pageOf(tasks) {
+  return { data: { content: tasks, totalElements: tasks.length, totalPages: 1, currentPage: 0, pageSize: 20 } }
+}
+
 function setup() {
   return render(
     <MemoryRouter>
@@ -46,7 +50,7 @@ describe('TasksPage', () => {
   })
 
   it('shows empty state when no tasks', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({ data: [] })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([]))
     setup()
     await waitFor(() =>
       expect(screen.getByText(/No tasks yet/i)).toBeInTheDocument()
@@ -54,12 +58,10 @@ describe('TasksPage', () => {
   })
 
   it('renders tasks loaded from API', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({
-      data: [
-        { id: 1, description: 'Meeting', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] },
-        { id: 2, description: null,      startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
-      ]
-    })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([
+      { id: 1, description: 'Meeting', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] },
+      { id: 2, description: null,      startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
+    ]))
     setup()
     await waitFor(() => {
       expect(screen.getByText('Meeting')).toBeInTheDocument()
@@ -68,7 +70,7 @@ describe('TasksPage', () => {
   })
 
   it('shows add-task form when button clicked', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({ data: [] })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([]))
     setup()
     await waitFor(() => screen.getByTestId('add-task-btn'))
     fireEvent.click(screen.getByTestId('add-task-btn'))
@@ -76,7 +78,7 @@ describe('TasksPage', () => {
   })
 
   it('shows client error when start >= end', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({ data: [] })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([]))
     setup()
     await waitFor(() => screen.getByTestId('add-task-btn'))
     fireEvent.click(screen.getByTestId('add-task-btn'))
@@ -97,8 +99,8 @@ describe('TasksPage', () => {
 
   it('calls createTask API and refreshes list on valid submit', async () => {
     taskApi.listTasks
-      .mockResolvedValueOnce({ data: [] })
-      .mockResolvedValueOnce({ data: [{ id: 3, description: 'Study', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }] })
+      .mockResolvedValueOnce(pageOf([]))
+      .mockResolvedValueOnce(pageOf([{ id: 3, description: 'Study', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]))
     taskApi.createTask.mockResolvedValueOnce({ data: { id: 3 } })
 
     setup()
@@ -118,7 +120,7 @@ describe('TasksPage', () => {
   })
 
   it('shows API error on failed create', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({ data: [] })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([]))
     taskApi.createTask.mockRejectedValueOnce({
       response: { data: { message: 'Start time must be before end time.' } }
     })
@@ -140,9 +142,9 @@ describe('TasksPage', () => {
   })
 
   it('clicking Edit button shows pre-populated edit form', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({
-      data: [{ id: 5, description: 'Old desc', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
-    })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([
+      { id: 5, description: 'Old desc', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
+    ]))
     setup()
     await waitFor(() => screen.getByTestId('edit-btn-5'))
     fireEvent.click(screen.getByTestId('edit-btn-5'))
@@ -152,9 +154,9 @@ describe('TasksPage', () => {
   })
 
   it('cancel edit button hides edit form', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({
-      data: [{ id: 6, description: 'Task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
-    })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([
+      { id: 6, description: 'Task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
+    ]))
     setup()
     await waitFor(() => screen.getByTestId('edit-btn-6'))
     fireEvent.click(screen.getByTestId('edit-btn-6'))
@@ -165,9 +167,9 @@ describe('TasksPage', () => {
   })
 
   it('shows client error when edit start >= end', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({
-      data: [{ id: 7, description: 'T', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
-    })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([
+      { id: 7, description: 'T', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
+    ]))
     setup()
     await waitFor(() => screen.getByTestId('edit-btn-7'))
     fireEvent.click(screen.getByTestId('edit-btn-7'))
@@ -188,12 +190,12 @@ describe('TasksPage', () => {
 
   it('calls updateTask API and refreshes list on valid edit', async () => {
     taskApi.listTasks
-      .mockResolvedValueOnce({
-        data: [{ id: 8, description: 'Original', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
-      })
-      .mockResolvedValueOnce({
-        data: [{ id: 8, description: 'Updated', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
-      })
+      .mockResolvedValueOnce(pageOf([
+        { id: 8, description: 'Original', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
+      ]))
+      .mockResolvedValueOnce(pageOf([
+        { id: 8, description: 'Updated', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
+      ]))
     taskApi.updateTask.mockResolvedValueOnce({ data: { id: 8 } })
 
     setup()
@@ -208,9 +210,9 @@ describe('TasksPage', () => {
   })
 
   it('shows API error on failed update', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({
-      data: [{ id: 9, description: 'Task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
-    })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([
+      { id: 9, description: 'Task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
+    ]))
     taskApi.updateTask.mockRejectedValueOnce({
       response: { data: { message: 'Task not found.' } }
     })
@@ -226,9 +228,9 @@ describe('TasksPage', () => {
   })
 
   it('canceling delete confirmation leaves task intact', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({
-      data: [{ id: 10, description: 'Keep me', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
-    })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([
+      { id: 10, description: 'Keep me', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
+    ]))
     window.confirm = vi.fn().mockReturnValue(false)
 
     setup()
@@ -241,10 +243,10 @@ describe('TasksPage', () => {
 
   it('confirming delete calls deleteTask API and removes task from list', async () => {
     taskApi.listTasks
-      .mockResolvedValueOnce({
-        data: [{ id: 11, description: 'Delete me', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
-      })
-      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce(pageOf([
+        { id: 11, description: 'Delete me', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
+      ]))
+      .mockResolvedValueOnce(pageOf([]))
     taskApi.deleteTask.mockResolvedValueOnce({})
     window.confirm = vi.fn().mockReturnValue(true)
 
@@ -259,7 +261,7 @@ describe('TasksPage', () => {
   // --- project association (US-013) ---
 
   it('shows project checkboxes in add task form when projects exist', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({ data: [] })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([]))
     projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
 
     setup()
@@ -274,7 +276,7 @@ describe('TasksPage', () => {
   })
 
   it('shows subproject indented in tree within selector', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({ data: [] })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([]))
     projectApi.listProjects.mockResolvedValue({ data: PROJECT_WITH_CHILD })
 
     setup()
@@ -288,8 +290,8 @@ describe('TasksPage', () => {
 
   it('create task with selected project calls createTask with projectIds', async () => {
     taskApi.listTasks
-      .mockResolvedValueOnce({ data: [] })
-      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce(pageOf([]))
+      .mockResolvedValueOnce(pageOf([]))
     taskApi.createTask.mockResolvedValueOnce({ data: { id: 20 } })
     projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
 
@@ -314,8 +316,8 @@ describe('TasksPage', () => {
 
   it('create task with no project selected calls createTask with null projectIds', async () => {
     taskApi.listTasks
-      .mockResolvedValueOnce({ data: [] })
-      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce(pageOf([]))
+      .mockResolvedValueOnce(pageOf([]))
     taskApi.createTask.mockResolvedValueOnce({ data: { id: 21 } })
     projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
 
@@ -335,16 +337,14 @@ describe('TasksPage', () => {
   })
 
   it('task row displays associated project names', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({
-      data: [{
-        id: 30,
-        description: 'Study',
-        startTime: PAST_START,
-        endTime: PAST_END,
-        running: false,
-        projects: [{ id: 100, name: 'Thesis' }]
-      }]
-    })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([{
+      id: 30,
+      description: 'Study',
+      startTime: PAST_START,
+      endTime: PAST_END,
+      running: false,
+      projects: [{ id: 100, name: 'Thesis' }]
+    }]))
 
     setup()
     await waitFor(() =>
@@ -353,16 +353,14 @@ describe('TasksPage', () => {
   })
 
   it('task row with multiple projects shows all names', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({
-      data: [{
-        id: 31,
-        description: 'Work',
-        startTime: PAST_START,
-        endTime: PAST_END,
-        running: false,
-        projects: [{ id: 100, name: 'Thesis' }, { id: 101, name: 'Work' }]
-      }]
-    })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([{
+      id: 31,
+      description: 'Work',
+      startTime: PAST_START,
+      endTime: PAST_END,
+      running: false,
+      projects: [{ id: 100, name: 'Thesis' }, { id: 101, name: 'Work' }]
+    }]))
 
     setup()
     await waitFor(() => {
@@ -373,9 +371,9 @@ describe('TasksPage', () => {
   })
 
   it('task row with no projects shows no project span', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({
-      data: [{ id: 32, description: 'Solo', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
-    })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([
+      { id: 32, description: 'Solo', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
+    ]))
 
     setup()
     await waitFor(() => screen.getByTestId('task-item-32'))
@@ -383,16 +381,14 @@ describe('TasksPage', () => {
   })
 
   it('edit form shows project checkboxes pre-populated from task.projects', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({
-      data: [{
-        id: 40,
-        description: 'Study',
-        startTime: PAST_START,
-        endTime: PAST_END,
-        running: false,
-        projects: [{ id: 100, name: 'Thesis' }]
-      }]
-    })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([{
+      id: 40,
+      description: 'Study',
+      startTime: PAST_START,
+      endTime: PAST_END,
+      running: false,
+      projects: [{ id: 100, name: 'Thesis' }]
+    }]))
     projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
 
     setup()
@@ -406,10 +402,10 @@ describe('TasksPage', () => {
 
   it('update task passes selected projectIds to updateTask', async () => {
     taskApi.listTasks
-      .mockResolvedValueOnce({
-        data: [{ id: 41, description: 'Task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
-      })
-      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce(pageOf([
+        { id: 41, description: 'Task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
+      ]))
+      .mockResolvedValueOnce(pageOf([]))
     taskApi.updateTask.mockResolvedValueOnce({ data: { id: 41 } })
     projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
 
@@ -434,10 +430,10 @@ describe('TasksPage', () => {
 
   it('update task with no projects selected passes null projectIds', async () => {
     taskApi.listTasks
-      .mockResolvedValueOnce({
-        data: [{ id: 42, description: 'Task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
-      })
-      .mockResolvedValueOnce({ data: [] })
+      .mockResolvedValueOnce(pageOf([
+        { id: 42, description: 'Task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
+      ]))
+      .mockResolvedValueOnce(pageOf([]))
     taskApi.updateTask.mockResolvedValueOnce({ data: { id: 42 } })
     projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
 
@@ -468,7 +464,7 @@ describe('TasksPage — search and filter', () => {
   })
 
   it('renders filter panel with all controls', async () => {
-    taskApi.listTasks.mockResolvedValue({ data: [] })
+    taskApi.listTasks.mockResolvedValue(pageOf([]))
     setup()
     expect(screen.getByTestId('filter-panel')).toBeInTheDocument()
     expect(screen.getByTestId('filter-search-input')).toBeInTheDocument()
@@ -479,7 +475,7 @@ describe('TasksPage — search and filter', () => {
   })
 
   it('passes search keyword to listTasks after debounce', async () => {
-    taskApi.listTasks.mockResolvedValue({ data: [] })
+    taskApi.listTasks.mockResolvedValue(pageOf([]))
     setup()
     await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalled())
 
@@ -493,7 +489,7 @@ describe('TasksPage — search and filter', () => {
   })
 
   it('passes projectId to listTasks when project selected', async () => {
-    taskApi.listTasks.mockResolvedValue({ data: [] })
+    taskApi.listTasks.mockResolvedValue(pageOf([]))
     setup()
     await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalled())
     await waitFor(() => expect(screen.getByTestId('filter-project-select')).toBeInTheDocument())
@@ -508,7 +504,7 @@ describe('TasksPage — search and filter', () => {
   })
 
   it('passes date range to listTasks when from/to set', async () => {
-    taskApi.listTasks.mockResolvedValue({ data: [] })
+    taskApi.listTasks.mockResolvedValue(pageOf([]))
     setup()
     await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalled())
 
@@ -524,7 +520,7 @@ describe('TasksPage — search and filter', () => {
   })
 
   it('shows no-tasks-message when filtered results are empty', async () => {
-    taskApi.listTasks.mockResolvedValue({ data: [] })
+    taskApi.listTasks.mockResolvedValue(pageOf([]))
     setup()
     await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalled())
 
@@ -536,7 +532,7 @@ describe('TasksPage — search and filter', () => {
   })
 
   it('shows match message when filter yields no results', async () => {
-    taskApi.listTasks.mockResolvedValue({ data: [] })
+    taskApi.listTasks.mockResolvedValue(pageOf([]))
     setup()
     await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalled())
 
@@ -549,7 +545,7 @@ describe('TasksPage — search and filter', () => {
   })
 
   it('reset button clears search input', async () => {
-    taskApi.listTasks.mockResolvedValue({ data: [] })
+    taskApi.listTasks.mockResolvedValue(pageOf([]))
     setup()
     await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalled())
 
@@ -561,7 +557,7 @@ describe('TasksPage — search and filter', () => {
   })
 
   it('reset button clears project select', async () => {
-    taskApi.listTasks.mockResolvedValue({ data: [] })
+    taskApi.listTasks.mockResolvedValue(pageOf([]))
     setup()
     await waitFor(() => expect(screen.getByTestId('filter-project-select')).toBeInTheDocument())
 
@@ -573,7 +569,7 @@ describe('TasksPage — search and filter', () => {
   })
 
   it('reset button refetches with no filters', async () => {
-    taskApi.listTasks.mockResolvedValue({ data: [] })
+    taskApi.listTasks.mockResolvedValue(pageOf([]))
     setup()
     await waitFor(() => expect(taskApi.listTasks).toHaveBeenCalled())
 
@@ -595,7 +591,7 @@ describe('TasksPage — search and filter', () => {
   })
 
   it('project dropdown is populated with available projects', async () => {
-    taskApi.listTasks.mockResolvedValue({ data: [] })
+    taskApi.listTasks.mockResolvedValue(pageOf([]))
     setup()
     await waitFor(() => expect(screen.getByTestId('filter-project-select')).toBeInTheDocument())
     await waitFor(() => {
@@ -613,7 +609,7 @@ describe('TasksPage — usability error messages', () => {
   })
 
   it('shows error from data.errors when create task returns 400 validation error', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({ data: [] })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([]))
     taskApi.createTask.mockRejectedValueOnce({
       response: { status: 400, data: { errors: { startTime: 'Start time is required' } } }
     })
@@ -634,9 +630,9 @@ describe('TasksPage — usability error messages', () => {
   })
 
   it('shows error from data.errors when update task returns 400 validation error', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({
-      data: [{ id: 50, description: 'Err task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }]
-    })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([
+      { id: 50, description: 'Err task', startTime: PAST_START, endTime: PAST_END, running: false, projects: [] }
+    ]))
     taskApi.updateTask.mockRejectedValueOnce({
       response: { status: 400, data: { errors: { endTime: 'End time is required' } } }
     })
@@ -652,7 +648,7 @@ describe('TasksPage — usability error messages', () => {
   })
 
   it('add task button is reachable with one click from task list (≤ 2 clicks rule)', async () => {
-    taskApi.listTasks.mockResolvedValueOnce({ data: [] })
+    taskApi.listTasks.mockResolvedValueOnce(pageOf([]))
     setup()
     // Add Task button visible on page load — 1 click to reach the form
     await waitFor(() =>
@@ -678,7 +674,7 @@ describe('TasksPage — URL param pre-fill', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     projectApi.listProjects.mockResolvedValue({ data: PROJECTS })
-    taskApi.listTasks.mockResolvedValue({ data: [] })
+    taskApi.listTasks.mockResolvedValue(pageOf([]))
   })
 
   it('seeds project filter dropdown from ?projectId= URL param', async () => {
@@ -700,5 +696,44 @@ describe('TasksPage — URL param pre-fill', () => {
     )
     // Project 100 checkbox should not be checked
     expect(screen.getByTestId('create-project-checkbox-100')).not.toBeChecked()
+  })
+})
+
+// ── Pagination ────────────────────────────────────────────────────────────────
+describe('TasksPage — pagination', () => {
+  const multiPage = { data: { content: [], totalElements: 45, totalPages: 3, currentPage: 0, pageSize: 20 } }
+
+  beforeEach(() => {
+    vi.clearAllMocks()
+    projectApi.listProjects.mockResolvedValue({ data: [] })
+  })
+
+  it('shows pagination controls when totalPages > 1', async () => {
+    taskApi.listTasks.mockResolvedValue(multiPage)
+    setup()
+    await waitFor(() =>
+      expect(screen.getByTestId('pagination-controls')).toBeInTheDocument()
+    )
+    expect(screen.getByTestId('prev-page-btn')).toBeDisabled()
+    expect(screen.getByTestId('next-page-btn')).not.toBeDisabled()
+    expect(screen.getByTestId('pagination-info')).toHaveTextContent('Showing 1–20 of 45 tasks')
+  })
+
+  it('next button advances page; previous button goes back', async () => {
+    taskApi.listTasks.mockResolvedValue(multiPage)
+    setup()
+    await waitFor(() => screen.getByTestId('next-page-btn'))
+
+    fireEvent.click(screen.getByTestId('next-page-btn'))
+    await waitFor(() => {
+      const calls = taskApi.listTasks.mock.calls
+      expect(calls[calls.length - 1][4]).toBe(1)
+    })
+
+    fireEvent.click(screen.getByTestId('prev-page-btn'))
+    await waitFor(() => {
+      const calls = taskApi.listTasks.mock.calls
+      expect(calls[calls.length - 1][4]).toBe(0)
+    })
   })
 })

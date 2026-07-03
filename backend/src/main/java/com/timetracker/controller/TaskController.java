@@ -1,6 +1,7 @@
 package com.timetracker.controller;
 
 import com.timetracker.dto.task.CreateTaskRequest;
+import com.timetracker.dto.task.PageResponse;
 import com.timetracker.dto.task.StartTaskRequest;
 import com.timetracker.dto.task.TaskResponse;
 import com.timetracker.dto.task.UpdateTaskRequest;
@@ -13,7 +14,6 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.Instant;
-import java.util.List;
 
 @RestController
 @RequestMapping("/api/tasks")
@@ -33,20 +33,23 @@ public class TaskController {
     }
 
     /**
-     * List tasks with optional filters.
+     * List tasks with optional filters and pagination.
      * When userId is provided it must be combined with projectId; both the caller
      * and the target user must be project members — otherwise 403 is returned (US-023).
      */
     @GetMapping
-    public List<TaskResponse> listTasks(@AuthenticationPrincipal UserDetails principal,
-                                        @RequestParam(required = false) String from,
-                                        @RequestParam(required = false) String to,
-                                        @RequestParam(required = false) String search,
-                                        @RequestParam(required = false) Long projectId,
-                                        @RequestParam(required = false) Long userId) {
+    public PageResponse<TaskResponse> listTasks(@AuthenticationPrincipal UserDetails principal,
+                                                @RequestParam(required = false) String from,
+                                                @RequestParam(required = false) String to,
+                                                @RequestParam(required = false) String search,
+                                                @RequestParam(required = false) Long projectId,
+                                                @RequestParam(required = false) Long userId,
+                                                @RequestParam(defaultValue = "0") int page,
+                                                @RequestParam(defaultValue = "20") int size) {
         Instant fromInstant = from != null ? Instant.parse(from) : null;
         Instant toInstant   = to   != null ? Instant.parse(to)   : null;
-        return taskService.listTasks(principal.getUsername(), fromInstant, toInstant, search, projectId, userId);
+        return taskService.listTasksPaged(principal.getUsername(), fromInstant, toInstant,
+                search, projectId, userId, page, size);
     }
 
     @PostMapping("/start")

@@ -75,7 +75,7 @@ class TaskControllerListFilterTest {
         mockMvc.perform(get("/api/tasks")
                 .header("Authorization", "Bearer " + jwt))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)));
+                .andExpect(jsonPath("$.content", hasSize(2)));
     }
 
     @Test
@@ -93,8 +93,8 @@ class TaskControllerListFilterTest {
                 .param("from", from.toString())
                 .param("to",   to.toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].description", is("In range")));
+                .andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].description", is("In range")));
     }
 
     @Test
@@ -110,7 +110,7 @@ class TaskControllerListFilterTest {
                 .param("from", from.toString())
                 .param("to",   to.toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
+                .andExpect(jsonPath("$.content", hasSize(0)));
     }
 
     @Test
@@ -129,9 +129,9 @@ class TaskControllerListFilterTest {
                 .param("from", from.toString())
                 .param("to",   to.toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[0].description", is("First task")))
-                .andExpect(jsonPath("$[1].description", is("Second task")));
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[0].description", is("First task")))
+                .andExpect(jsonPath("$.content[1].description", is("Second task")));
     }
 
     @Test
@@ -148,7 +148,7 @@ class TaskControllerListFilterTest {
                 .param("from", from.toString())
                 .param("to",   to.toString()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].projects", notNullValue()));
+                .andExpect(jsonPath("$.content[0].projects", notNullValue()));
     }
 
     @Test

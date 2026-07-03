@@ -114,12 +114,13 @@ test.describe('US-021 — Data Persistence', () => {
 
     const ctxB = await request.newContext({ baseURL: API, extraHTTPHeaders: { Authorization: `Bearer ${await getToken(OTHER)}` } });
     const listResp = await ctxB.get('/api/tasks');
-    const tasks = await listResp.json();
+    const body = await listResp.json();
     await ctxB.dispose();
 
-    const leakedTask = Array.isArray(tasks)
-      ? tasks.find((t: { description: string }) => t.description === 'User A private task')
-      : null;
+    const taskList: Array<{ description: string }> = body.content ?? body;
+    const leakedTask = Array.isArray(taskList)
+      ? taskList.find(t => t.description === 'User A private task')
+      : undefined;
     expect(leakedTask).toBeUndefined();
   });
 });

@@ -99,6 +99,10 @@ export default function TasksPage() {
   const [loading, setLoading]               = useState(false)
   const [error, setError]                   = useState('')
 
+  const [page, setPage]                     = useState(0)
+  const [totalPages, setTotalPages]         = useState(1)
+  const [totalElements, setTotalElements]   = useState(0)
+
   // edit state
   const [editingId, setEditingId]           = useState(null)
   const [editDesc, setEditDesc]             = useState('')
@@ -114,13 +118,18 @@ export default function TasksPage() {
     return () => clearTimeout(id)
   }, [searchKw])
 
-  const fetchTasks = useCallback(() => {
+  const fetchTasks = useCallback((pg = 0) => {
     const fromDate = filterFrom ? new Date(filterFrom) : null
     const from = fromDate && !isNaN(fromDate.getTime()) ? fromDate.toISOString() : null
     const toDate = filterTo ? new Date(filterTo + 'T23:59:59') : null
     const to = toDate && !isNaN(toDate.getTime()) ? toDate.toISOString() : null
-    taskApi.listTasks(from, to, debouncedSearch || null, filterProjectId || null)
-      .then(res => setTasks(res.data))
+    taskApi.listTasks(from, to, debouncedSearch || null, filterProjectId || null, pg)
+      .then(res => {
+        setTasks(res.data.content)
+        setTotalPages(res.data.totalPages)
+        setTotalElements(res.data.totalElements)
+        setPage(pg)
+      })
       .catch(() => {})
   }, [debouncedSearch, filterProjectId, filterFrom, filterTo])
 
@@ -500,6 +509,26 @@ export default function TasksPage() {
           )
         })}
       </div>
+
+      {totalPages > 1 && (
+        <div className="pagination-controls" data-testid="pagination-controls">
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => fetchTasks(page - 1)}
+            disabled={page === 0}
+            data-testid="prev-page-btn"
+          >Previous</button>
+          <span data-testid="pagination-info">
+            Showing {page * 20 + 1}–{Math.min((page + 1) * 20, totalElements)} of {totalElements} tasks
+          </span>
+          <button
+            className="btn btn-ghost btn-sm"
+            onClick={() => fetchTasks(page + 1)}
+            disabled={page >= totalPages - 1}
+            data-testid="next-page-btn"
+          >Next</button>
+        </div>
+      )}
     </div>
   )
 }

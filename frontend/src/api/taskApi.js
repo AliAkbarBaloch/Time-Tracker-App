@@ -12,12 +12,14 @@ export function getActiveTask() {
   return api.get('/tasks/active')
 }
 
-export function listTasks(from = null, to = null, search = null, projectId = null) {
+export function listTasks(from = null, to = null, search = null, projectId = null, page = 0, size = 20) {
   const params = {}
   if (from) params.from = from
   if (to) params.to = to
   if (search) params.search = search
   if (projectId) params.projectId = projectId
+  params.page = page
+  params.size = size
   return api.get('/tasks', { params })
 }
 

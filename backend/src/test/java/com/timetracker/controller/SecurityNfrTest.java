@@ -22,6 +22,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasSize;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -298,7 +299,7 @@ class SecurityNfrTest {
                 .header("Authorization", "Bearer " + jwtB))
                 .andExpect(status().isOk())
                 .andReturn();
-        assertThat(objectMapper.readTree(r.getResponse().getContentAsString()).size()).isZero();
+        assertThat(objectMapper.readTree(r.getResponse().getContentAsString()).get("content").size()).isZero();
     }
 
     @Test
@@ -400,7 +401,7 @@ class SecurityNfrTest {
                 .header("Authorization", "Bearer " + jwtA)
                 .param("search", "' OR 1=1; DROP TABLE tasks; --"))
                 .andExpect(status().isOk())
-                .andExpect(content().string("[]"));
+                .andExpect(jsonPath("$.content", hasSize(0)));
     }
 
     @Test

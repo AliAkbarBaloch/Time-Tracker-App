@@ -117,7 +117,7 @@ class DataPersistenceTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        JsonNode tasks = objectMapper.readTree(r.getResponse().getContentAsString());
+        JsonNode tasks = objectMapper.readTree(r.getResponse().getContentAsString()).get("content");
         assertThat(tasks.size()).isGreaterThanOrEqualTo(1);
         boolean found = false;
         for (JsonNode t : tasks) {
@@ -206,7 +206,7 @@ class DataPersistenceTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        JsonNode tasks = objectMapper.readTree(r.getResponse().getContentAsString());
+        JsonNode tasks = objectMapper.readTree(r.getResponse().getContentAsString()).get("content");
         assertThat(tasks.size()).isGreaterThanOrEqualTo(1);
         boolean hasRunning = false;
         for (JsonNode t : tasks) {
@@ -286,7 +286,7 @@ class DataPersistenceTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        JsonNode tasks = objectMapper.readTree(r.getResponse().getContentAsString());
+        JsonNode tasks = objectMapper.readTree(r.getResponse().getContentAsString()).get("content");
         boolean associationFound = false;
         for (JsonNode t : tasks) {
             if (t.get("id").asLong() == taskId) {
@@ -316,7 +316,7 @@ class DataPersistenceTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        JsonNode tasks = objectMapper.readTree(r.getResponse().getContentAsString());
+        JsonNode tasks = objectMapper.readTree(r.getResponse().getContentAsString()).get("content");
         assertThat(tasks.size()).isEqualTo(3);
     }
 
@@ -341,7 +341,7 @@ class DataPersistenceTest {
                 .header("Authorization", "Bearer " + jwtB2))
                 .andExpect(status().isOk()).andReturn();
 
-        assertThat(objectMapper.readTree(tasksR.getResponse().getContentAsString()).size()).isZero();
+        assertThat(objectMapper.readTree(tasksR.getResponse().getContentAsString()).get("content").size()).isZero();
         assertThat(objectMapper.readTree(projR.getResponse().getContentAsString()).size()).isZero();
     }
 
@@ -363,7 +363,7 @@ class DataPersistenceTest {
                 .header("Authorization", "Bearer " + jwtA2))
                 .andExpect(status().isOk()).andReturn();
 
-        JsonNode tasks = objectMapper.readTree(r.getResponse().getContentAsString());
+        JsonNode tasks = objectMapper.readTree(r.getResponse().getContentAsString()).get("content");
         assertThat(tasks.size()).isEqualTo(1);
         assertThat(tasks.get(0).get("id").asLong()).isEqualTo(taskId);
     }

@@ -127,8 +127,8 @@ class TaskControllerManualTest {
         mockMvc.perform(get("/api/tasks")
                 .header("Authorization", "Bearer " + jwt))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(2)))
-                .andExpect(jsonPath("$[*].description", hasItems("Task A", "Task B")));
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[*].description", hasItems("Task A", "Task B")));
     }
 
     @Test
@@ -136,6 +136,6 @@ class TaskControllerManualTest {
         mockMvc.perform(get("/api/tasks")
                 .header("Authorization", "Bearer " + jwt))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$", hasSize(0)));
+                .andExpect(jsonPath("$.content", hasSize(0)));
     }
 }

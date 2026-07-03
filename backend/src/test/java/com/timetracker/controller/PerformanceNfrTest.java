@@ -1,5 +1,6 @@
 package com.timetracker.controller;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.timetracker.entity.Project;
 import com.timetracker.entity.Task;
@@ -164,20 +165,25 @@ class PerformanceNfrTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        List<?> tasks = objectMapper.readValue(result.getResponse().getContentAsString(), List.class);
-        assertThat(tasks).hasSize(3);
+        JsonNode page = objectMapper.readTree(result.getResponse().getContentAsString());
+        JsonNode tasks = page.get("content");
+        assertThat(tasks.size()).isEqualTo(3);
 
         // Every task must embed its project array — verified without an additional HTTP call
-        for (Object rawTask : tasks) {
-            Map<?, ?> task = (Map<?, ?>) rawTask;
-            assertThat(task.containsKey("projects")).isTrue();
+        for (JsonNode task : tasks) {
+            assertThat(task.has("projects")).isTrue();
         }
 
         // Task 1 must have 2 projects in its embedded array
-        Map<?, ?> task1 = (Map<?, ?>) tasks.stream()
-                .filter(t -> "Task 1".equals(((Map<?, ?>) t).get("description")))
-                .findFirst().orElseThrow();
-        assertThat((List<?>) task1.get("projects")).hasSize(2);
+        JsonNode task1 = null;
+        for (JsonNode t : tasks) {
+            if ("Task 1".equals(t.get("description").asText())) {
+                task1 = t;
+                break;
+            }
+        }
+        assertThat(task1).isNotNull();
+        assertThat(task1.get("projects").size()).isEqualTo(2);
     }
 
     @Test
@@ -194,11 +200,12 @@ class PerformanceNfrTest {
                 .andExpect(status().isOk())
                 .andReturn();
 
-        List<?> tasks = objectMapper.readValue(result.getResponse().getContentAsString(), List.class);
-        assertThat(tasks).hasSize(1);
-        Map<?, ?> task = (Map<?, ?>) tasks.get(0);
-        assertThat((List<?>) task.get("projects")).hasSize(1);
-        assertThat(((Map<?, ?>) ((List<?>) task.get("projects")).get(0)).get("name")).isEqualTo("Gamma");
+        JsonNode page2 = objectMapper.readTree(result.getResponse().getContentAsString());
+        JsonNode tasks2 = page2.get("content");
+        assertThat(tasks2.size()).isEqualTo(1);
+        JsonNode task = tasks2.get(0);
+        assertThat(task.get("projects").size()).isEqualTo(1);
+        assertThat(task.get("projects").get(0).get("name").asText()).isEqualTo("Gamma");
     }
 
     @Test
