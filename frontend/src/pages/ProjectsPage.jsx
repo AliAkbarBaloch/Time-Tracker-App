@@ -117,12 +117,14 @@ function ProjectTree({ projects, depth = 0, editingId, editName, editDesc, editB
               <span className="project-total" data-testid={`project-total-${p.id}`}>
                 {formatDuration(p.totalSeconds)}
               </span>
-              <div className="task-actions">
-                <button className="btn btn-ghost btn-xs" onClick={() => onStartEdit(p)}
-                  data-testid={`edit-project-btn-${p.id}`}>Edit</button>
-                <button className="btn btn-danger btn-xs" onClick={() => onDelete(p.id, false)}
-                  data-testid={`delete-project-btn-${p.id}`}>Delete</button>
-              </div>
+              {!p.shared && (
+                <div className="task-actions">
+                  <button className="btn btn-ghost btn-xs" onClick={() => onStartEdit(p)}
+                    data-testid={`edit-project-btn-${p.id}`}>Edit</button>
+                  <button className="btn btn-danger btn-xs" onClick={() => onDelete(p.id, false)}
+                    data-testid={`delete-project-btn-${p.id}`}>Delete</button>
+                </div>
+              )}
               {p.budgetHours && (
                 <BudgetBar projectId={p.id} budgetHours={p.budgetHours} totalSeconds={p.totalSeconds} />
               )}
