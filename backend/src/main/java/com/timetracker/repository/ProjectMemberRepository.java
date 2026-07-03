@@ -22,4 +22,7 @@ public interface ProjectMemberRepository extends JpaRepository<ProjectMember, Lo
 
     /** Quick existence check used to detect duplicate invites (returns 409). */
     boolean existsByProjectAndUser(Project project, User user);
+
+    /** All memberships for a given user (used by analytics shared-breakdown). */
+    List<ProjectMember> findByUser(User user);
 }
