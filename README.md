@@ -117,7 +117,7 @@ cd backend
 ./mvnw test
 ```
 
-Expected: **487 tests, 0 failures, 0 errors.**
+Expected: **535 tests, 0 failures, 0 errors.**
 
 ### Backend — full quality gates (coverage + linter + tests)
 
@@ -148,7 +148,7 @@ npm install   # first run only
 npm test
 ```
 
-Expected: **328 tests, 0 failures.**
+Expected: **339 tests, 0 failures.**
 
 ### Frontend — unit tests + coverage
 
@@ -205,10 +205,28 @@ Playwright report (HTML): `frontend/playwright-report/index.html`
 | Database | H2 — file-based in dev/Docker, in-memory for tests |
 | Frontend | React 19, Vite 6, React Router 7, Axios |
 | Auth | Stateless JWT (jjwt 0.12.6) + BCrypt; secret from `JWT_SECRET` env var |
-| Backend testing | JUnit 5, Mockito, Spring MockMvc — 487 tests |
+| Backend testing | JUnit 5, Mockito, Spring MockMvc — 535 tests |
 | Backend coverage | JaCoCo ≥ 90% line coverage |
 | Mutation testing | PITest ≥ 80% test strength (service layer) |
-| Frontend testing | Vitest + @testing-library/react — 328 tests, ≥ 90% line coverage |
+| Frontend testing | Vitest + @testing-library/react — 339 tests, ≥ 90% line coverage |
 | Linting | Checkstyle (backend), oxlint (frontend) |
 | E2E tests | Playwright 1.61.1 — 31 spec files (Chromium) |
 | CI | GitHub Actions — backend, frontend, and Playwright jobs |
+
+---
+
+## Design Decisions
+
+### System hardening (Issue #141)
+
+- **React Error Boundary** — class component with `getDerivedStateFromError` / `componentDidCatch` wraps all protected routes in `App.jsx`. The "Try again" handler must swap children to a non-throwing component *before* resetting `hasError`, otherwise React immediately re-renders with the original crashing child, catches again, and the fallback never disappears.
+
+- **Task soft delete** — `deleted_at` column on `Task` with `@SQLRestriction("deleted_at IS NULL")` transparently filters deleted rows from all JPA queries. `@OnDelete(action = CASCADE)` is added to `Task.user` and the `task_projects` join-table FK so that `userRepository.deleteAll()` in `@BeforeEach` does not fail on FK constraints against rows that the `@SQLRestriction` makes invisible to JPA.
+
+- **Login rate limiter** — `RateLimitService` maintains a per-IP sliding window of 60 seconds; `LoginRateLimitFilter` intercepts only `POST /api/auth/login`. The filter uses `request.getRequestURI()` (not `getServletPath()`, which returns `""` in MockMvc). The default limit is 10 req/min (suitable for production); Docker Compose overrides it to 1000 via `APP_RATE_LIMIT_LOGIN_PER_MINUTE` so that ~30 concurrent Playwright specs can all authenticate without being blocked; backend integration tests use the same override in `application-test.properties`.
+
+- **JWT refresh tokens** — `RefreshToken` entity stores a hashed token tied to a `User`. `@OnDelete(action = CASCADE)` on the `user` FK ensures that `userRepository.deleteAll()` in integration tests deletes refresh tokens automatically. The `/api/auth/refresh` endpoint rotates the token on every use. The Axios interceptor in `authApi.js` silently retries the failed request with the new access token on 401, then falls back to clearing storage and redirecting to `/login`.
+
+- **SSE timer push** — `TimerEventService` maintains a map of `email → List<SseEmitter>`. Spring publishes `TimerStartedEvent` / `TimerStoppedEvent` after each timer state change; the service broadcasts the appropriate SSE event per user. `TimerContext.jsx` opens an `EventSource` only when `localStorage.tt_token` is present, so unauthenticated renders are safe.
+
+- **PostgreSQL production profile** — `application-prod.properties` configures a PostgreSQL datasource driven by `DB_*` environment variables; H2 is retained for development and tests. A `docker-compose.prod.yml` overlay demonstrates a production-ready stack with `APP_PROFILE=prod`.
