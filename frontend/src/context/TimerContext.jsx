@@ -61,6 +61,7 @@ export function TimerProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react/only-export-components
 export function useTimer() {
   const ctx = useContext(TimerContext)
   if (!ctx) throw new Error('useTimer must be used within TimerProvider')

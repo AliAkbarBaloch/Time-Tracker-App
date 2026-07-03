@@ -593,7 +593,7 @@ describe('ProjectDetailPage', () => {
 
   it('clicking Download calls exportProject and triggers blob download', async () => {
     // Resolve with a Blob response as the real API would
-    projectApi.exportProject = vi.fn().mockResolvedValue({ data: new Blob(['csv'], { type: 'text/csv' }) })
+    vi.mocked(projectApi.exportProject).mockResolvedValue({ data: new Blob(['csv'], { type: 'text/csv' }) })
     setup()
 
     await waitFor(() => expect(screen.getByTestId('export-btn')).toBeInTheDocument())
@@ -608,7 +608,7 @@ describe('ProjectDetailPage', () => {
   })
 
   it('export with JSON format passes format=json to the API', async () => {
-    projectApi.exportProject = vi.fn().mockResolvedValue({ data: new Blob(['{}'], { type: 'application/json' }) })
+    vi.mocked(projectApi.exportProject).mockResolvedValue({ data: new Blob(['{}'], { type: 'application/json' }) })
     setup()
 
     await waitFor(() => expect(screen.getByTestId('export-btn')).toBeInTheDocument())
@@ -623,7 +623,7 @@ describe('ProjectDetailPage', () => {
   })
 
   it('export with Specific Month scope passes year and month to the API', async () => {
-    projectApi.exportProject = vi.fn().mockResolvedValue({ data: new Blob(['csv'], { type: 'text/csv' }) })
+    vi.mocked(projectApi.exportProject).mockResolvedValue({ data: new Blob(['csv'], { type: 'text/csv' }) })
     setup()
 
     await waitFor(() => expect(screen.getByTestId('export-btn')).toBeInTheDocument())
@@ -641,7 +641,7 @@ describe('ProjectDetailPage', () => {
   })
 
   it('shows error message when export API call fails', async () => {
-    projectApi.exportProject = vi.fn().mockRejectedValue(new Error('Network error'))
+    vi.mocked(projectApi.exportProject).mockRejectedValue(new Error('Network error'))
     setup()
 
     await waitFor(() => expect(screen.getByTestId('export-btn')).toBeInTheDocument())

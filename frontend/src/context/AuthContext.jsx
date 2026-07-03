@@ -41,7 +41,7 @@ export function AuthProvider({ children }) {
   }
 
   async function logout() {
-    try { await authApi.logout() } catch (_) { /* best-effort */ }
+    try { await authApi.logout() } catch { /* best-effort */ }
     localStorage.removeItem(TOKEN_KEY)
     localStorage.removeItem(USER_KEY)
     setToken(null)
@@ -73,6 +73,7 @@ export function AuthProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react/only-export-components
 export function useAuth() {
   const ctx = useContext(AuthContext)
   if (!ctx) throw new Error('useAuth must be used within AuthProvider')

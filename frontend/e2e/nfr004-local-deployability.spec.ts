@@ -45,7 +45,7 @@ test.describe('NFR-004 — Local Deployability', () => {
   });
 
   // AC2: data persists — a task created in one session is visible in another
-  test('data written in one session is visible in a subsequent session', async ({ page, browser }) => {
+  test('data written in one session is visible in a subsequent session', async ({ browser }) => {
     const API = process.env.API_BASE ?? 'http://localhost:8080';
     const email = `nfr004p${Date.now()}@e2e.test`;
     const password = 'TestPass1!';

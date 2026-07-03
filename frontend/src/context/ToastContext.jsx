@@ -68,6 +68,7 @@ export function ToastProvider({ children }) {
   )
 }
 
+// eslint-disable-next-line react/only-export-components
 export function useToast() {
   const ctx = useContext(ToastCtx)
   // Safe fallback when rendered outside provider (e.g. isolated tests)

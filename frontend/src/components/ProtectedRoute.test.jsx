@@ -3,8 +3,6 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import ProtectedRoute from './ProtectedRoute'
 import { AuthProvider } from '../context/AuthContext'
-import * as authApi from '../api/authApi'
-
 vi.mock('../api/authApi')
 
 function setup(isLoggedIn = false) {
