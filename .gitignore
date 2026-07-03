@@ -22,3 +22,4 @@ Thumbs.db
 # Local QA guide — never commit
 QA_TEST_GUIDE.md
 CLAUDE.md
+template.tex
