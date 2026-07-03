@@ -1,6 +1,7 @@
 package com.timetracker.entity;
 
 import jakarta.persistence.*;
+import org.hibernate.annotations.BatchSize;
 
 import java.time.Instant;
 import java.util.HashSet;
@@ -36,6 +37,7 @@ public class Task {
         joinColumns = @JoinColumn(name = "task_id"),
         inverseJoinColumns = @JoinColumn(name = "project_id")
     )
+    @BatchSize(size = 30)
     private Set<Project> projects = new HashSet<>();
 
     @Column(nullable = false, updatable = false)
