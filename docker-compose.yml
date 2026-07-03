@@ -10,6 +10,7 @@ services:
       SPRING_DATASOURCE_URL: jdbc:h2:file:/app/data/timetracker
       SPRING_H2_CONSOLE_ENABLED: "false"
       JWT_SECRET: ${JWT_SECRET:-TimeTrackerSuperSecretKeyForJWTSigningMustBe256BitsLongAtLeast32Chars!}
+      APP_RATE_LIMIT_LOGIN_PER_MINUTE: "1000"
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/api/health"]
       interval: 10s
