@@ -17,6 +17,7 @@ import com.timetracker.repository.ProjectRepository;
 import com.timetracker.repository.TaskRepository;
 import com.timetracker.repository.UserRepository;
 import com.timetracker.specification.TaskSpecifications;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -39,13 +40,16 @@ public class TaskService {
     private final TaskRepository taskRepository;
     private final UserRepository userRepository;
     private final ProjectRepository projectRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     public TaskService(TaskRepository taskRepository,
                        UserRepository userRepository,
-                       ProjectRepository projectRepository) {
+                       ProjectRepository projectRepository,
+                       ApplicationEventPublisher eventPublisher) {
         this.taskRepository = taskRepository;
         this.userRepository = userRepository;
         this.projectRepository = projectRepository;
+        this.eventPublisher = eventPublisher;
     }
 
     @Transactional
@@ -80,7 +84,9 @@ public class TaskService {
         task.setProjects(projects);
         task.setTotalPreviousSeconds(totalPreviousSeconds);
 
-        return TaskResponse.from(taskRepository.save(task));
+        TaskResponse response = TaskResponse.from(taskRepository.save(task));
+        eventPublisher.publishEvent(new TimerStartedEvent(userEmail, response));
+        return response;
     }
 
     @Transactional
@@ -89,7 +95,9 @@ public class TaskService {
         Task running = taskRepository.findByUserAndEndTimeIsNull(user)
                 .orElseThrow(NoActiveTimerException::new);
         running.setEndTime(Instant.now());
-        return TaskResponse.from(taskRepository.save(running));
+        TaskResponse response = TaskResponse.from(taskRepository.save(running));
+        eventPublisher.publishEvent(new TimerStoppedEvent(userEmail));
+        return response;
     }
 
     @Transactional
@@ -318,8 +326,8 @@ public class TaskService {
         if (!task.getUser().equals(user)) {
             throw new org.springframework.security.access.AccessDeniedException("Not your task.");
         }
-        task.getProjects().clear();
-        taskRepository.delete(task);
+        task.setDeletedAt(Instant.now());
+        taskRepository.save(task);
     }
 
     private User loadUser(String email) {
