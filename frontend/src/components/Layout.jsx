@@ -238,8 +238,8 @@ export default function Layout() {
             <button
               className="sidebar-logout-btn"
               onClick={handleLogout}
-              title="Log out"
-              aria-label="Log out"
+              title="Logout"
+              aria-label="Logout"
             >
               {icons.logout}
             </button>

@@ -7,3 +7,7 @@ export function getHeatmap(year) {
 export function getWeeklyPattern(weeks = 12, year) {
   return api.get('/analytics/weekly-pattern', { params: { weeks, year } })
 }
+
+export function getSharedBreakdown(weeks = 12, year) {
+  return api.get('/analytics/shared-breakdown', { params: { weeks, year } })
+}
