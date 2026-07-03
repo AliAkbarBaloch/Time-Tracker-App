@@ -51,7 +51,12 @@ Once both services are healthy, open **http://localhost:3000** in your browser, 
 | Backend (REST API) | http://localhost:8080 |
 | Health check | http://localhost:8080/api/health |
 
-**JWT secret (optional):** The application ships with a built-in development secret — no configuration needed. To supply your own 32+ character secret:
+**JWT secret:** The app always signs and verifies JWT tokens using a secret key. If you do not set `JWT_SECRET`, the app falls back to a hardcoded default (visible in the source code). That default is fine for local development, but it is a security risk in production — anyone who reads the source code knows the secret and could forge tokens to impersonate any user.
+
+| Environment | What to do |
+|-------------|-----------|
+| Local dev / CI | Do nothing — the built-in default works |
+| Production | Set `JWT_SECRET` to a random 32+ character string that only you know |
 
 ```bash
 # Inline (one-off):
@@ -90,7 +95,7 @@ npm run dev
 
 Open **http://localhost:3000** and register.
 
-**JWT secret (optional):** Export before starting the backend:
+**JWT secret:** Same rule as above — skip it for local dev, set it for production:
 
 ```bash
 export JWT_SECRET=my-strong-secret-at-least-32-chars
