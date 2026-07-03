@@ -10,11 +10,13 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Method;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -181,6 +183,33 @@ class LocalDeployabilityTest {
         // bootstrapped successfully with only local/classpath resources.
         // H2 is embedded — no external DB server required.
         assertThat(datasourceUrl).isNotBlank();
+    }
+
+    // ── SpaController.serveIndex() unit-level coverage ────────────────────────
+
+    /**
+     * Calls the private {@code serveIndex()} directly via reflection to verify
+     * its return value when {@code static/index.html} IS on the classpath
+     * (branch: {@code resource.exists() == true}).
+     *
+     * The opposite branch ({@code resource.exists() == false}) is dead code in
+     * this environment because {@code static/index.html} is always present.
+     * The HTTP-layer tests above already exercise both public handler methods
+     * ({@code spaRoot} and {@code spaDeep}) that call {@code serveIndex()}.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void spaController_serveIndex_resourceExists_returns200WithHtmlContentType() throws Exception {
+        SpaController controller = new SpaController();
+
+        Method serveIndex = SpaController.class.getDeclaredMethod("serveIndex");
+        serveIndex.setAccessible(true);
+
+        ResponseEntity<?> response = (ResponseEntity<?>) serveIndex.invoke(controller);
+
+        assertThat(response.getStatusCode().value()).isEqualTo(200);
+        assertThat(response.getHeaders().getFirst("Content-Type")).contains("text/html");
+        assertThat(response.getBody()).isNotNull();
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

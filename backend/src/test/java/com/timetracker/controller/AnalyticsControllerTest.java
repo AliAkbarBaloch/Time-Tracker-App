@@ -335,4 +335,43 @@ class AnalyticsControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.projects", hasSize(0)));
     }
+
+    // ── year == null → defaults to current year (heatmap) ────────────────────
+
+    @Test
+    void heatmap_yearParamAbsent_defaultsToCurrentYear() throws Exception {
+        // A task added right now must appear when no year param is provided
+        Instant start = Instant.now().minusSeconds(3600);
+        Instant end   = Instant.now().minusSeconds(60);
+        addTask(jwt, start, end);
+
+        int currentYear = LocalDate.now().getYear();
+
+        mockMvc.perform(get("/api/analytics/heatmap") // no year param
+                .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.year").value(currentYear))
+                .andExpect(jsonPath("$.days", hasSize(greaterThan(0))));
+    }
+
+    // ── year == null → defaults to current year (shared-breakdown) ───────────
+
+    @Test
+    void sharedBreakdown_yearParamAbsent_defaultsToCurrentYear() throws Exception {
+        long pid = createProject(jwt, "NoYear Shared");
+        inviteMember(jwt, pid, "other@example.com");
+
+        Instant start = Instant.now().minusSeconds(3660);
+        Instant end   = start.plusSeconds(3600);
+        addTaskToProject(jwt, start, end, pid);
+        addTaskToProject(otherJwt,
+                Instant.now().minusSeconds(1800),
+                Instant.now().minusSeconds(60), pid);
+
+        // No year param — controller must default to LocalDate.now().getYear()
+        mockMvc.perform(get("/api/analytics/shared-breakdown?weeks=12") // no year
+                .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.projects", hasSize(1)));
+    }
 }

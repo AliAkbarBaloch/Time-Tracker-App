@@ -304,4 +304,81 @@ class ProjectExportServiceTest {
         assertThatThrownBy(() -> exportService.export("ghost@example.com", 1L, "csv", null, null))
                 .isInstanceOf(org.springframework.security.core.userdetails.UsernameNotFoundException.class);
     }
+
+    // ── JSON export: running task has null endTime → duration 0, endTime null ──
+
+    @Test
+    void export_json_runningTask_durationZeroAndEndTimeNull() {
+        Task running = new Task();
+        running.setDescription("Active work");
+        running.setStartTime(Instant.parse("2026-06-01T09:00:00Z"));
+        running.setEndTime(null);
+        running.setUser(user);
+        running.setProjects(new HashSet<>(Set.of(project)));
+        project.setTasks(new HashSet<>(Set.of(running)));
+        when(projectRepository.findByIdAndMember(1L, user)).thenReturn(Optional.of(project));
+
+        ResponseEntity<String> response = exportService.export("alice@example.com", 1L, "json", null, null);
+
+        // durationSeconds must be 0 and endTime field must be null (not "null" string)
+        assertThat(response.getBody()).contains("\"durationSeconds\":0");
+        assertThat(response.getBody()).contains("\"endTime\":null");
+    }
+
+    // ── csvEscape: null value → returns empty string ───────────────────────────
+
+    @Test
+    void export_csv_nullDescription_rendersAsEmptyField() {
+        Task t = new Task();
+        t.setDescription(null); // description is null → csvEscape(null) → ""
+        t.setStartTime(Instant.parse("2026-05-01T08:00:00Z"));
+        t.setEndTime(Instant.parse("2026-05-01T09:00:00Z"));
+        t.setUser(user);
+        t.setProjects(new HashSet<>(Set.of(project)));
+        project.setTasks(new HashSet<>(Set.of(t)));
+        when(projectRepository.findByIdAndMember(1L, user)).thenReturn(Optional.of(project));
+
+        ResponseEntity<String> response = exportService.export("alice@example.com", 1L, "csv", null, null);
+
+        // Null description → empty CSV field: the field between the first and second comma
+        // on the data row must be empty (no text). The row starts with the task id, then
+        // an empty description field — so we get ",," (id + empty-desc + next-field).
+        assertThat(response.getBody()).contains(",,");
+        // The description field itself must not contain the literal text "null"
+        String dataRow = response.getBody().lines()
+                .filter(l -> !l.startsWith("task_id"))
+                .findFirst().orElseThrow();
+        String[] cols = dataRow.split(",", -1);
+        assertThat(cols[1]).isEmpty(); // description column is blank
+    }
+
+    // ── csvEscape: value contains newline → must be quoted ────────────────────
+
+    @Test
+    void export_csv_descriptionWithNewline_isQuotedInCsv() {
+        Task t = completedTask(1L, "Line1\nLine2", "2026-04-01T08:00:00Z", "2026-04-01T09:00:00Z");
+        project.setTasks(new HashSet<>(Set.of(t)));
+        when(projectRepository.findByIdAndMember(1L, user)).thenReturn(Optional.of(project));
+
+        ResponseEntity<String> response = exportService.export("alice@example.com", 1L, "csv", null, null);
+
+        // A value containing a newline must be wrapped in double quotes
+        assertThat(response.getBody()).contains("\"Line1\nLine2\"");
+    }
+
+    // ── isInRange false: task startTime < from → excluded from export ─────────
+
+    @Test
+    void export_csv_taskBeforeFrom_isExcluded() {
+        Task early = completedTask(1L, "Before", "2026-03-01T08:00:00Z", "2026-03-01T09:00:00Z");
+        Task inRange = completedTask(2L, "InRange", "2026-06-01T08:00:00Z", "2026-06-01T09:00:00Z");
+        project.setTasks(new HashSet<>(Set.of(early, inRange)));
+        when(projectRepository.findByIdAndMember(1L, user)).thenReturn(Optional.of(project));
+
+        Instant from = Instant.parse("2026-06-01T00:00:00Z");
+        ResponseEntity<String> response = exportService.export("alice@example.com", 1L, "csv", from, null);
+
+        assertThat(response.getBody()).contains("InRange");
+        assertThat(response.getBody()).doesNotContain("Before");
+    }
 }

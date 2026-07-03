@@ -683,4 +683,41 @@ class TaskServiceTest {
         assertThat(result).hasSize(1);
         assertThat(result.get(0).description()).isEqualTo("Thesis task");
     }
+
+    // ── search non-null/non-blank but description is null → excluded ──────────
+
+    @Test
+    void listTasks_searchKeyword_taskWithNullDescription_isExcluded() {
+        // Covers L219: t.getDescription() != null — description == null branch
+        Task nullDesc = new Task(); nullDesc.setUser(user); nullDesc.setDescription(null);
+        nullDesc.setStartTime(Instant.now().minusSeconds(3600));
+        nullDesc.setEndTime(Instant.now().minusSeconds(1800));
+
+        Task withDesc = new Task(); withDesc.setUser(user); withDesc.setDescription("Research");
+        withDesc.setStartTime(Instant.now().minusSeconds(7200));
+        withDesc.setEndTime(Instant.now().minusSeconds(5400));
+
+        when(taskRepository.findByUserOrderByStartTimeDesc(user)).thenReturn(List.of(nullDesc, withDesc));
+
+        // search is non-null and non-blank → the description-null branch must be taken for nullDesc
+        List<TaskResponse> result = taskService.listTasks("alice@example.com", null, null, "Research", null);
+
+        assertThat(result).hasSize(1);
+        assertThat(result.get(0).description()).isEqualTo("Research");
+    }
+
+    @Test
+    void listTasks_searchNonBlank_allDescriptionsNull_returnsEmpty() {
+        // Covers L216 true-branch: search != null && !search.isBlank()
+        // then L219 false-branch: description == null → excluded
+        Task t1 = new Task(); t1.setUser(user); t1.setDescription(null);
+        t1.setStartTime(Instant.now().minusSeconds(3600));
+        t1.setEndTime(Instant.now().minusSeconds(1800));
+
+        when(taskRepository.findByUserOrderByStartTimeDesc(user)).thenReturn(List.of(t1));
+
+        List<TaskResponse> result = taskService.listTasks("alice@example.com", null, null, "anything", null);
+
+        assertThat(result).isEmpty();
+    }
 }

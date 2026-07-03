@@ -289,4 +289,181 @@ class DashboardServiceTest {
         assertThat(tp.usedHours()).isEqualTo(2.0);      // 7200 / 3600; mutation: returns 0 or negates
         assertThat(tp.budgetPercent()).isEqualTo(50.0);  // 2.0 / 4.0 * 100; mutation: returns null
     }
+
+    // ── budgetHours == 0 → budgetPercent null (L87) ───────────────────────────
+
+    @Test
+    void getSummary_projectWithBudgetHoursZero_budgetPercentIsNull() {
+        ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
+        long base = now.withHour(8).withMinute(0).withSecond(0).withNano(0).toInstant().getEpochSecond();
+
+        Project p = new Project();
+        p.setId(1L); p.setName("ZeroBudget"); p.setUser(user);
+        p.setSubprojects(new ArrayList<>());
+        p.setBudgetHours(0.0); // budgetHours <= 0 → budgetPercent must be null
+
+        Task t = completedTask(base, base + 3600);
+        t.setProjects(new HashSet<>(List.of(p)));
+        p.setTasks(new HashSet<>(Set.of(t)));
+
+        when(taskRepository.findByUserAndEndTimeIsNull(user)).thenReturn(Optional.empty());
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
+                .thenReturn(List.of(t));
+        when(projectRepository.findByUserAndParentIsNull(user)).thenReturn(List.of(p));
+
+        DashboardSummaryResponse result = dashboardService.getSummary("bob@example.com");
+
+        assertThat(result.topProjects()).hasSize(1);
+        assertThat(result.topProjects().get(0).budgetPercent()).isNull();
+    }
+
+    // ── calcSubtreeSeconds: endTime == null → task skipped in week total ──────
+
+    @Test
+    void getSummary_weekTaskWithNullEndTime_notCountedInWeekSeconds() {
+        ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
+        long base = now.withHour(8).withMinute(0).withSecond(0).withNano(0).toInstant().getEpochSecond();
+
+        Project p = new Project();
+        p.setId(1L); p.setName("P"); p.setUser(user);
+        p.setSubprojects(new ArrayList<>());
+
+        // Running task (endTime null) — associated to the project
+        Task running = new Task();
+        running.setUser(user);
+        running.setStartTime(Instant.ofEpochSecond(base));
+        running.setEndTime(null);
+        running.setProjects(new HashSet<>(List.of(p)));
+
+        when(taskRepository.findByUserAndEndTimeIsNull(user)).thenReturn(Optional.of(running));
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
+                .thenReturn(List.of(running));
+        when(projectRepository.findByUserAndParentIsNull(user)).thenReturn(List.of(p));
+
+        DashboardSummaryResponse result = dashboardService.getSummary("bob@example.com");
+
+        // Running task must not be counted in weekSeconds for the project
+        assertThat(result.topProjects()).isEmpty(); // weekSeconds == 0 → filtered out
+        assertThat(result.weekSeconds()).isEqualTo(0);
+    }
+
+    // ── calcSubtreeSeconds: duplicate task in seen set → counted only once ────
+
+    @Test
+    void getSummary_duplicateTaskAcrossSubprojects_countedOnce() {
+        ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
+        long base = now.withHour(8).withMinute(0).withSecond(0).withNano(0).toInstant().getEpochSecond();
+
+        Project parent = new Project();
+        parent.setId(10L); parent.setName("Parent"); parent.setUser(user);
+
+        Project child1 = new Project();
+        child1.setId(11L); child1.setName("Child1"); child1.setUser(user);
+        child1.setSubprojects(new ArrayList<>());
+
+        Project child2 = new Project();
+        child2.setId(12L); child2.setName("Child2"); child2.setUser(user);
+        child2.setSubprojects(new ArrayList<>());
+
+        parent.setSubprojects(new ArrayList<>(List.of(child1, child2)));
+
+        // Same task shared across both children — must be counted only once
+        Task shared = completedTask(base, base + 3600);
+        try {
+            var f = Task.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(shared, 99L);
+        } catch (Exception ignored) {}
+        shared.setProjects(new HashSet<>(List.of(child1, child2)));
+
+        when(taskRepository.findByUserAndEndTimeIsNull(user)).thenReturn(Optional.empty());
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
+                .thenReturn(List.of(shared));
+        when(projectRepository.findByUserAndParentIsNull(user)).thenReturn(List.of(parent));
+
+        DashboardSummaryResponse result = dashboardService.getSummary("bob@example.com");
+
+        assertThat(result.topProjects()).hasSize(1);
+        assertThat(result.topProjects().get(0).weekSeconds()).isEqualTo(3600); // not 7200
+    }
+
+    // ── calcSubtreeTotalSeconds: endTime null → task not counted in all-time ──
+
+    @Test
+    void getSummary_allTimeRunningTask_notCountedInBudgetProgress() {
+        ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
+        long base = now.withHour(8).withMinute(0).withSecond(0).withNano(0).toInstant().getEpochSecond();
+
+        Project p = new Project();
+        p.setId(1L); p.setName("BudgetProject"); p.setUser(user);
+        p.setSubprojects(new ArrayList<>());
+        p.setBudgetHours(10.0);
+
+        // Completed task for week (week count)
+        Task weekTask = completedTask(base, base + 3600);
+        weekTask.setProjects(new HashSet<>(List.of(p)));
+
+        // Running task (endTime null) directly on the project — must not be counted
+        Task running = new Task();
+        running.setUser(user);
+        running.setStartTime(Instant.ofEpochSecond(base + 100));
+        running.setEndTime(null);
+        try {
+            var f = Task.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(running, 55L);
+        } catch (Exception ignored) {}
+        running.setProjects(new HashSet<>(List.of(p)));
+        p.setTasks(new HashSet<>(Set.of(weekTask, running)));
+
+        when(taskRepository.findByUserAndEndTimeIsNull(user)).thenReturn(Optional.empty());
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
+                .thenReturn(List.of(weekTask));
+        when(projectRepository.findByUserAndParentIsNull(user)).thenReturn(List.of(p));
+
+        DashboardSummaryResponse result = dashboardService.getSummary("bob@example.com");
+
+        assertThat(result.topProjects()).hasSize(1);
+        // usedHours must reflect only the completed task (3600s = 1h), not the running one
+        assertThat(result.topProjects().get(0).usedHours()).isEqualTo(1.0);
+    }
+
+    // ── calcSubtreeTotalSeconds: duplicate task already in seen → counted once ─
+
+    @Test
+    void getSummary_allTimeDuplicateTask_countedOnce() {
+        ZonedDateTime now = ZonedDateTime.now(ZoneOffset.UTC);
+        long base = now.withHour(8).withMinute(0).withSecond(0).withNano(0).toInstant().getEpochSecond();
+
+        Project parent = new Project();
+        parent.setId(20L); parent.setName("Root"); parent.setUser(user);
+
+        Project child = new Project();
+        child.setId(21L); child.setName("Child"); child.setUser(user);
+        child.setSubprojects(new ArrayList<>());
+        parent.setSubprojects(new ArrayList<>(List.of(child)));
+        parent.setBudgetHours(5.0);
+
+        // Task appears in both parent.tasks and child.tasks — seen set must deduplicate
+        Task t = completedTask(base, base + 7200);
+        try {
+            var f = Task.class.getDeclaredField("id");
+            f.setAccessible(true);
+            f.set(t, 77L);
+        } catch (Exception ignored) {}
+        t.setProjects(new HashSet<>(List.of(parent, child)));
+        parent.setTasks(new HashSet<>(Set.of(t)));
+        child.setTasks(new HashSet<>(Set.of(t)));
+
+        when(taskRepository.findByUserAndEndTimeIsNull(user)).thenReturn(Optional.empty());
+        when(taskRepository.findByUserAndStartTimeBetweenOrderByStartTimeAsc(eq(user), any(), any()))
+                .thenReturn(List.of(t));
+        when(projectRepository.findByUserAndParentIsNull(user)).thenReturn(List.of(parent));
+
+        DashboardSummaryResponse result = dashboardService.getSummary("bob@example.com");
+
+        assertThat(result.topProjects()).hasSize(1);
+        // 7200s = 2h, counted once
+        assertThat(result.topProjects().get(0).usedHours()).isEqualTo(2.0);
+    }
 }

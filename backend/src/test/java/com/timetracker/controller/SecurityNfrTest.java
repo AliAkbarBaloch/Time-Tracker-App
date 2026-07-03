@@ -417,4 +417,22 @@ class SecurityNfrTest {
                 .header("Authorization", "Bearer " + jwtA))
                 .andExpect(status().isOk());
     }
+
+    // ── JwtAuthFilter: Authorization header present but not "Bearer " prefix ──
+
+    @Test
+    void jwt_authorizationHeaderWithoutBearerPrefix_returns401() throws Exception {
+        // The header exists (StringUtils.hasText → true) but doesn't start with "Bearer "
+        // so extractToken() returns null → request is treated as unauthenticated
+        mockMvc.perform(get("/api/tasks")
+                .header("Authorization", "Token " + jwtA))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void jwt_authorizationHeaderWithBasicScheme_returns401() throws Exception {
+        mockMvc.perform(get("/api/tasks")
+                .header("Authorization", "Basic dXNlcjpwYXNz"))
+                .andExpect(status().isUnauthorized());
+    }
 }

@@ -336,6 +336,55 @@ class ProjectExportTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    // ── resolveFrom / resolveTo: year present, month absent → no filter applied ─
+
+    /**
+     * When year is provided but month is omitted, resolveFrom/resolveTo both
+     * return null (the year+month branch is skipped), so all tasks are exported.
+     */
+    @Test
+    void export_yearOnlyNoMonth_returnsAllTasks() throws Exception {
+        // Tasks in different months of the same year
+        logTaskAt(aliceJwt, "March task", 1800, rootProjectId,
+                "2026-03-10T08:00:00Z", "2026-03-10T08:30:00Z");
+        logTaskAt(aliceJwt, "June task", 3600, rootProjectId,
+                "2026-06-15T10:00:00Z", "2026-06-15T11:00:00Z");
+
+        // Provide year but NOT month — resolveFrom and resolveTo both return null
+        MvcResult result = mockMvc.perform(get("/api/projects/{id}/export", rootProjectId)
+                .param("year", "2026")
+                .header("Authorization", "Bearer " + aliceJwt))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String body = result.getResponse().getContentAsString();
+        // Both tasks must appear since no date window was applied
+        assertThat(body).contains("March task");
+        assertThat(body).contains("June task");
+    }
+
+    /**
+     * When an explicit ISO from/to string is supplied, resolveFrom parses it directly
+     * (the from != null branch), bypassing the year+month path.
+     */
+    @Test
+    void export_explicitFromString_usedDirectlyAndFilters() throws Exception {
+        logTaskAt(aliceJwt, "Before filter", 1800, rootProjectId,
+                "2026-05-31T23:00:00Z", "2026-05-31T23:30:00Z");
+        logTaskAt(aliceJwt, "After filter",  3600, rootProjectId,
+                "2026-06-01T08:00:00Z", "2026-06-01T09:00:00Z");
+
+        MvcResult result = mockMvc.perform(get("/api/projects/{id}/export", rootProjectId)
+                .param("from", "2026-06-01T00:00:00Z")
+                .header("Authorization", "Bearer " + aliceJwt))
+                .andExpect(status().isOk())
+                .andReturn();
+
+        String body = result.getResponse().getContentAsString();
+        assertThat(body).contains("After filter");
+        assertThat(body).doesNotContain("Before filter");
+    }
+
     // ── Helpers ───────────────────────────────────────────────────────────────
 
     private String registerAndLogin(String email, String displayName) throws Exception {
