@@ -70,10 +70,14 @@ Sections~\ref{sec:architecture}--\ref{sec:custom} explain the design rationale i
     cascades to subprojects and disassociates tasks).
 
   \item[Task Overview.]
-    The \textit{Tasks} page shows a paginated, filterable list of tasks. Users can filter by
-    project, date range, description keyword, and (for shared projects) by contributing user.
-    A \textit{Dashboard} page presents today's and this week's totals, the running task, and
-    the five most-active projects at a glance in a single API call.
+    The \textit{Tasks} page shows a paginated, filterable list of tasks (20 per page).
+    Previous / Next controls and a ``Showing X--Y of Z tasks'' indicator appear automatically
+    once the result set exceeds one page. Users can filter by project, date range, description
+    keyword, and (for shared projects) by contributing user. All filters are applied first in
+    the service layer; pagination is then applied to the filtered result so the page count
+    always reflects the active filter. A \textit{Dashboard} page presents today's and this
+    week's totals, the running task, and the five most-active projects at a glance in a
+    single API call.
 
   \item[Data Persistence.]
     All data is stored in an H2 file-based database (\texttt{timetracker.mv.db}) that survives
@@ -114,47 +118,6 @@ Sections~\ref{sec:architecture}--\ref{sec:custom} explain the design rationale i
     \texttt{localDateToUtcIso} utility corrects for DST by measuring the actual UTC offset at
     the target moment rather than the nominal one, preventing a one-hour shift at DST
     boundaries.
-
-\end{description}
-
-\subsection{Mandatory non-functional requirements}
-
-\begin{description}[leftmargin=0pt]
-
-  \item[Usability.]
-    The frontend is a React 19 single-page application with a persistent sidebar, a live
-    timer in the top bar, and a dedicated page for each domain (Dashboard, Tasks, Projects,
-    Analytics, Profile). Frequently performed actions — starting or stopping the timer,
-    creating a task, switching projects — each require one or two clicks. The Dashboard page
-    consolidates today's and this week's totals, the currently running task, and the five
-    most-active projects into a single view served by one API call, so users get an overview
-    without navigating away.
-
-  \item[Security.]
-    Passwords are hashed with BCrypt. Authentication uses stateless JWTs (1-hour access
-    tokens) paired with server-side refresh tokens stored in a dedicated \texttt{refresh\_tokens}
-    table. Every protected endpoint requires a valid Bearer token; the Spring Security filter
-    chain rejects unauthenticated requests with 401 before they reach the controller layer.
-    All request DTOs are validated with Jakarta Bean Validation (\texttt{@NotBlank},
-    \texttt{@Email}, \texttt{@Size}) so malformed input is rejected at the boundary.
-    Spring Data JPA parameterised queries prevent SQL injection. A login rate limiter
-    (10~requests/min per IP by default) protects against brute-force credential attacks.
-
-  \item[Performance.]
-    The frontend is served as a production-optimised Vite bundle via Nginx (gzip-compressed
-    static assets), so the initial page load is a single small HTML file with hashed JS/CSS
-    chunks that the browser caches across navigations. API responses are served from the local
-    H2 database with no external service calls on the critical path; typical response times
-    on localhost are under 50~ms. The backend Docker image starts and is ready to serve
-    health-check requests in under 10~seconds.
-
-  \item[Independence.]
-    The entire application — backend, frontend, and database — runs locally with a single
-    command: \texttt{docker compose up -{}-build}. No external cloud service or third-party
-    API is required at runtime. The H2 database is embedded in the backend and persisted to
-    a Docker named volume (\texttt{timetracker-data}) that survives container restarts.
-    For production use, a \texttt{docker-compose.prod.yml} overlay switches the database to
-    a locally-run PostgreSQL container while keeping the same single-command workflow.
 
 \end{description}
 
@@ -307,6 +270,28 @@ Tasks and projects are connected through a \texttt{task\_projects} join table ma
 Cascading is managed at the database level: an \texttt{ON DELETE CASCADE} foreign key on
 \texttt{task\_projects.task\_id} ensures that soft-deleted task rows (invisible to JPA) are
 cleaned up when their owner user is deleted.
+
+\subsection{Paginated task list}
+
+\texttt{GET /api/tasks} returns a \texttt{PageResponse<TaskResponse>} wrapper instead of a
+bare array:
+
+\begin{verbatim}
+{ "content": [...], "totalElements": 42,
+  "totalPages": 3, "currentPage": 0, "pageSize": 20 }
+\end{verbatim}
+
+All active filters (project, date range, keyword, user) are applied first in the service
+layer, and pagination is performed on the already-filtered list. This means the page count
+always reflects the current filter rather than the total number of tasks. Page index and
+size are clamped server-side (minimum~1, maximum~100) so invalid query parameters cannot
+crash or over-fetch.
+
+On the frontend the \textit{Tasks} page reads \texttt{.content} from the response and renders
+Previous / Next navigation buttons together with a ``Showing X--Y of Z tasks'' indicator.
+The controls are hidden entirely when \texttt{totalPages} is 1, keeping the UI clean for
+users with fewer than 20 tasks. Changing any filter resets the page index to 0 so the user
+always sees the first page of the new result set.
 
 \subsection{Real-time timer synchronisation via SSE}
 
