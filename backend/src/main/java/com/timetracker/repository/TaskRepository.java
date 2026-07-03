@@ -1,5 +1,6 @@
 package com.timetracker.repository;
 
+import com.timetracker.entity.Project;
 import com.timetracker.entity.Task;
 import com.timetracker.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
@@ -31,4 +32,8 @@ public interface TaskRepository extends JpaRepository<Task, Long> {
     Optional<Task> findByIdAndUser(@Param("id") Long id, @Param("user") User user);
 
     List<Task> findByUserAndDescriptionAndEndTimeIsNotNull(User user, String description);
+
+    /** All completed tasks associated with a project within the given time window. */
+    @Query("SELECT DISTINCT t FROM Task t JOIN t.projects p WHERE p = :project AND t.startTime >= :from AND t.startTime <= :to AND t.endTime IS NOT NULL")
+    List<Task> findByProjectInTimeRange(@Param("project") Project project, @Param("from") Instant from, @Param("to") Instant to);
 }

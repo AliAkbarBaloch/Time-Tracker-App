@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { getHeatmap, getWeeklyPattern } from '../api/analyticsApi'
+import { getHeatmap, getWeeklyPattern, getSharedBreakdown } from '../api/analyticsApi'
 
 const DAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN']
 
@@ -53,14 +53,17 @@ export default function AnalyticsPage() {
   const [year, setYear]               = useState(currentYear)
   const [heatmapData, setHeatmapData] = useState(null)
   const [patternData, setPatternData] = useState(null)
+  const [breakdownData, setBreakdownData] = useState(null)
   const [loading, setLoading]         = useState(false)
+  const [error, setError]             = useState(null)
   const [tooltip, setTooltip]         = useState(null) // { date, totalSeconds, x, y }
 
   const fetchHeatmap = useCallback((y) => {
     setLoading(true)
+    setError(null)
     getHeatmap(y)
       .then(res => setHeatmapData(res.data))
-      .catch(() => {})
+      .catch(() => setError('Failed to load heatmap data.'))
       .finally(() => setLoading(false))
   }, [])
 
@@ -70,9 +73,16 @@ export default function AnalyticsPage() {
       .catch(() => {})
   }, [])
 
+  const fetchBreakdown = useCallback((y) => {
+    getSharedBreakdown(12, y)
+      .then(res => setBreakdownData(res.data))
+      .catch(() => {})
+  }, [])
+
   useEffect(() => {
     fetchHeatmap(year)
     fetchPattern(year)
+    fetchBreakdown(year)
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleYearChange = (e) => {
@@ -81,6 +91,7 @@ export default function AnalyticsPage() {
     setYear(y)
     fetchHeatmap(y)
     fetchPattern(y)
+    fetchBreakdown(y)
   }
 
   // Build heatmap cells
@@ -92,8 +103,6 @@ export default function AnalyticsPage() {
   }
   const cells = buildHeatmapCells(year, dataMap)
   const maxSeconds = Math.max(...cells.filter(c => !c.pad).map(c => c.totalSeconds), 0)
-  const totalWeeks = cells.length / 7
-
   // Build week pattern bars
   const pattern = patternData?.byDayOfWeek ?? DAYS.map(d => ({ day: d, avgSeconds: 0 }))
   const maxAvg = Math.max(...pattern.map(d => d.avgSeconds), 1)
@@ -118,10 +127,16 @@ export default function AnalyticsPage() {
       {/* ── Activity Heatmap ─────────────────────────────────────────────────── */}
       <section className="analytics-section">
         <h3 className="section-title">Activity Heatmap — {year}</h3>
+        {error && (
+          <p className="empty-state" data-testid="heatmap-error" style={{ color: '#c0392b' }}>{error}</p>
+        )}
         {loading ? (
           <p className="empty-state" data-testid="heatmap-loading">Loading…</p>
         ) : (
-          <div className="heatmap-wrap">
+          <div className="heatmap-wrap" style={{ overflowX: 'auto' }}>
+            {!error && heatmapData && heatmapData.days.length === 0 && (
+              <p className="empty-state" data-testid="heatmap-empty">No activity recorded for {year}.</p>
+            )}
             {/* Day labels on the left */}
             <div className="heatmap-day-labels">
               {DAYS.map(d => (
@@ -206,6 +221,53 @@ export default function AnalyticsPage() {
             )
           })}
         </div>
+      </section>
+
+      {/* ── Shared Project Breakdown ─────────────────────────────────────────── */}
+      <section className="analytics-section" data-testid="breakdown-section">
+        <h3 className="section-title">
+          Shared Project Breakdown{' '}
+          <span style={{ fontWeight: 'normal', fontSize: '0.85em', color: '#666' }}>
+            (last 12 weeks of {year})
+          </span>
+        </h3>
+        {!breakdownData || breakdownData.projects.length === 0 ? (
+          <p className="empty-state" data-testid="breakdown-empty">
+            No shared project activity found for this period.
+          </p>
+        ) : (
+          <div data-testid="breakdown-list">
+            {breakdownData.projects.map(proj => (
+              <div key={proj.projectId} className="breakdown-project" data-testid={`breakdown-project-${proj.projectId}`}>
+                <h4 className="breakdown-project-name" style={{ margin: '12px 0 6px', fontWeight: 600 }}>{proj.projectName}</h4>
+                <div className="breakdown-contributions">
+                  {proj.contributions.map(c => (
+                    <div
+                      key={c.userName}
+                      className="breakdown-row"
+                      data-testid={`breakdown-row-${proj.projectId}-${c.userName}`}
+                      style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}
+                    >
+                      <span className="breakdown-name" style={{ width: '120px', fontSize: '0.9em' }}>{c.userName}</span>
+                      <div className="breakdown-bar-track" style={{ flex: 1, height: '10px', background: '#ebedf0', borderRadius: '4px' }}>
+                        <div
+                          className="breakdown-bar-fill"
+                          style={{ width: `${c.percentage}%`, height: '100%', background: '#40c463', borderRadius: '4px' }}
+                        />
+                      </div>
+                      <span className="breakdown-pct" style={{ width: '48px', textAlign: 'right', fontSize: '0.85em', color: '#555' }}>
+                        {c.percentage.toFixed(1)}%
+                      </span>
+                      <span className="breakdown-time" style={{ width: '56px', textAlign: 'right', fontSize: '0.85em', color: '#555' }}>
+                        {formatDuration(c.totalSeconds)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   )

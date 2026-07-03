@@ -1,6 +1,7 @@
 package com.timetracker.controller;
 
 import com.timetracker.dto.analytics.HeatmapResponse;
+import com.timetracker.dto.analytics.SharedBreakdownResponse;
 import com.timetracker.dto.analytics.WeeklyPatternResponse;
 import com.timetracker.service.AnalyticsService;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -35,5 +36,13 @@ public class AnalyticsController {
                                                   @RequestParam(required = false) Integer year) {
         int y = year != null ? year : LocalDate.now().getYear();
         return analyticsService.getWeeklyPattern(principal.getUsername(), weeks, y);
+    }
+
+    @GetMapping("/shared-breakdown")
+    public SharedBreakdownResponse getSharedBreakdown(@AuthenticationPrincipal UserDetails principal,
+                                                      @RequestParam(defaultValue = "12") int weeks,
+                                                      @RequestParam(required = false) Integer year) {
+        int y = year != null ? year : LocalDate.now().getYear();
+        return analyticsService.getSharedBreakdown(principal.getUsername(), weeks, y);
     }
 }
