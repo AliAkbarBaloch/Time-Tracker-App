@@ -426,8 +426,19 @@ class AnalyticsServiceTest {
         Project solo = makeProject(1L, "Solo");
         ProjectMember myMembership = membership(solo, user);
 
+        // Give the solo project a real task so that if the <= 1 guard is mutated
+        // to < 1 (boundary) or removed entirely, the project would be included
+        // and the assertion below would fail — killing the mutation.
+        Task t = new Task();
+        t.setUser(user);
+        t.setStartTime(Instant.parse("2026-06-01T08:00:00Z"));
+        t.setEndTime(Instant.parse("2026-06-01T09:00:00Z")); // 3600s
+        t.setProjects(new HashSet<>());
+
         when(projectMemberRepository.findByUser(user)).thenReturn(List.of(myMembership));
         when(projectMemberRepository.findByProject(solo)).thenReturn(List.of(myMembership));
+        lenient().when(taskRepository.findByProjectInTimeRange(eq(solo), any(), any()))
+                .thenReturn(List.of(t));
 
         SharedBreakdownResponse result = analyticsService.getSharedBreakdown("alice@example.com", 12, 2026);
 
@@ -518,5 +529,104 @@ class AnalyticsServiceTest {
         SharedBreakdownResponse result = analyticsService.getSharedBreakdown("alice@example.com", 8, 2026);
 
         assertThat(result.weeks()).isEqualTo(8);
+    }
+
+    @Test
+    void getSharedBreakdown_zeroDurationTask_notCountedAsContribution() {
+        // Kills line 152 ConditionalsBoundaryMutator (<= 0 → < 0) and ORDER_ELSE:
+        // a 0-second task must NOT appear as a contribution entry.
+        User bob = otherUser();
+        Project shared = makeProject(5L, "ZeroDuration");
+        ProjectMember aliceMembership = membership(shared, user);
+        ProjectMember bobMembership   = membership(shared, bob);
+
+        when(projectMemberRepository.findByUser(user)).thenReturn(List.of(aliceMembership));
+        when(projectMemberRepository.findByProject(shared)).thenReturn(List.of(aliceMembership, bobMembership));
+
+        Task positiveTask = new Task();
+        positiveTask.setUser(user);
+        positiveTask.setStartTime(Instant.parse("2026-06-01T08:00:00Z"));
+        positiveTask.setEndTime(Instant.parse("2026-06-01T09:00:00Z")); // 3600s
+        positiveTask.setProjects(new HashSet<>());
+
+        Task zeroTask = new Task();
+        zeroTask.setUser(bob);
+        Instant t = Instant.parse("2026-06-01T10:00:00Z");
+        zeroTask.setStartTime(t);
+        zeroTask.setEndTime(t); // 0s — must be excluded
+        zeroTask.setProjects(new HashSet<>());
+
+        when(taskRepository.findByProjectInTimeRange(eq(shared), any(), any()))
+                .thenReturn(List.of(positiveTask, zeroTask));
+
+        SharedBreakdownResponse result = analyticsService.getSharedBreakdown("alice@example.com", 12, 2026);
+
+        assertThat(result.projects()).hasSize(1);
+        // Bob's 0-second task must NOT produce a contribution entry
+        assertThat(result.projects().get(0).contributions()).hasSize(1);
+        assertThat(result.projects().get(0).contributions().get(0).userName()).isEqualTo("Alice");
+    }
+
+    @Test
+    void getSharedBreakdown_currentYear_timeWindowUsesCorrectBounds() {
+        // Kills line 130 (year+1→year-1), 132 (isBefore conditional), 135 (weeks*7→weeks/7):
+        // captures from/to and asserts 'to' ≈ now and window = weeks*7 days.
+        User bob = otherUser();
+        Project shared = makeProject(6L, "Window");
+        ProjectMember aliceMembership = membership(shared, user);
+        ProjectMember bobMembership   = membership(shared, bob);
+
+        when(projectMemberRepository.findByUser(user)).thenReturn(List.of(aliceMembership));
+        when(projectMemberRepository.findByProject(shared)).thenReturn(List.of(aliceMembership, bobMembership));
+        when(taskRepository.findByProjectInTimeRange(eq(shared), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        int currentYear = LocalDate.now().getYear();
+        Instant beforeCall = Instant.now();
+        analyticsService.getSharedBreakdown("alice@example.com", 12, currentYear);
+
+        ArgumentCaptor<Instant> fromCaptor = ArgumentCaptor.forClass(Instant.class);
+        ArgumentCaptor<Instant> toCaptor   = ArgumentCaptor.forClass(Instant.class);
+        verify(taskRepository).findByProjectInTimeRange(eq(shared), fromCaptor.capture(), toCaptor.capture());
+
+        ZoneId utc = ZoneId.of("UTC");
+        Instant yearEnd = ZonedDateTime.of(currentYear + 1, 1, 1, 0, 0, 0, 0, utc).toInstant();
+
+        // 'to' must be Instant.now() (not yearEnd which is months away)
+        assertThat(toCaptor.getValue()).isAfterOrEqualTo(beforeCall);
+        assertThat(toCaptor.getValue()).isBefore(yearEnd);
+
+        // window must be exactly 12 * 7 = 84 days
+        long diffDays = ChronoUnit.DAYS.between(fromCaptor.getValue(), toCaptor.getValue());
+        assertThat(diffDays).isEqualTo(84L);
+    }
+
+    @Test
+    void getSharedBreakdown_futureYear_fromIsSetToYearStart() {
+        // Kills line 133 (yearStart.isAfter(to) → always false): for a future year,
+        // 'from' must equal yearStart (not to.minus(weeks*7)) so from > to and the query is empty.
+        User bob = otherUser();
+        Project shared = makeProject(7L, "FutureWindow");
+        ProjectMember aliceMembership = membership(shared, user);
+        ProjectMember bobMembership   = membership(shared, bob);
+
+        when(projectMemberRepository.findByUser(user)).thenReturn(List.of(aliceMembership));
+        when(projectMemberRepository.findByProject(shared)).thenReturn(List.of(aliceMembership, bobMembership));
+        when(taskRepository.findByProjectInTimeRange(eq(shared), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        int futureYear = LocalDate.now().getYear() + 2;
+        analyticsService.getSharedBreakdown("alice@example.com", 12, futureYear);
+
+        ArgumentCaptor<Instant> fromCaptor = ArgumentCaptor.forClass(Instant.class);
+        ArgumentCaptor<Instant> toCaptor   = ArgumentCaptor.forClass(Instant.class);
+        verify(taskRepository).findByProjectInTimeRange(eq(shared), fromCaptor.capture(), toCaptor.capture());
+
+        ZoneId utc = ZoneId.of("UTC");
+        Instant yearStart = ZonedDateTime.of(futureYear, 1, 1, 0, 0, 0, 0, utc).toInstant();
+
+        // 'from' must equal yearStart so the window is impossible (from > to → empty)
+        assertThat(fromCaptor.getValue()).isEqualTo(yearStart);
+        assertThat(fromCaptor.getValue()).isAfter(toCaptor.getValue());
     }
 }
