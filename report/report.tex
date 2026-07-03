@@ -6,6 +6,7 @@
 \usepackage{parskip}
 \usepackage{microtype}
 \usepackage{titlesec}
+\usepackage{booktabs}
 
 \hypersetup{
   colorlinks=true,
@@ -16,6 +17,9 @@
 
 \titlespacing*{\section}{0pt}{1.4em}{0.6em}
 \titlespacing*{\subsection}{0pt}{1.1em}{0.4em}
+
+% Give TeX extra slack to avoid overfull boxes from long \texttt{} spans
+\setlength{\emergencystretch}{3em}
 
 \title{\textbf{TimeTracker}\\[0.4em]
        \large AI-Driven Software Development --- Project Report}
@@ -28,159 +32,375 @@
 \newpage
 
 % ─────────────────────────────────────────────────────────────────
+\section{Implemented Features}
+% ─────────────────────────────────────────────────────────────────
+
+TimeTracker is a complete time-tracking application implementing all mandatory requirements,
+all four additional customer requirements, three custom features, and a set of security and
+reliability hardening improvements. The following subsections summarise what was built;
+Sections~\ref{sec:architecture}--\ref{sec:custom} explain the design rationale in depth.
+
+\subsection{Mandatory functional requirements}
+
+\begin{description}[leftmargin=0pt]
+
+  \item[User Management.]
+    Users register with an e-mail address, display name, and password. On login the server
+    returns a signed JWT that the browser stores in \texttt{localStorage}. A dedicated
+    \textit{Change Password} page lets authenticated users update their credentials without
+    re-registering. Logout revokes the server-side refresh token and clears all local storage.
+
+  \item[Time Tracking.]
+    A single \textbf{Start / Stop} button in the top bar starts and stops a live timer.
+    The elapsed time (\texttt{HH:MM:SS}) is updated every second and persisted in the database
+    (\texttt{tasks.start\_time}, \texttt{tasks.end\_time}), so the timer survives a browser
+    reload or a cross-device switch. Completed tasks can be added manually with a custom start
+    and end time, edited (including moving the start time), or soft-deleted (the record is
+    preserved in the database with a \texttt{deleted\_at} timestamp rather than being removed,
+    protecting the audit trail). An active timer is rehydrated from
+    \texttt{GET /api/tasks/active} on every page load.
+
+  \item[Projects.]
+    Users create projects and optionally nest them as subprojects to arbitrary depth. A task
+    can be associated with one or more projects simultaneously via a \texttt{task\_projects}
+    join table. The project summary aggregates time recursively: time logged against a
+    subproject is counted towards all ancestor projects. If the same task is linked to two
+    sibling subprojects, it is counted only once at the parent level (set-based deduplication
+    in the service layer). Projects can be renamed, given a budget, or deleted (force-delete
+    cascades to subprojects and disassociates tasks).
+
+  \item[Task Overview.]
+    The \textit{Tasks} page shows a paginated, filterable list of tasks. Users can filter by
+    project, date range, description keyword, and (for shared projects) by contributing user.
+    A \textit{Dashboard} page presents today's and this week's totals, the running task, and
+    the five most-active projects at a glance in a single API call.
+
+  \item[Data Persistence.]
+    All data is stored in an H2 file-based database (\texttt{timetracker.mv.db}) that survives
+    container restarts. The DDL strategy is \texttt{update}, so schema changes are applied
+    incrementally without data loss. The timer state (running task, start time) is stored in
+    the database; there is no reliance on browser storage for timing, so switching browsers or
+    devices shows the correct running time.
+
+\end{description}
+
+\subsection{Additional customer requirements}
+
+\begin{description}[leftmargin=0pt]
+
+  \item[Project Sharing.]
+    A project owner can invite other registered users by e-mail. Accepted invitations create
+    a row in \texttt{project\_members} with role \textsc{member}. Members can view the project,
+    log tasks against it, and see the aggregated totals; only the owner can rename, delete, or
+    modify budget settings. All write endpoints use \texttt{findByIdAndUser} (owner check);
+    read endpoints use \texttt{findByIdAndMember} (any member).
+
+  \item[Shared Task Overview.]
+    On the Tasks page, a \textit{user filter} drop-down lists all members of the current
+    project. Selecting a member shows only their tasks. The backend enforces that both the
+    requesting user and the target user must be members of the project; non-member target
+    requests return 403.
+
+  \item[Export.]
+    The export button on a project page downloads a CSV file containing every task in the
+    project and its subprojects. Each row includes task description, start time, end time,
+    duration, associated projects, and the contributing user. An optional month filter
+    restricts the export to a specific calendar month.
+
+  \item[Time Zones.]
+    Each user can set a preferred IANA time zone (e.g.\ \texttt{Europe/Berlin}) on their
+    profile page. All timestamps are stored as UTC in the database; the display layer converts
+    them using \texttt{Intl.DateTimeFormat} with the user's stored timezone. A custom
+    \texttt{localDateToUtcIso} utility corrects for DST by measuring the actual UTC offset at
+    the target moment rather than the nominal one, preventing a one-hour shift at DST
+    boundaries.
+
+\end{description}
+
+\subsection{Security and reliability hardening}
+\label{sec:hardening-overview}
+
+Beyond the stated requirements, six security and reliability improvements were implemented
+(\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/issues/141}{Issue~\#141},
+\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/142}{PR~\#142}):
+
+\begin{enumerate}
+  \item \textbf{React Error Boundary} --- catches unexpected render errors and shows a recovery
+        UI instead of a blank page.
+  \item \textbf{Task soft delete} --- preserves the audit trail; deleted tasks remain in the
+        database with a \texttt{deleted\_at} timestamp.
+  \item \textbf{Login rate limiting} --- blocks brute-force credential stuffing by limiting
+        login attempts per IP to 10~per minute (configurable).
+  \item \textbf{JWT refresh tokens} --- short-lived access tokens (1~hour) paired with
+        long-lived refresh tokens; the frontend silently renews access tokens on 401 without
+        interrupting the user.
+  \item \textbf{Server-Sent Events timer push} --- the backend broadcasts timer start/stop
+        events to all connected browser tabs of the same user, keeping the timer in sync
+        across multiple open windows.
+  \item \textbf{PostgreSQL production profile} --- a \texttt{prod} Spring profile and a
+        Docker Compose overlay file enable a one-command switch from H2 to
+        PostgreSQL for production deployments.
+\end{enumerate}
+
+% ─────────────────────────────────────────────────────────────────
 \section{System Architecture and Design Decisions}
+\label{sec:architecture}
 % ─────────────────────────────────────────────────────────────────
 
 \subsection{High-level architecture}
 
-TimeTracker is a full-stack single-page application structured around a clear separation of concerns:
-a \textbf{Spring Boot 3 / Java 21 backend} that exposes a RESTful JSON API, a \textbf{React 19 + Vite
-frontend} that communicates with it exclusively over HTTP, and a \textbf{file-based H2 database} for
-persistence. The backend uses Spring Data JPA for the persistence layer, Spring Security 6 for
-authentication, and jjwt 0.12.6 for token generation and validation.
+TimeTracker is a full-stack single-page application structured around a clear separation of
+concerns: a \textbf{Spring Boot 3 / Java 21 backend} that exposes a RESTful JSON API, a
+\textbf{React 19 + Vite frontend} that communicates with it exclusively over HTTP and SSE,
+and a \textbf{file-based H2 database} for development (switchable to PostgreSQL for
+production). The backend uses Spring Data JPA for the persistence layer, Spring Security 6
+for authentication and authorisation, and jjwt 0.12.6 for token generation and validation.
 
 \subsection{Authentication design}
 
-Authentication is \textbf{stateless JWT-based}: on login the backend signs a JWT with an HMAC-SHA256
-key and returns it to the client; the client stores it in \texttt{localStorage} and attaches it as a
-\texttt{Bearer} header on every subsequent request. There are no server-side sessions. This design was
-chosen because it integrates cleanly with single-page applications (no cookie/CSRF complexity), scales
-horizontally without shared session state, and keeps the backend fully stateless.
+Authentication is \textbf{stateless JWT-based}: on login the backend signs a short-lived
+access token (1~hour, HMAC-SHA256) and a long-lived refresh token (30~days, stored hashed
+in the \texttt{refresh\_tokens} table). The client stores the access token in
+\texttt{localStorage} and attaches it as a \texttt{Bearer} header on every request. When a
+request returns 401, the Axios response interceptor silently calls
+\texttt{POST /api/auth/refresh} with the stored refresh token; if successful, it retries the
+original request with the new access token --- the user never sees the interruption. If the
+refresh token is expired or revoked, the interceptor clears storage and redirects to
+\texttt{/login}.
 
-A more sophisticated authentication mechanism, such as OAuth2 or OpenID Connect with an external
-identity provider, could have been integrated. However, the custom JWT approach was deliberately chosen
-to keep the application self-contained with zero external dependencies and to give full control over
-token issuance, expiry, and revocation.
+Refresh tokens \textbf{rotate on every use}: each call to \texttt{/api/auth/refresh}
+invalidates the submitted token and issues a new one. This limits the damage from a stolen
+token to at most one more use.
 
-BCrypt at cost factor 10 hashes all stored passwords; the random salt ensures that two identical
-passwords produce different hashes, neutralising pre-computation attacks.
+\texttt{POST /api/auth/logout} accepts the refresh token in the request body and immediately
+revokes it in the database, so the user cannot silently regain access with a captured token
+after logging out.
+
+BCrypt at cost factor 10 hashes all stored passwords; the random salt ensures that two
+identical passwords produce different hashes, neutralising pre-computation attacks.
+
+The JWT signing secret is supplied via the \texttt{JWT\_SECRET} environment variable and
+falls back to a built-in development default when not set. The built-in default is acceptable
+for local development and CI but must be replaced with a secret value in production, because
+the default is publicly visible in the repository.
+
+\subsection{Login rate limiting}
+
+A \texttt{RateLimitService} maintains a \texttt{ConcurrentHashMap} of per-IP sliding windows.
+Each entry records the request count and window expiry (\texttt{nowMs + 60,000~ms}). The
+default limit is \textbf{10 login attempts per IP per minute}, controlled by the
+\texttt{app.rate-limit.login-per-minute} property (overridden to 1000 in Docker Compose and
+to 1000 in the test profile, so CI E2E tests are not blocked).
+
+The filter uses \texttt{request.getRequestURI()} rather than \texttt{getServletPath()},
+because \texttt{getServletPath()} returns an empty string in Spring MockMvc, causing the
+filter to be skipped in every integration test. This distinction is non-obvious and is
+documented in \texttt{CLAUDE.md} to prevent regression.
 
 \subsection{Database and persistence}
 
-H2 is used in two modes: \textbf{file-based} (\texttt{jdbc:h2:file:./data/timetracker}) in development
-and Docker Compose, and \textbf{in-memory} (\texttt{jdbc:h2:mem:testdb}) for the test profile.
-This decision eliminated every external dependency: a developer can clone the repository, run
-\texttt{docker compose up -{}-build}, and have a fully functional stack within minutes without
-installing or configuring a separate database server.
+H2 is used in two modes: \textbf{file-based} (\texttt{jdbc:h2:file:./data/timetracker}) in
+development and Docker Compose, and \textbf{in-memory} (\texttt{jdbc:h2:mem:testdb}) for the
+test profile. This eliminated every external dependency: a developer can clone the repository,
+run \texttt{docker compose up -{}-build}, and have a fully functional stack within minutes.
 
-The DDL strategy is \texttt{create-drop} in tests and \texttt{update} in development, so the schema is
-auto-created on first boot and survives restarts without manual SQL steps.
+A \textbf{PostgreSQL production profile} (\texttt{application-prod.properties}) is provided
+for deployments that require a production-grade database. The profile reads connection details
+from \texttt{DB\_HOST}, \texttt{DB\_PORT}, \texttt{DB\_NAME}, \texttt{DB\_USER}, and
+\texttt{DB\_PASSWORD} environment variables and sets the Hibernate dialect to
+\texttt{PostgreSQLDialect}. A \texttt{docker-compose.prod.yml} overlay adds a PostgreSQL 17
+service and wires the variables automatically. Switching from H2 to PostgreSQL requires only
+setting \texttt{APP\_PROFILE=prod} in the environment; no application code changes.
+
+The DDL strategy is \texttt{create-drop} in tests and \texttt{update} in development, so the
+schema is auto-created on first boot and survives restarts without manual SQL steps.
+
+\subsection{Task soft delete and data integrity}
+
+Instead of removing rows from the \texttt{tasks} table, a \texttt{DELETE /api/tasks/\{id\}}
+request sets the \texttt{deleted\_at} column to the current UTC timestamp. The
+\texttt{@SQLRestriction("deleted\_at IS NULL")} annotation on the \texttt{Task} entity
+transparently filters deleted rows from every JPA query, including collection fetches,
+pagination, and \texttt{deleteAll()} in tests --- without changing any repository or service
+code.
+
+A subtle consequence: \texttt{taskRepository.deleteAll()} in \texttt{@BeforeEach} only
+deletes non-deleted tasks. Soft-deleted tasks remain and their foreign keys point at the user
+being deleted, causing FK constraint violations during test teardown. The fix adds \texttt{@OnDelete(action = OnDeleteAction.CASCADE)} to the \texttt{Task.user}
+mapping and an explicit \texttt{ON DELETE CASCADE} foreign-key definition on the
+\texttt{task\_id} column of the \texttt{task\_projects} join table. The same \texttt{@OnDelete(CASCADE)} annotation is
+applied to \texttt{RefreshToken.user} for the same reason. These are database-level cascades
+(DDL), not JPA-level cascades, so they execute regardless of what JPA can see through its
+filter.
 
 \subsection{Backend layer structure}
 
 The backend follows a strict four-layer convention:
 
 \begin{itemize}
-  \item \textbf{entity/} --- JPA entities (\texttt{User}, \texttt{Task}, \texttt{Project},
-        \texttt{ProjectMember}, \texttt{TaskTemplate}).
-  \item \textbf{repository/} --- Spring Data JPA interfaces; method names derive queries; \texttt{@Query}
-        used only when derivation is insufficient.
-  \item \textbf{service/} --- all business logic, the exclusive mutation testing (PITest) target.
-  \item \textbf{controller/} --- thin REST layer; delegates immediately to the service, enforces
-        HTTP-level concerns only.
+  \item \textbf{entity/} --- JPA entities: \texttt{User}, \texttt{Task}, \texttt{Project},
+        \texttt{ProjectMember}, \texttt{TaskTemplate}, \texttt{RefreshToken}.
+  \item \textbf{repository/} --- Spring Data JPA interfaces; method names derive queries;
+        \texttt{@Query} used only when derivation is insufficient.
+  \item \textbf{service/} --- all business logic, the exclusive mutation testing (PITest)
+        target.
+  \item \textbf{controller/} --- thin REST layer; delegates immediately to the service,
+        enforces HTTP-level concerns only.
 \end{itemize}
-
-In contrast to the initial design, which planned a single \texttt{ProjectController} for all project
-operations, the implementation split project concerns across \texttt{ProjectController} (CRUD),
-\texttt{ProjectSummaryController} (time aggregation), and \texttt{ProjectMemberController}-adjacent
-endpoints within the same controller class. This kept each method short and made the ownership/membership
-access checks easier to reason about in isolation.
 
 \subsection{Project sharing data model}
 
 Sharing is implemented through a dedicated \texttt{project\_members} join table with columns
 \texttt{(project\_id, user\_id, role, joined\_at)} and a unique constraint on
-\texttt{(project\_id, user\_id)}. The \texttt{project.user\_id} column was retained as the original
-owner foreign key for backward compatibility. All read operations use a \texttt{findByIdAndMember} query
-(any member may read); write operations use \texttt{findByIdAndUser} (owner only). A
-\texttt{MembershipSeeder} component back-fills \texttt{OWNER} rows on application startup for all
-projects created before the sharing feature was added.
+\texttt{(project\_id, user\_id)}. The \texttt{project.user\_id} column was retained as the
+original owner foreign key for backward compatibility. All read operations use a
+\texttt{findByIdAndMember} query (any member may read); write operations use
+\texttt{findByIdAndUser} (owner only). A \texttt{MembershipSeeder} component back-fills
+\texttt{OWNER} rows on application startup for all projects created before the sharing feature
+was added.
 
 \subsection{Task-project many-to-many relationship}
 
 Tasks and projects are connected through a \texttt{task\_projects} join table managed with
 \texttt{@ManyToMany}. This allows a single task to belong to multiple projects simultaneously.
-Cascading is managed manually: the join table is cleared before any task or project delete to prevent
-foreign-key constraint violations.
+Cascading is managed at the database level: an \texttt{ON DELETE CASCADE} foreign key on
+\texttt{task\_projects.task\_id} ensures that soft-deleted task rows (invisible to JPA) are
+cleaned up when their owner user is deleted.
+
+\subsection{Real-time timer synchronisation via SSE}
+
+A \texttt{TimerEventService} holds a \texttt{ConcurrentHashMap<String, List<SseEmitter>>}
+mapping user e-mail to open browser connections. When \texttt{TaskService.startTask} or
+\texttt{stopTask} completes, it publishes a Spring application event
+(\texttt{TimerStartedEvent} / \texttt{TimerStoppedEvent}). The service listens to these
+events and sends the appropriate SSE frame to every emitter registered for that user's e-mail.
+
+On the frontend, \texttt{TimerContext.jsx} opens an \texttt{EventSource} to
+\texttt{/api/timer/events?token=\ldots} only when a valid JWT is present in
+\texttt{localStorage}. Receiving a \texttt{timer-started} event immediately updates the
+active task state; a \texttt{timer-stopped} event clears it. This means that starting a timer
+in one browser tab is instantly reflected in any other open tab without polling.
+
+\subsection{React Error Boundary}
+
+An \texttt{ErrorBoundary} class component wraps all protected routes in \texttt{App.jsx}.
+When a child throws during render, the boundary's error lifecycle sets an internal error flag
+and logs the error to the console via \texttt{componentDidCatch}. The fallback UI shows
+a user-friendly message and a \textit{Try Again} button.
+
+The ``Try Again'' handler resets \texttt{hasError} to \texttt{false}. However, the children
+must be swapped to a non-throwing component \textit{before} the state reset is triggered;
+otherwise React immediately re-renders with the original throwing children, catches the error
+again, and sets \texttt{hasError} back to \texttt{true} before the UI can update. This
+ordering constraint is tested explicitly in \texttt{ErrorBoundary.test.jsx} using
+\texttt{rerender} followed by \texttt{fireEvent.click}.
 
 \subsection{Accumulated timer design}
 
-When a user starts a task template for the second or third time, a new \texttt{Task} row is created
-(preserving a complete audit trail) but the timer is initialised to the sum of all previous completed
-sessions. This is modelled via a \texttt{totalPreviousSeconds} column (bigint, default 0) on the
-\texttt{Task} entity. The frontend timer displays
-\texttt{totalPreviousSeconds + (now - startTime)}, giving the user a continuously growing counter
-across template restarts without changing the underlying entity semantics.
+When a user starts a task template for the second or third time, a new \texttt{Task} row is
+created (preserving a complete audit trail) but the timer is initialised to the sum of all
+previous completed sessions. This is modelled via a \texttt{totalPreviousSeconds} column
+(bigint, default 0) on the \texttt{Task} entity. The frontend timer displays
+\texttt{totalPreviousSeconds + (now - startTime)}, giving the user a continuously growing
+counter across template restarts without changing the underlying entity semantics.
 
 \subsection{Frontend state management}
 
-The frontend intentionally avoids Redux or any global state library. State is managed through two
-React Contexts:
+The frontend intentionally avoids Redux or any global state library. State is managed through
+two React Contexts:
 \begin{itemize}
-  \item \textbf{AuthContext} --- JWT token, user email, display name, and timezone; persisted in
-        \texttt{localStorage}.
-  \item \textbf{TimerContext} --- the active running task and a live elapsed string, rehydrated from
-        \texttt{GET /api/tasks/active} on every mount (no browser storage).
+  \item \textbf{AuthContext} --- JWT token, user e-mail, display name, and timezone; persisted
+        in \texttt{localStorage}.
+  \item \textbf{TimerContext} --- the active running task and a live elapsed string,
+        rehydrated from \texttt{GET /api/tasks/active} on every mount (no browser storage).
+        SSE events from the backend keep the state in sync across multiple tabs.
 \end{itemize}
-A \textbf{ThemeContext} was added in the UI/UX overhaul
-(\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/130}{PR~\#130}) to support
-light, dark, and system-preference modes via CSS custom properties on the \texttt{<html>} element.
-
-\subsection{UI design system}
-
-In contrast to the initial design, which used inline styles and scattered CSS classes, the final frontend
-uses a \textbf{CSS custom-property token system} (\texttt{App.css}) with named semantic tokens for every
-colour, surface, shadow, border radius, and spacing value. All theme variants (light and dark) are
-expressed as overrides on the \texttt{[data-theme]} attribute, requiring no JavaScript for colour
-switching. A fixed sidebar at 224~px replaces the original horizontal topbar, improving usability on
-wide monitors and enabling persistent navigation without page jumps.
+A \textbf{ThemeContext} supports light, dark, and system-preference modes via CSS custom
+properties on the \texttt{<html>} element.
 
 \subsection{Performance design}
 
-Database indexes on \texttt{tasks(user\_id, start\_time)}, \texttt{tasks(user\_id, end\_time)}, and
-\texttt{projects(user\_id, parent\_project\_id)} cover the hot query paths. All task-fetching queries
-use \texttt{LEFT JOIN FETCH t.projects} to eliminate the N+1 query problem. The Dashboard summary is
-computed in a single \texttt{GET /api/dashboard/summary} call that returns today/week totals, the
-running task, and the top-5 projects in one response, eliminating any waterfall.
+Database indexes on \texttt{tasks(user\_id, start\_time)}, \texttt{tasks(user\_id,
+end\_time)}, and \texttt{projects(user\_id, parent\_project\_id)} cover the hot query paths.
+All task-fetching queries use \texttt{LEFT JOIN FETCH t.projects} to eliminate the N+1 query
+problem. The Dashboard summary is computed in a single \texttt{GET /api/dashboard/summary}
+call that returns today/week totals, the running task, and the top-5 projects in one
+response, eliminating any waterfall. The entire stack (cold Docker build included) starts
+and responds to \texttt{/api/health} in under 60~seconds; after that, all page loads and
+API calls respond in under one second on a local machine.
+
+\subsection{Test strategy}
+
+The project ships \textbf{535 backend tests} and \textbf{339 frontend unit tests}, plus
+31 Playwright end-to-end spec files (one per user story / NFR). All three suites run in a
+GitHub Actions CI pipeline.
+
+\begin{itemize}
+  \item \textbf{Backend unit tests} (\texttt{service/} package): use Mockito with no Spring
+        context; these are the PITest mutation-testing target and are written to kill
+        setter-mutation mutants via \texttt{ArgumentCaptor} assertions.
+  \item \textbf{Backend integration tests} (\texttt{controller/} package): use
+        \texttt{@SpringBootTest + MockMvc + @ActiveProfiles("test")} against an in-memory H2
+        database. Each test class calls \texttt{repository.deleteAll()} in
+        \texttt{@BeforeEach}; the \texttt{@OnDelete(CASCADE)} database constraints ensure
+        this succeeds even when soft-deleted tasks or refresh tokens reference the users being
+        deleted.
+  \item \textbf{Frontend unit tests}: Vitest + React Testing Library; all \texttt{src/api/*}
+        modules are mocked with \texttt{vi.mock}; coverage thresholds are $\geq$90\% lines,
+        $\geq$85\% functions, $\geq$80\% branches.
+  \item \textbf{E2E tests}: Playwright in headless Chromium; the shared \texttt{auth.ts}
+        helper registers users via API and injects JWTs directly into \texttt{localStorage}
+        to bypass the login form. The Docker Compose environment overrides the login rate
+        limit to 1000~per minute (\texttt{APP\_RATE\_LIMIT\_LOGIN\_PER\_MINUTE=1000}) so that
+        30+ specs running concurrently from the same IP are not blocked.
+\end{itemize}
+
+Coverage gates enforced by CI: JaCoCo $\geq$90\% line coverage, PITest $\geq$80\% mutation
+strength, Vitest $\geq$90\% line/statement coverage.
 
 % ─────────────────────────────────────────────────────────────────
 \section{Used LLMs and AI-based Tools}
 % ─────────────────────────────────────────────────────────────────
 
-The entire project was developed using a single AI tool: \textbf{Claude Code} (Anthropic's CLI agent)
-running \textbf{Claude Sonnet 4.6}, accessed through the VS Code extension. No other LLM or
-AI-based tool was used.
+The entire project was developed using a single AI tool: \textbf{Claude Code} (Anthropic's
+CLI agent) running \textbf{Claude Sonnet 4.6}, accessed through the VS Code extension. No
+other LLM or AI-based tool was used.
 
 \subsection{How Claude Code was used}
 
-Claude Code was used as an \textbf{interactive pair-programming agent} for every phase of development:
+Claude Code was used as an \textbf{interactive pair-programming agent} for every phase of
+development:
 
 \begin{itemize}
-  \item \textbf{Architecture and design} --- discussing and deciding on the layered backend structure,
-        JWT statelessness, H2 file-persistence, and the many-to-many task-project model before writing
+  \item \textbf{Architecture and design} --- discussing and deciding on the layered backend
+        structure, JWT statelessness, H2 file-persistence, the many-to-many task-project
+        model, refresh-token rotation strategy, and soft-delete cascade design before writing
         a single line of code.
-  \item \textbf{Feature implementation} --- writing JPA entities, Spring service and controller classes,
-        React page components, CSS, and Axios API wrappers for all 28 user stories and 4 non-functional
-        requirements.
-  \item \textbf{Test authoring} --- generating the full suite of 457 JUnit/Mockito backend tests and
-        326 Vitest/React Testing Library frontend tests, covering unit, integration, and component levels.
-  \item \textbf{E2E test authoring} --- writing all 28 Playwright spec files (one per user story/NFR),
-        including the shared \texttt{auth.ts} helper that registers users via API and injects JWT
-        directly into \texttt{localStorage} to bypass the login form.
-  \item \textbf{CI pipeline design and debugging} --- setting up the GitHub Actions pipeline (backend,
-        frontend, and Playwright system-test jobs in Docker), diagnosing CI failures, and iterating on
-        fixes.
-  \item \textbf{Bug investigation and fixing} --- all fix PRs (e.g.\ analytics year sync, accumulated
-        timer, NFR-003 layout overflow, Playwright strict-mode violations) were diagnosed and resolved
-        through a conversation with the agent.
-  \item \textbf{Documentation} --- writing issue descriptions, PR summaries, the README (including the
-        full test table, API reference, and design-decisions section), and this report.
+  \item \textbf{Feature implementation} --- writing JPA entities, Spring service and
+        controller classes, React page components, CSS, and Axios API wrappers for all 28
+        user stories, 4 non-functional requirements, and 6 security hardening improvements.
+  \item \textbf{Test authoring} --- generating the full suite of 535 JUnit/Mockito backend
+        tests and 339 Vitest/React Testing Library frontend tests, covering unit, integration,
+        and component levels, including reflection-based tests for private SSE callback
+        wiring.
+  \item \textbf{E2E test authoring} --- writing all 31 Playwright spec files (one per user
+        story/NFR), including the shared \texttt{auth.ts} helper that registers users via API
+        and injects JWT directly into \texttt{localStorage} to bypass the login form.
+  \item \textbf{CI pipeline design and debugging} --- setting up the GitHub Actions pipeline
+        (backend, frontend, and Playwright system-test jobs in Docker), diagnosing CI
+        failures, and iterating on fixes.
+  \item \textbf{Bug investigation and fixing} --- all fix PRs (analytics year sync,
+        accumulated timer, NFR-003 layout overflow, Playwright strict-mode violations,
+        rate-limiter path matching, SSE callback reflection, Error Boundary try-again
+        ordering) were diagnosed and resolved through conversations with the agent.
+  \item \textbf{Documentation} --- writing issue descriptions, PR summaries, the README
+        (test table, architecture notes, JWT secret explanation), and this report.
 \end{itemize}
 
-The \texttt{CLAUDE.md} file at the repository root served as a standing briefing document for the agent.
-It encoded process rules (one issue per PR, CI must never fail, commit style), the full architecture
-description, and a growing list of design decisions so that every new conversation started with full
-project context without needing re-explanation.
+The \texttt{CLAUDE.md} file at the repository root served as a standing briefing document
+for the agent. It encoded process rules (one issue per PR, CI must never fail, commit style),
+the full architecture description, and a growing list of design decisions so that every new
+conversation started with full project context without needing re-explanation.
 
 % ─────────────────────────────────────────────────────────────────
 \section{Where Did the AI Tools Work Well?}
@@ -188,54 +408,71 @@ project context without needing re-explanation.
 
 \subsection{Consistent boilerplate generation}
 
-The most immediate win was the elimination of boilerplate. Each user story followed the same pattern:
-entity $\rightarrow$ repository $\rightarrow$ service $\rightarrow$ controller $\rightarrow$ DTO $\rightarrow$
-frontend page. Claude Code understood this convention from \texttt{CLAUDE.md} and generated all layers
-coherently in a single turn, including field validation, error handling, and the correct Spring Security
-integration. What would have taken hours of repetitive typing per story was reduced to minutes.
+The most immediate win was the elimination of boilerplate. Each user story followed the same
+pattern: entity $\rightarrow$ repository $\rightarrow$ service $\rightarrow$ controller
+$\rightarrow$ DTO $\rightarrow$ frontend page. Claude Code understood this convention from
+\texttt{CLAUDE.md} and generated all layers coherently in a single turn, including field
+validation, error handling, and the correct Spring Security integration. What would have
+taken hours of repetitive typing per story was reduced to minutes.
 
 \subsection{Comprehensive test authoring}
 
 Claude Code produced test suites that went well beyond happy-path coverage. For example,
-\texttt{TaskServiceTest} (41 tests, \href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/35}{PR~\#35}
-and later expansions) uses ArgumentCaptor to verify the exact fields written to the database on every
-save call, specifically to kill setter-mutation PITest mutants. The agent understood that PITest
-kills mutations by detecting when a field is set to the wrong value, and wrote tests that specifically
-validated each field assignment --- a non-trivial testing strategy. The final suite achieves
-$\geq$90\% JaCoCo line coverage, $\geq$80\% PITest mutation-test strength, and $\geq$90\% Vitest
-statement coverage across all three metric categories.
+\texttt{TaskServiceTest} uses ArgumentCaptor to verify the exact fields written to the
+database on every save call, specifically to kill setter-mutation PITest mutants. The agent
+understood that PITest kills mutations by detecting when a field is set to the wrong value,
+and wrote tests that specifically validated each field assignment --- a non-trivial testing
+strategy. The final suite achieves $\geq$90\% JaCoCo line coverage, $\geq$80\% PITest
+mutation-test strength, and $\geq$90\% Vitest statement coverage.
+
+The security hardening tests were particularly thorough. The \texttt{TimerEventServiceTest}
+uses Java reflection to access the private \texttt{completionCallback} field of
+\texttt{ResponseBodyEmitter} and invokes it directly, because
+\texttt{SseEmitter.complete()} does not trigger \texttt{onCompletion} callbacks when called
+outside a real HTTP handler. The agent identified this Spring internals subtlety and produced
+the reflection-based test rather than accepting an untested code path.
 
 \subsection{Complex cross-cutting features}
 
-The project-sharing feature
-(\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/issues/59}{Issue~\#59},
-\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/66}{PR~\#66})
-required coordinating changes across the entity model, four repository methods, two service classes,
-access-control guards in every controller, the frontend project list, project detail page, and the
-invitation form. Claude Code designed the full \texttt{project\_members} table approach, wrote the
-\texttt{MembershipSeeder} to back-fill ownership rows for pre-existing data, and produced the 17-test
-\texttt{ProjectSharingTest} integration suite in one coherent turn. The breadth of that change
-(touching 12+ files) would have been highly error-prone if implemented manually.
+The project-sharing feature required coordinating changes across the entity model, four
+repository methods, two service classes, access-control guards in every controller, the
+frontend project list, project detail page, and the invitation form. Claude Code designed the
+full \texttt{project\_members} table approach, wrote the \texttt{MembershipSeeder} to
+back-fill ownership rows for pre-existing data, and produced the integration test suite in
+one coherent turn. The breadth of that change (touching 12+ files) would have been highly
+error-prone if implemented manually.
+
+Similarly, the JWT refresh-token feature required coordinating a new JPA entity with a
+database-level cascade, a new service with rotate-on-use semantics, a new controller
+endpoint, and a frontend Axios interceptor with retry logic --- all without breaking any of
+the 28 existing Playwright specs. The agent kept all these constraints in mind simultaneously.
 
 \subsection{CI failure diagnosis}
 
-When the CI pipeline failed, Claude Code diagnosed root causes from raw error output with high
-accuracy. The most precise example was the CI workspace-mount bug
-(\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/58}{PR~\#58}): the GitHub
-Actions backend job mounted only \texttt{backend/} as \texttt{/workspace}, so
-\texttt{LocalDeployabilityTest}'s \texttt{../docker-compose.yml} path resolved to the container
-filesystem root. Claude Code identified the exact volume-mount line in the YAML, explained the
-resolution order, and produced the one-line fix immediately.
+When the CI pipeline failed, Claude Code diagnosed root causes from raw error output with
+high accuracy. Two examples from the hardening story:
+
+\begin{enumerate}
+  \item \textbf{Rate-limiter filter path} --- The \texttt{LoginRateLimitFilter} called
+        \texttt{getServletPath()}, which returns \texttt{""} in MockMvc rather than the
+        real path, so the filter never intercepted the login endpoint in integration tests.
+        The agent identified the Spring distinction and applied the one-character fix.
+  \item \textbf{E2E rate-limit exhaustion} --- 30+ Playwright specs each called
+        \texttt{POST /api/auth/login} via \texttt{registerUser()} in \texttt{beforeAll}.
+        Running concurrently from the same CI IP address exhausted the 10/min limit;
+        subsequent specs received 429, stored \texttt{undefined} as the JWT, and every API
+        call returned 401. The agent traced the cascade from the \texttt{auth.ts} helper
+        through to the failing assertions and diagnosed the single-line fix: add
+        \texttt{APP\_RATE\_LIMIT\_LOGIN\_PER\_MINUTE=1000} to \texttt{docker-compose.yml}.
+\end{enumerate}
 
 \subsection{UI/UX overhaul}
 
-The UI/UX redesign
-(\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/issues/129}{Issue~\#129},
-\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/130}{PR~\#130})
-produced a complete CSS custom-property token system, a light/dark/system theme switcher, skeleton
-shimmer loaders, a toast notification system, a fixed sidebar with mobile hamburger menu, route
-transition animations, and an illustrated SVG empty state --- all in a single large PR. The visual
-result was production-quality, not a rough draft, and required no manual CSS iteration.
+The UI/UX redesign produced a complete CSS custom-property token system, a light/dark/system
+theme switcher, skeleton shimmer loaders, a toast notification system, a fixed sidebar with
+mobile hamburger menu, route transition animations, and an illustrated SVG empty state ---
+all in a single large PR. The visual result was production-quality, not a rough draft, and
+required no manual CSS iteration.
 
 % ─────────────────────────────────────────────────────────────────
 \section{Where Did the AI Tools Not Work as Intended?}
@@ -243,104 +480,94 @@ result was production-quality, not a rough draft, and required no manual CSS ite
 
 \subsection{Playwright E2E test flakiness}
 
-Writing Playwright end-to-end tests proved to be the most challenging area. The first full E2E run
-on CI failed with 30 test failures across 14 spec files
-(\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/116}{PR~\#116}).
-The root causes were varied and subtle:
+Writing Playwright end-to-end tests proved to be the most challenging area. The first full
+E2E run on CI failed with 30 test failures across 14 spec files. The root causes were varied
+and subtle:
 
 \begin{itemize}
-  \item \textbf{Strict-mode violations}: Playwright's strict mode throws when a locator matches more
-        than one element. A success toast (\texttt{role="alert"}) was still in the DOM when a
-        subsequent error \texttt{<p role="alert">} appeared, causing \texttt{getByRole('alert')} to
-        resolve to two elements. The fix required adding \texttt{.filter(\{ hasText: /pattern/i \})}
-        (\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/132}{PR~\#132}).
+  \item \textbf{Strict-mode violations}: Playwright's strict mode throws when a locator
+        matches more than one element. A success toast (\texttt{role="alert"}) was still in
+        the DOM when a subsequent error \texttt{<p role="alert">} appeared, causing
+        \texttt{getByRole('alert')} to resolve to two elements. The fix required adding
+        \texttt{.filter(\{ hasText: /pattern/i \})}.
 
-  \item \textbf{Timing races}: \texttt{waitForResponse} fires at the network layer before the
-        browser's JavaScript \texttt{fetch().then()} callback runs and React re-renders. Reading
-        \texttt{rows.count()} immediately after the event returned the pre-update DOM count.
-        The fix was to use \texttt{expect(rows).not.toHaveCount(oldCount, \{ timeout: 8\_000 \})} to
-        poll until the DOM reflected the new state.
+  \item \textbf{Timing races}: \texttt{waitForResponse} fires at the network layer before
+        the browser's JavaScript \texttt{fetch().then()} callback runs and React re-renders.
+        Reading \texttt{rows.count()} immediately after the event returned the pre-update
+        DOM count. The fix was to use \texttt{expect(rows).not.toHaveCount(oldCount, \{
+        timeout: 8\_000 \})} to poll until the DOM reflected the new state.
 
-  \item \textbf{Time-of-day-dependent failures}: Three \texttt{TaskControllerListFilterTest} tests
-        used \texttt{Instant.now().truncatedTo(DAYS)} as a window boundary. Tasks created about an
-        hour before the test ran appeared outside the window during the first hour of a UTC day.
-        The fix replaced the absolute day boundary with a relative 2-hour window.
+  \item \textbf{Time-of-day-dependent failures}: Three tests used midnight UTC as a window
+        boundary. Tasks created about an hour before the test ran appeared outside the window
+        during the first hour of a UTC day. The fix replaced the absolute boundary with a
+        relative 2-hour window.
 
-  \item \textbf{DOM detach after React re-render}: Stopping a timer triggered
-        \texttt{setActiveTask(null)} followed by \texttt{setElapsed('00:00:00')} in rapid succession,
-        briefly unmounting the start button. Playwright's \texttt{click()} kept retrying until the
-        30-second timeout. The fix was to stop the timer via the API in \texttt{beforeEach} before
-        navigating to the page.
+  \item \textbf{DOM detach after React re-render}: Stopping a timer triggered two rapid
+        state updates that briefly unmounted the start button. Playwright's \texttt{click()}
+        kept retrying until the 30-second timeout. The fix was to stop the timer via the API
+        in \texttt{beforeEach} before navigating to the page.
 \end{itemize}
 
-The first-generation tests were generated without a full mental model of the browser event loop and
-React's asynchronous reconciliation. Three follow-up PRs
-(\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/117}{\#117},
-\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/118}{\#118},
-\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/132}{\#132})
-were needed before the full suite passed reliably.
+The first-generation tests were generated without a full mental model of the browser event
+loop and React's asynchronous reconciliation. Three follow-up PRs were needed before the
+full suite passed reliably.
 
-\textbf{Adaptation}: providing the agent with the exact CI log output (including which locator failed,
-what elements were found, and the stack trace) on each iteration was the key to getting accurate fixes.
-Vague prompts like ``fix the failing tests'' produced generic solutions; specific prompts like ``here
-is the exact Playwright error, here is the component code, explain the timing issue'' produced targeted
-and correct fixes.
+\textbf{Adaptation}: providing the agent with the exact CI log output (including which
+locator failed, what elements were found, and the stack trace) on each iteration was the key
+to getting accurate fixes. Vague prompts produced generic solutions; specific prompts with
+the exact Playwright error and component code produced targeted fixes.
 
 \subsection{Incremental bugs introduced after merge}
 
-Several features were implemented correctly at a high level but contained subtle logic errors that
-only manifested later:
+Several features were implemented correctly at a high level but contained subtle logic errors
+that only manifested later:
 
 \begin{itemize}
-  \item \textbf{Analytics year boundary bug}
-        (\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/issues/125}{Issue~\#125},
-        \href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/124}{PR~\#124},
-        \href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/127}{PR~\#127}):
-        the weekly-pattern service used \texttt{year >= currentYear} to decide the upper time bound,
-        which caused future years (e.g.\ 2027) to display current-year data. The correct condition is
-        \texttt{to = min(now, yearEnd)}, with \texttt{from = yearStart} for future years forcing
-        \texttt{from > to} so the query returns zero rows. This required two separate PRs to fully
-        fix --- the first corrected the frontend year propagation, the second fixed the backend boundary
-        logic.
+  \item \textbf{Analytics year boundary bug}: the weekly-pattern service used
+        \texttt{year >= currentYear} to decide the upper time bound, causing future years to
+        display current-year data. The correct logic is \texttt{to = min(now, yearEnd)}, with
+        \texttt{from = yearStart} for future years forcing \texttt{from > to} so the query
+        returns zero rows. This required two separate PRs to fully fix.
 
-  \item \textbf{Accumulated timer omission}
-        (\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/issues/126}{Issue~\#126},
-        \href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/128}{PR~\#128}):
-        the initial Task Templates implementation created a new task on every template start but always
-        initialised the timer to zero, ignoring previous sessions. The \texttt{totalPreviousSeconds}
-        column and the accumulation logic were added in a subsequent PR after the templates feature was
-        already merged and in use.
+  \item \textbf{Accumulated timer omission}: the initial Task Templates implementation always
+        initialised the timer to zero, ignoring previous sessions. The
+        \texttt{totalPreviousSeconds} column and accumulation logic were added in a subsequent
+        PR after the templates feature was already merged.
 
-  \item \textbf{NFR-003 layout overflow}
-        (\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/132}{PR~\#132}):
-        the \texttt{.page-content} CSS class contained \texttt{margin-left: var(-{}-sidebar-w)}, and
-        the outer wrapper \texttt{div} in \texttt{Layout.jsx} applied the same offset via an inline
-        style. The doubled offset (448~px instead of 224~px) pushed the dashboard content well beyond
-        the 1024~px viewport, causing \texttt{body.scrollWidth} to reach 1179~px. The CSS grid
-        additionally expanded its \texttt{1fr} column to its min-content size rather than its available
-        track size because \texttt{1fr} defaults to \texttt{minmax(auto, 1fr)}. Two separate commits
-        were needed: removing the duplicate margin, then changing \texttt{1fr} to
-        \texttt{minmax(0, 1fr)} with \texttt{min-width: 0} on grid children.
+  \item \textbf{NFR-003 layout overflow}: the \texttt{.page-content} CSS class and the outer
+        wrapper \texttt{div} in \texttt{Layout.jsx} both applied \texttt{margin-left:
+        var(-{}-sidebar-w)}, doubling the offset to 448~px instead of 224~px and pushing the
+        dashboard content well beyond the 1024~px viewport. Two separate commits were needed:
+        removing the duplicate margin, then changing \texttt{1fr} to \texttt{minmax(0, 1fr)}
+        in the CSS grid to prevent min-content expansion.
+
+  \item \textbf{SseEmitter callback not triggered in tests}: \texttt{SseEmitter.complete()}
+        does not invoke \texttt{onCompletion} callbacks when called outside a real HTTP
+        handler. The test for emitter cleanup was written using \texttt{emitter.complete()},
+        which silently did nothing, and so the test always passed even when the cleanup was
+        not wired. The correct approach --- discovered after the test was seen to be vacuous
+        --- is to reflect on \texttt{ResponseBodyEmitter.completionCallback} and call it
+        directly.
 \end{itemize}
 
-\textbf{Adaptation}: in each case, the agent fixed the issue correctly once given the CI failure
-output and the specific file. The lesson learned was to run the E2E test suite locally and inspect
-NFR checks (layout at 1024~px) before pushing, rather than relying on CI as the first line of
-detection. Extending the \texttt{CLAUDE.md} ``Key Design Decisions'' section with the root cause and
-fix pattern for each class of bug prevented the same mistake from recurring in subsequent PRs.
+\textbf{Adaptation}: in each case, the agent fixed the issue correctly once given the CI
+failure output and the specific file. Extending the \texttt{CLAUDE.md} ``Key Design
+Decisions'' section with the root cause and fix pattern for each class of bug prevented the
+same mistake from recurring in subsequent PRs.
 
 \subsection{Overly broad initial implementations}
 
-For several features, the agent produced working code that was more complex than needed. The analytics
-service originally implemented three separate repository query methods and a custom aggregation loop.
-The simpler final design reuses the existing \texttt{findByUserAndStartTimeBetweenOrderByStartTimeAsc}
-method (already used by the daily/weekly overview) and performs all grouping in Java streams, which
-meant zero new repository methods and no new database indexes were required. Getting to this simpler
-design required explicitly asking the agent ``can this use the existing repository method instead of a
-new one?'' --- the first-pass answer was always to introduce new infrastructure.
+For several features, the agent produced working code that was more complex than needed. The
+analytics service originally implemented three separate repository query methods and a custom
+aggregation loop. The simpler final design reuses the existing repository method and performs
+all grouping in Java streams, which meant zero new repository methods and no new database
+indexes. Getting to this simpler design required explicitly asking ``can this use the existing
+repository method instead of a new one?'' --- the first-pass answer was always to introduce
+new infrastructure.
 
 % ─────────────────────────────────────────────────────────────────
 \section{Custom Features}
+\label{sec:custom}
 % ─────────────────────────────────────────────────────────────────
 
 Three custom features were designed and implemented beyond the mandatory project requirements.
@@ -350,20 +577,22 @@ Three custom features were designed and implemented beyond the mandatory project
 \href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/issues/63}{Issue~\#63}~$\cdot$~%
 \href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/70}{PR~\#70}
 
-A project can optionally carry a \texttt{budgetHours} value (a positive decimal, e.g.\ \texttt{40.0}).
-When set, the project detail page, project list, and dashboard top-projects list all display a
-colour-coded progress bar: green below 80\% usage (\textsc{on\_track}), orange at 80--99\%
-(\textsc{warning}), and red at or above 100\% (\textsc{over\_budget}).
+A project can optionally carry a \texttt{budgetHours} value (a positive decimal,
+e.g.\ \texttt{40.0}). When set, the project detail page, project list, and dashboard
+top-projects list all display a colour-coded progress bar: green below 80\% usage
+(\textsc{on\_track}), orange at 80--99\% (\textsc{warning}), and red at or above 100\%
+(\textsc{over\_budget}).
 
 \textbf{Key design choices:}
 \begin{itemize}
-  \item The \texttt{budgetHours} column is \texttt{nullable Double} on the \texttt{Project} entity.
-        A null value means no budget is enforced and no progress bar is rendered.
-  \item Budget usage is an \textbf{all-time aggregate} across the full project subtree and all members,
-        intentionally independent of the date-range filter on the project summary.
-  \item \texttt{ProjectService.computeBudgetStatus} is a \texttt{static} helper so that both
-        \texttt{ProjectService.getProjectSummary} and \texttt{DashboardService} can compute budget
-        status without a circular dependency between the two services.
+  \item The \texttt{budgetHours} column is \texttt{nullable Double} on the \texttt{Project}
+        entity. A null value means no budget is enforced and no progress bar is rendered.
+  \item Budget usage is an \textbf{all-time aggregate} across the full project subtree and
+        all members, intentionally independent of the date-range filter on the project
+        summary.
+  \item \texttt{computeBudgetStatus} is a \texttt{static} method on \texttt{ProjectService},
+        shared with \texttt{DashboardService} so both can compute budget status without
+        creating a circular dependency between the two services.
 \end{itemize}
 
 \subsection{US-027 --- Task Templates}
@@ -372,23 +601,24 @@ colour-coded progress bar: green below 80\% usage (\textsc{on\_track}), orange a
 \href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/71}{PR~\#71}~$\cdot$~%
 \href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/128}{PR~\#128}
 
-A \texttt{TaskTemplate} entity stores a user-defined name, an optional description, and optional project
-associations. Clicking \textbf{Start} on a template creates a new running task pre-populated with
-the template's description and project links. Starting the same template multiple times accumulates time
-across sessions: the timer begins from the sum of all previous completed sessions for that description
-rather than from zero.
+A \texttt{TaskTemplate} entity stores a user-defined name, an optional description, and
+optional project associations. Clicking \textbf{Start} on a template creates a new running
+task pre-populated with the template's description and project links. Starting the same
+template multiple times accumulates time across sessions: the timer begins from the sum of
+all previous completed sessions for that description rather than from zero.
 
 \textbf{Key design choices:}
 \begin{itemize}
-  \item Templates are \textbf{strictly private}; ownership is enforced via \texttt{findByIdAndUser},
-        returning 404 (not 403) to avoid leaking template existence to other users.
+  \item Templates are \textbf{strictly private}; ownership is enforced via
+        \texttt{findByIdAndUser}, returning 404 (not 403) to avoid leaking template existence
+        to other users.
   \item The \texttt{startFromTemplate} method delegates to the existing
-        \texttt{TaskService.startTask(userEmail, request, projectIds)} overload rather than duplicating
-        the 409-if-running check.
-  \item Project associations on a template are resolved with \texttt{findByIdAndMember}, preventing
-        users from associating arbitrary project IDs with their templates.
-  \item The accumulated-timer design keeps each session as a \textbf{separate Task row} (complete audit
-        trail) while showing the user a continuously growing total via
+        \texttt{TaskService.startTask} overload rather than duplicating the
+        409-if-running check.
+  \item Project associations on a template are resolved with \texttt{findByIdAndMember},
+        preventing users from associating arbitrary project IDs with their templates.
+  \item The accumulated-timer design keeps each session as a \textbf{separate Task row}
+        (complete audit trail) while showing the user a continuously growing total via
         \texttt{totalPreviousSeconds + (now - startTime)}.
 \end{itemize}
 
@@ -396,35 +626,35 @@ rather than from zero.
 
 \href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/issues/65}{Issue~\#65}~$\cdot$~%
 \href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/72}{PR~\#72}~$\cdot$~%
-\href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/131}{Issue~\#131}~$\cdot$~%
 \href{https://github.com/se2p-classrooms/final-project-AliAkbarBaloch/pull/132}{PR~\#132}
 
 A dedicated Analytics page offers three visualisations:
 
 \begin{enumerate}
-  \item \textbf{Activity Heatmap} --- a GitHub-style 52--53-week grid (7 rows $\times$ N columns,
-        Monday-first). Each cell represents one calendar day colour-coded in four levels based on its
-        share of the year's maximum tracked time. Day boundaries are computed in the user's preferred
-        timezone using \texttt{ZonedDateTime}. A year selector (current year $\pm$10) lets users browse
-        historical data.
-  \item \textbf{Average Hours by Day of Week} --- a bar chart showing average tracked seconds per
-        weekday (Mon--Sun) over the last 12 weeks of the selected year. The average is \texttt{total /
-        weeks} (not \texttt{total / days-with-data}), giving a true per-week mean.
-  \item \textbf{Shared Project Breakdown} --- for each shared project where at least two members
-        tracked time in the window, a ranked list of contributor bars showing each person's share as a
-        percentage. Projects with only one contributor or zero total seconds are excluded.
+  \item \textbf{Activity Heatmap} --- a GitHub-style 52--53-week grid (7 rows $\times$
+        N columns, Monday-first). Each cell represents one calendar day colour-coded in four
+        levels based on its share of the year's maximum tracked time. A year selector lets
+        users browse historical data; future years return an empty grid by design.
+  \item \textbf{Average Hours by Day of Week} --- a bar chart showing average tracked seconds
+        per weekday (Mon--Sun) over the last 12 weeks of the selected year. The average is
+        \texttt{total / weeks} (not \texttt{total / days-with-data}), giving a true
+        per-week mean.
+  \item \textbf{Shared Project Breakdown} --- for each shared project where at least two
+        members tracked time in the window, a ranked list of contributor bars showing each
+        person's share as a percentage. Projects with only one contributor or zero total
+        seconds are excluded.
 \end{enumerate}
 
 \textbf{Key design choices:}
 \begin{itemize}
-  \item All three endpoints reuse the existing \texttt{findByUserAndStartTimeBetween\-OrderByStartTimeAsc}
-        repository method and the \texttt{(user\_id, start\_time)} index --- no new database indexes
-        were required.
+  \item All three endpoints reuse the existing repository query method and the
+        \texttt{(user\_id, start\_time)} composite index --- no new database indexes were required.
   \item Future years return zero results by design: \texttt{to = min(now, yearEnd)} means
         \texttt{from = yearStart > to}, so the \texttt{BETWEEN} clause returns no rows.
-  \item The frontend heatmap cell array is built from a flat list padded to complete weeks using
-        \texttt{(Jan1.getDay() + 6) \% 7} (converts JavaScript's Sunday=0 to Monday=0), rendered via
-        \texttt{grid-auto-flow: column} so week columns emerge naturally from a row-major array.
+  \item The frontend heatmap cell array is built from a flat list padded to complete weeks
+        using \texttt{(Jan1.getDay() + 6) \% 7} (converts JavaScript's Sunday=0 to
+        Monday=0), rendered via \texttt{grid-auto-flow: column} so week columns emerge
+        naturally from a row-major array.
 \end{itemize}
 
 % ─────────────────────────────────────────────────────────────────
