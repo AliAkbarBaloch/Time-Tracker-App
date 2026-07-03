@@ -4,6 +4,7 @@ import com.timetracker.entity.Project;
 import com.timetracker.entity.Task;
 import com.timetracker.entity.User;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -11,7 +12,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Optional;
 
-public interface TaskRepository extends JpaRepository<Task, Long> {
+public interface TaskRepository extends JpaRepository<Task, Long>, JpaSpecificationExecutor<Task> {
 
     @Query("SELECT DISTINCT t FROM Task t LEFT JOIN FETCH t.projects WHERE t.user = :user ORDER BY t.startTime DESC")
     List<Task> findByUserOrderByStartTimeDesc(@Param("user") User user);

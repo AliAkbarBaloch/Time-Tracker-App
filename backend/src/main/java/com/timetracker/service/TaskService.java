@@ -16,6 +16,12 @@ import com.timetracker.exception.TimerAlreadyRunningException;
 import com.timetracker.repository.ProjectRepository;
 import com.timetracker.repository.TaskRepository;
 import com.timetracker.repository.UserRepository;
+import com.timetracker.specification.TaskSpecifications;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -233,17 +239,60 @@ public class TaskService {
         return tasks.stream().map(TaskResponse::from).toList();
     }
 
+    @Transactional(readOnly = true)
     public PageResponse<TaskResponse> listTasksPaged(String userEmail, Instant from, Instant to,
                                                       String search, Long projectId, Long userId,
                                                       int page, int size) {
-        List<TaskResponse> all = listTasks(userEmail, from, to, search, projectId, userId);
+        User caller = loadUser(userEmail);
+        User taskOwner = caller;
+        Set<Long> projectSubtreeIds = null;
+
+        if (projectId != null) {
+            Project filterProject = projectRepository.findByIdAndMember(projectId, caller)
+                    .orElseThrow(() -> new ProjectNotFoundException(projectId));
+            projectSubtreeIds = collectSubtreeProjectIds(filterProject);
+        }
+
+        if (userId != null) {
+            if (projectId == null) {
+                throw new org.springframework.security.access.AccessDeniedException(
+                        "userId filter requires projectId to be specified.");
+            }
+            User targetUser = userRepository.findById(userId)
+                    .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException(
+                            "User is not a member of this project."));
+            projectRepository.findByIdAndMember(projectId, targetUser)
+                    .orElseThrow(() -> new org.springframework.security.access.AccessDeniedException(
+                            "User is not a member of this project."));
+            taskOwner = targetUser;
+        }
+
         int clampedSize = Math.max(1, Math.min(size, 100));
-        int totalElements = all.size();
-        int totalPages = totalElements == 0 ? 1 : (int) Math.ceil((double) totalElements / clampedSize);
+
+        Specification<Task> spec = Specification.where(TaskSpecifications.ownedBy(taskOwner));
+        if (from != null)                        spec = spec.and(TaskSpecifications.startedAtOrAfter(from));
+        if (to != null)                          spec = spec.and(TaskSpecifications.startedBefore(to));
+        if (search != null && !search.isBlank()) spec = spec.and(TaskSpecifications.descriptionContains(search));
+        if (projectSubtreeIds != null)           spec = spec.and(TaskSpecifications.inProjects(projectSubtreeIds));
+
+        // Two-query approach: count first to compute a valid page range, then fetch.
+        // This preserves the original behaviour of clamping out-of-range pages to the last page
+        // rather than returning empty content.
+        long total = taskRepository.count(spec);
+        int totalPages = total == 0 ? 1 : (int) Math.ceil((double) total / clampedSize);
         int clampedPage = Math.max(0, Math.min(page, totalPages - 1));
-        int fromIdx = clampedPage * clampedSize;
-        int toIdx = Math.min(fromIdx + clampedSize, totalElements);
-        return new PageResponse<>(all.subList(fromIdx, toIdx), totalElements, totalPages, clampedPage, clampedSize);
+
+        Pageable pageable = PageRequest.of(clampedPage, clampedSize,
+                Sort.by(Sort.Direction.DESC, "startTime"));
+        Page<Task> dbPage = taskRepository.findAll(spec, pageable);
+
+        return new PageResponse<>(
+                dbPage.getContent().stream().map(TaskResponse::from).toList(),
+                (int) total,
+                totalPages,
+                clampedPage,
+                clampedSize
+        );
     }
 
     private Set<Long> collectSubtreeProjectIds(Project project) {
