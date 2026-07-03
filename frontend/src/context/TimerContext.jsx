@@ -1,7 +1,6 @@
-import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import * as taskApi from '../api/taskApi'
-
-const TimerContext = createContext(null)
+import { TimerContext } from './timerCtx'
 
 function formatElapsed(startTime, totalPreviousSeconds) {
   const currentSecs = Math.max(0, Math.floor((Date.now() - new Date(startTime).getTime()) / 1000))
@@ -61,9 +60,3 @@ export function TimerProvider({ children }) {
   )
 }
 
-// eslint-disable-next-line react/only-export-components
-export function useTimer() {
-  const ctx = useContext(TimerContext)
-  if (!ctx) throw new Error('useTimer must be used within TimerProvider')
-  return ctx
-}

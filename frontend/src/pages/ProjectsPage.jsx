@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as projectApi from '../api/projectApi'
-import { useToast } from '../context/ToastContext'
+import { useToast } from '../context/useToast'
 
 function formatDuration(totalSeconds) {
   if (!totalSeconds) return '0m'

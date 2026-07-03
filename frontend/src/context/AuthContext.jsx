@@ -1,7 +1,6 @@
-import { createContext, useContext, useState } from 'react'
+import { useState } from 'react'
 import * as authApi from '../api/authApi'
-
-const AuthContext = createContext(null)
+import { AuthContext } from './authCtx'
 
 const TOKEN_KEY = 'tt_token'
 const USER_KEY  = 'tt_user'
@@ -73,9 +72,3 @@ export function AuthProvider({ children }) {
   )
 }
 
-// eslint-disable-next-line react/only-export-components
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used within AuthProvider')
-  return ctx
-}

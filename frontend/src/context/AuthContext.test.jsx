@@ -1,6 +1,7 @@
 import { render, screen, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { AuthProvider, useAuth } from './AuthContext'
+import { AuthProvider } from './AuthContext'
+import { useAuth } from './useAuth'
 import { MemoryRouter } from 'react-router-dom'
 import * as authApi from '../api/authApi'
 

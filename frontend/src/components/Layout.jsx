@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { Outlet, NavLink, useNavigate, useLocation } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
-import { useTimer } from '../context/TimerContext'
-import { useTheme } from '../context/ThemeContext'
+import { useAuth } from '../context/useAuth'
+import { useTimer } from '../context/useTimer'
+import { useTheme } from '../context/useTheme'
 
 function Icon({ size = 16, children }) {
   return (

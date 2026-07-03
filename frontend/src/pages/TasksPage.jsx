@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import * as taskApi from '../api/taskApi'
 import * as projectApi from '../api/projectApi'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../context/useAuth'
 import { toDatetimeLocalInTz, formatInZone, nowInTz, localDateToUtcIso } from '../utils/dateUtils'
 
 function formatDuration(startTime, endTime) {

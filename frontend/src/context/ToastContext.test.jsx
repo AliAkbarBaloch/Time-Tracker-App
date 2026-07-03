@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { render, screen, act, fireEvent } from '@testing-library/react'
-import { ToastProvider, useToast } from './ToastContext'
+import { ToastProvider } from './ToastContext'
+import { useToast } from './useToast'
 
 // Helper that renders one button per toast type
 function Trigger() {

@@ -1,6 +1,5 @@
-import { createContext, useContext, useState, useEffect } from 'react'
-
-const ThemeCtx = createContext(null)
+import { useState, useEffect } from 'react'
+import { ThemeCtx } from './themeCtx'
 
 export function ThemeProvider({ children }) {
   const [theme, setTheme] = useState(() => {
@@ -32,9 +31,3 @@ export function ThemeProvider({ children }) {
   return <ThemeCtx.Provider value={{ theme, setTheme }}>{children}</ThemeCtx.Provider>
 }
 
-// eslint-disable-next-line react/only-export-components
-export function useTheme() {
-  const ctx = useContext(ThemeCtx)
-  if (!ctx) throw new Error('useTheme must be used inside ThemeProvider')
-  return ctx
-}

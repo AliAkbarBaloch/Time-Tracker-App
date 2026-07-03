@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from 'react'
 import { getDashboardSummary } from '../api/dashboardApi'
 import * as templateApi from '../api/templateApi'
 import * as projectApi from '../api/projectApi'
-import { useTimer } from '../context/TimerContext'
-import { useToast } from '../context/ToastContext'
+import { useTimer } from '../context/useTimer'
+import { useToast } from '../context/useToast'
 
 function formatSeconds(totalSecs) {
   const h = Math.floor(totalSecs / 3600)

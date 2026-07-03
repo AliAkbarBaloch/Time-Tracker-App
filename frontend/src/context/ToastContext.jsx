@@ -1,6 +1,5 @@
-import { createContext, useContext, useState, useCallback, useEffect } from 'react'
-
-const ToastCtx = createContext(null)
+import { useState, useCallback, useEffect } from 'react'
+import { ToastCtx } from './toastCtx'
 let _nextId = 0
 
 function ToastItem({ toast, onDismiss }) {
@@ -68,9 +67,3 @@ export function ToastProvider({ children }) {
   )
 }
 
-// eslint-disable-next-line react/only-export-components
-export function useToast() {
-  const ctx = useContext(ToastCtx)
-  // Safe fallback when rendered outside provider (e.g. isolated tests)
-  return ctx ?? { success: () => {}, error: () => {}, info: () => {} }
-}
