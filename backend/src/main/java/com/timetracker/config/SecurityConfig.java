@@ -33,7 +33,8 @@ public class SecurityConfig {
             .cors(cors -> cors.configurationSource(new CorsConfig().corsConfigurationSource()))
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/register", "/api/auth/login", "/api/health", "/h2-console/**").permitAll()
+                .requestMatchers("/api/auth/register", "/api/auth/login", "/api/auth/refresh",
+                        "/api/auth/logout", "/api/health", "/h2-console/**").permitAll()
                 .requestMatchers("/api/**").authenticated()
                 .anyRequest().permitAll()  // SPA routes and static assets are public; API security enforced above
             )

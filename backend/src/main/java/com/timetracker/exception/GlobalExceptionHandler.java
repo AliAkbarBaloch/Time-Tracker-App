@@ -196,4 +196,13 @@ public class GlobalExceptionHandler {
         body.put("message", ex.getMessage());
         return body;
     }
+
+    @ExceptionHandler(InvalidRefreshTokenException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
+    public Map<String, Object> handleInvalidRefreshToken(InvalidRefreshTokenException ex) {
+        Map<String, Object> body = new HashMap<>();
+        body.put("status", 401);
+        body.put("message", ex.getMessage());
+        return body;
+    }
 }

@@ -4,6 +4,7 @@ import com.timetracker.dto.auth.AuthResponse;
 import com.timetracker.dto.auth.ChangePasswordRequest;
 import com.timetracker.dto.auth.LoginRequest;
 import com.timetracker.dto.auth.RegisterRequest;
+import com.timetracker.entity.RefreshToken;
 import com.timetracker.entity.User;
 import com.timetracker.exception.EmailAlreadyExistsException;
 import com.timetracker.exception.WrongPasswordException;
@@ -24,15 +25,18 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final JwtTokenProvider jwtTokenProvider;
     private final AuthenticationManager authenticationManager;
+    private final RefreshTokenService refreshTokenService;
 
     public AuthService(UserRepository userRepository,
                        PasswordEncoder passwordEncoder,
                        JwtTokenProvider jwtTokenProvider,
-                       AuthenticationManager authenticationManager) {
+                       AuthenticationManager authenticationManager,
+                       RefreshTokenService refreshTokenService) {
         this.userRepository = userRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtTokenProvider = jwtTokenProvider;
         this.authenticationManager = authenticationManager;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @Transactional
@@ -46,10 +50,12 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         userRepository.save(user);
         String token = jwtTokenProvider.generateTokenFromEmail(user.getEmail());
-        // Include timezone so the frontend can apply the correct display zone right away (US-025)
-        return new AuthResponse(token, user.getEmail(), user.getDisplayName(), user.getTimezone());
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
+        return new AuthResponse(token, refreshToken.getToken(),
+                user.getEmail(), user.getDisplayName(), user.getTimezone());
     }
 
+    @Transactional
     public AuthResponse login(LoginRequest request) {
         Authentication authentication = authenticationManager.authenticate(
                 new UsernamePasswordAuthenticationToken(request.email(), request.password())
@@ -57,7 +63,25 @@ public class AuthService {
         String token = jwtTokenProvider.generateToken(authentication);
         User user = userRepository.findByEmail(request.email())
                 .orElseThrow(() -> new IllegalStateException("Authenticated user not found"));
-        return new AuthResponse(token, user.getEmail(), user.getDisplayName(), user.getTimezone());
+        RefreshToken refreshToken = refreshTokenService.createRefreshToken(user);
+        return new AuthResponse(token, refreshToken.getToken(),
+                user.getEmail(), user.getDisplayName(), user.getTimezone());
+    }
+
+    @Transactional
+    public AuthResponse refreshAccessToken(String refreshTokenValue) {
+        RefreshToken refreshToken = refreshTokenService.validateRefreshToken(refreshTokenValue);
+        User user = refreshToken.getUser();
+        refreshTokenService.revokeToken(refreshTokenValue);
+        RefreshToken newRefreshToken = refreshTokenService.createRefreshToken(user);
+        String newAccessToken = jwtTokenProvider.generateTokenFromEmail(user.getEmail());
+        return new AuthResponse(newAccessToken, newRefreshToken.getToken(),
+                user.getEmail(), user.getDisplayName(), user.getTimezone());
+    }
+
+    @Transactional
+    public void revokeRefreshToken(String refreshTokenValue) {
+        refreshTokenService.revokeToken(refreshTokenValue);
     }
 
     @Transactional
