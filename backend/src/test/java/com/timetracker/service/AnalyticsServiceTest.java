@@ -1,9 +1,14 @@
 package com.timetracker.service;
 
 import com.timetracker.dto.analytics.HeatmapResponse;
+import com.timetracker.dto.analytics.SharedBreakdownResponse;
 import com.timetracker.dto.analytics.WeeklyPatternResponse;
+import com.timetracker.entity.Project;
+import com.timetracker.entity.ProjectMember;
+import com.timetracker.entity.ProjectMemberRole;
 import com.timetracker.entity.Task;
 import com.timetracker.entity.User;
+import com.timetracker.repository.ProjectMemberRepository;
 import com.timetracker.repository.TaskRepository;
 import com.timetracker.repository.UserRepository;
 import org.junit.jupiter.api.BeforeEach;
@@ -35,6 +40,7 @@ class AnalyticsServiceTest {
 
     @Mock TaskRepository taskRepository;
     @Mock UserRepository userRepository;
+    @Mock ProjectMemberRepository projectMemberRepository;
     @InjectMocks AnalyticsService analyticsService;
 
     private User user;
@@ -377,5 +383,140 @@ class AnalyticsServiceTest {
         // 'from' must be exactly 4*7 = 28 days before 'to'
         assertThat(fromCaptor.getValue())
                 .isEqualTo(toCaptor.getValue().minus(28, ChronoUnit.DAYS));
+    }
+
+    // ── getSharedBreakdown ────────────────────────────────────────────────────
+
+    private Project makeProject(long id, String name) {
+        Project p = new Project();
+        p.setId(id);
+        p.setName(name);
+        p.setUser(user);
+        return p;
+    }
+
+    private ProjectMember membership(Project project, User member) {
+        ProjectMember pm = new ProjectMember();
+        pm.setProject(project);
+        pm.setUser(member);
+        pm.setRole(ProjectMemberRole.MEMBER);
+        return pm;
+    }
+
+    private User otherUser() {
+        User u = new User();
+        u.setEmail("bob@example.com");
+        u.setDisplayName("Bob");
+        u.setPasswordHash("hash");
+        u.setTimezone("UTC");
+        return u;
+    }
+
+    @Test
+    void getSharedBreakdown_noMemberships_returnsEmptyProjects() {
+        when(projectMemberRepository.findByUser(user)).thenReturn(Collections.emptyList());
+
+        SharedBreakdownResponse result = analyticsService.getSharedBreakdown("alice@example.com", 12, 2026);
+
+        assertThat(result.projects()).isEmpty();
+    }
+
+    @Test
+    void getSharedBreakdown_soloProject_excluded() {
+        Project solo = makeProject(1L, "Solo");
+        ProjectMember myMembership = membership(solo, user);
+
+        when(projectMemberRepository.findByUser(user)).thenReturn(List.of(myMembership));
+        when(projectMemberRepository.findByProject(solo)).thenReturn(List.of(myMembership));
+
+        SharedBreakdownResponse result = analyticsService.getSharedBreakdown("alice@example.com", 12, 2026);
+
+        assertThat(result.projects()).isEmpty();
+    }
+
+    @Test
+    void getSharedBreakdown_sharedProjectWithTasks_returnsCorrectContributions() {
+        User bob = otherUser();
+        Project shared = makeProject(2L, "Shared");
+        ProjectMember aliceMembership = membership(shared, user);
+        ProjectMember bobMembership   = membership(shared, bob);
+
+        when(projectMemberRepository.findByUser(user)).thenReturn(List.of(aliceMembership));
+        when(projectMemberRepository.findByProject(shared)).thenReturn(List.of(aliceMembership, bobMembership));
+
+        // Alice: 2h task, Bob: 1h task
+        Task aliceTask = new Task();
+        aliceTask.setUser(user);
+        aliceTask.setStartTime(Instant.parse("2026-06-01T08:00:00Z"));
+        aliceTask.setEndTime(Instant.parse("2026-06-01T10:00:00Z")); // 7200s
+        aliceTask.setProjects(new HashSet<>());
+
+        Task bobTask = new Task();
+        bobTask.setUser(bob);
+        bobTask.setStartTime(Instant.parse("2026-06-01T10:00:00Z"));
+        bobTask.setEndTime(Instant.parse("2026-06-01T11:00:00Z")); // 3600s
+        bobTask.setProjects(new HashSet<>());
+
+        when(taskRepository.findByProjectInTimeRange(eq(shared), any(), any()))
+                .thenReturn(List.of(aliceTask, bobTask));
+
+        SharedBreakdownResponse result = analyticsService.getSharedBreakdown("alice@example.com", 12, 2026);
+
+        assertThat(result.projects()).hasSize(1);
+        SharedBreakdownResponse.ProjectContribution proj = result.projects().get(0);
+        assertThat(proj.projectName()).isEqualTo("Shared");
+        assertThat(proj.contributions()).hasSize(2);
+        // Alice is first (highest contributor)
+        assertThat(proj.contributions().get(0).userName()).isEqualTo("Alice");
+        assertThat(proj.contributions().get(0).totalSeconds()).isEqualTo(7200L);
+        assertThat(proj.contributions().get(0).percentage()).isCloseTo(66.67, within(0.01));
+        assertThat(proj.contributions().get(1).userName()).isEqualTo("Bob");
+        assertThat(proj.contributions().get(1).totalSeconds()).isEqualTo(3600L);
+        assertThat(proj.contributions().get(1).percentage()).isCloseTo(33.33, within(0.01));
+    }
+
+    @Test
+    void getSharedBreakdown_projectWithNoActivity_excluded() {
+        User bob = otherUser();
+        Project shared = makeProject(3L, "Idle");
+        ProjectMember aliceMembership = membership(shared, user);
+        ProjectMember bobMembership   = membership(shared, bob);
+
+        when(projectMemberRepository.findByUser(user)).thenReturn(List.of(aliceMembership));
+        when(projectMemberRepository.findByProject(shared)).thenReturn(List.of(aliceMembership, bobMembership));
+        when(taskRepository.findByProjectInTimeRange(eq(shared), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        SharedBreakdownResponse result = analyticsService.getSharedBreakdown("alice@example.com", 12, 2026);
+
+        assertThat(result.projects()).isEmpty();
+    }
+
+    @Test
+    void getSharedBreakdown_futureYear_returnsEmptyProjects() {
+        User bob = otherUser();
+        Project shared = makeProject(4L, "Future");
+        ProjectMember aliceMembership = membership(shared, user);
+        ProjectMember bobMembership   = membership(shared, bob);
+
+        when(projectMemberRepository.findByUser(user)).thenReturn(List.of(aliceMembership));
+        when(projectMemberRepository.findByProject(shared)).thenReturn(List.of(aliceMembership, bobMembership));
+        // Future year → from > to → query returns empty
+        when(taskRepository.findByProjectInTimeRange(eq(shared), any(), any()))
+                .thenReturn(Collections.emptyList());
+
+        int futureYear = LocalDate.now().getYear() + 2;
+        SharedBreakdownResponse result = analyticsService.getSharedBreakdown("alice@example.com", 12, futureYear);
+
+        assertThat(result.projects()).isEmpty();
+    }
+
+    @Test
+    void getSharedBreakdown_weeksReturnedInResponse() {
+        when(projectMemberRepository.findByUser(user)).thenReturn(Collections.emptyList());
+
+        SharedBreakdownResponse result = analyticsService.getSharedBreakdown("alice@example.com", 8, 2026);
+
+        assertThat(result.weeks()).isEqualTo(8);
     }
 }

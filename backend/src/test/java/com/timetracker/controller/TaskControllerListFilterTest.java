@@ -80,18 +80,18 @@ class TaskControllerListFilterTest {
 
     @Test
     void listTasks_withFromAndTo_returnsOnlyTasksInRange() throws Exception {
-        Instant now        = Instant.now();
-        Instant todayStart = now.truncatedTo(ChronoUnit.DAYS);
-        Instant todayEnd   = todayStart.plus(1, ChronoUnit.DAYS);
+        Instant now  = Instant.now();
+        Instant from = now.minusSeconds(7200); // 2 hours ago
+        Instant to   = now.plusSeconds(60);
 
-        Instant taskStart = now.minusSeconds(3600);
-        createTask("In range",    taskStart,                   taskStart.plusSeconds(1800));
+        Instant taskStart = now.minusSeconds(3600); // 1h ago — within [from, to]
+        createTask("In range",     taskStart,                   taskStart.plusSeconds(1800));
         createTask("Out of range", now.minus(2, ChronoUnit.DAYS), now.minus(2, ChronoUnit.DAYS).plusSeconds(1800));
 
         mockMvc.perform(get("/api/tasks")
                 .header("Authorization", "Bearer " + jwt)
-                .param("from", todayStart.toString())
-                .param("to",   todayEnd.toString()))
+                .param("from", from.toString())
+                .param("to",   to.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$", hasSize(1)))
                 .andExpect(jsonPath("$[0].description", is("In range")));
@@ -115,12 +115,12 @@ class TaskControllerListFilterTest {
 
     @Test
     void listTasks_withFromAndTo_sortedByStartTimeAscending() throws Exception {
-        Instant now = Instant.now();
-        Instant from = now.truncatedTo(ChronoUnit.DAYS);
-        Instant to   = from.plus(1, ChronoUnit.DAYS);
+        Instant now  = Instant.now();
+        Instant from = now.minusSeconds(10800); // 3 hours ago
+        Instant to   = now.plusSeconds(60);
 
-        Instant start1 = now.minusSeconds(3600);
-        Instant start2 = now.minusSeconds(7200);
+        Instant start1 = now.minusSeconds(3600); // 1h ago
+        Instant start2 = now.minusSeconds(7200); // 2h ago
         createTask("Second task", start1, start1.plusSeconds(900));
         createTask("First task",  start2, start2.plusSeconds(900));
 
@@ -137,8 +137,8 @@ class TaskControllerListFilterTest {
     @Test
     void listTasks_withFromAndTo_returnsProjectsField() throws Exception {
         Instant now  = Instant.now();
-        Instant from = now.truncatedTo(ChronoUnit.DAYS);
-        Instant to   = from.plus(1, ChronoUnit.DAYS);
+        Instant from = now.minusSeconds(7200); // 2 hours ago
+        Instant to   = now.plusSeconds(60);
         Instant s    = now.minusSeconds(3600);
 
         createTask("Task", s, s.plusSeconds(1800));

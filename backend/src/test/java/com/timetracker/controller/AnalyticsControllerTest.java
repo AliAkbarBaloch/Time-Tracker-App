@@ -3,6 +3,8 @@ package com.timetracker.controller;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.timetracker.dto.auth.LoginRequest;
 import com.timetracker.dto.auth.RegisterRequest;
+import com.timetracker.dto.project.CreateProjectRequest;
+import com.timetracker.dto.project.InviteMemberRequest;
 import com.timetracker.dto.task.CreateTaskRequest;
 import com.timetracker.repository.TaskRepository;
 import com.timetracker.repository.UserRepository;
@@ -18,6 +20,7 @@ import org.springframework.test.web.servlet.MvcResult;
 
 import java.time.Instant;
 import java.time.LocalDate;
+import java.util.List;
 import static org.hamcrest.Matchers.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -227,5 +230,109 @@ class AnalyticsControllerTest {
                 .header("Authorization", "Bearer " + jwt))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.byDayOfWeek[*].avgSeconds", everyItem(is(0.0))));
+    }
+
+    // ── Shared breakdown ──────────────────────────────────────────────────────
+
+    /** Creates a project for the given user, returns its id. */
+    private long createProject(String token, String name) throws Exception {
+        MvcResult r = mockMvc.perform(post("/api/projects")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                        new CreateProjectRequest(name, null, null, null))))
+                .andExpect(status().isCreated())
+                .andReturn();
+        return objectMapper.readTree(r.getResponse().getContentAsString()).get("id").asLong();
+    }
+
+    /** Invites {@code inviteeEmail} to the project owned by {@code ownerToken}. */
+    private void inviteMember(String ownerToken, long projectId, String inviteeEmail) throws Exception {
+        mockMvc.perform(post("/api/projects/" + projectId + "/members")
+                .header("Authorization", "Bearer " + ownerToken)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(new InviteMemberRequest(inviteeEmail))))
+                .andExpect(status().isCreated());
+    }
+
+    /** Creates a task associated with the given project. */
+    private void addTaskToProject(String token, Instant start, Instant end, long projectId) throws Exception {
+        mockMvc.perform(post("/api/tasks")
+                .header("Authorization", "Bearer " + token)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(
+                        new CreateTaskRequest("Task", start, end, List.of(projectId)))))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void sharedBreakdown_returns401WithoutAuth() throws Exception {
+        mockMvc.perform(get("/api/analytics/shared-breakdown"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void sharedBreakdown_noSharedProjects_returnsEmptyList() throws Exception {
+        // User has a solo project (no other members invited)
+        long pid = createProject(jwt, "Solo Project");
+        addTaskToProject(jwt,
+                Instant.now().minusSeconds(3600),
+                Instant.now().minusSeconds(60), pid);
+
+        mockMvc.perform(get("/api/analytics/shared-breakdown?weeks=12")
+                .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.projects", hasSize(0)));
+    }
+
+    @Test
+    void sharedBreakdown_sharedProject_includesContributionsForBothMembers() throws Exception {
+        long pid = createProject(jwt, "Shared Alpha");
+        inviteMember(jwt, pid, "other@example.com");
+
+        // User1 tracks 2h (7200s): started 10900s ago, ended 3700s ago
+        Instant u1Start = Instant.now().minusSeconds(10900);
+        Instant u1End   = u1Start.plusSeconds(7200);
+        addTaskToProject(jwt, u1Start, u1End, pid);
+        // User2 tracks 1h (3600s): started 3660s ago, ended 60s ago
+        Instant u2Start = Instant.now().minusSeconds(3660);
+        Instant u2End   = u2Start.plusSeconds(3600);
+        addTaskToProject(otherJwt, u2Start, u2End, pid);
+
+        mockMvc.perform(get("/api/analytics/shared-breakdown?weeks=12")
+                .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.projects", hasSize(1)))
+                .andExpect(jsonPath("$.projects[0].projectName").value("Shared Alpha"))
+                .andExpect(jsonPath("$.projects[0].contributions", hasSize(2)))
+                // First entry is the top contributor (user1 with 2h)
+                .andExpect(jsonPath("$.projects[0].contributions[0].totalSeconds").value(greaterThan(3500)))
+                .andExpect(jsonPath("$.projects[0].contributions[0].percentage").value(closeTo(66.67, 1.0)));
+    }
+
+    @Test
+    void sharedBreakdown_projectWithNoActivity_excluded() throws Exception {
+        long pid = createProject(jwt, "Quiet Project");
+        inviteMember(jwt, pid, "other@example.com");
+        // No tasks added to the project
+
+        mockMvc.perform(get("/api/analytics/shared-breakdown?weeks=12")
+                .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.projects", hasSize(0)));
+    }
+
+    @Test
+    void sharedBreakdown_dataScopedToAuthenticatedUser() throws Exception {
+        // other user creates a shared project but does NOT invite the main user
+        long otherId = createProject(otherJwt, "Others Private");
+        addTaskToProject(otherJwt,
+                Instant.now().minusSeconds(3600),
+                Instant.now().minusSeconds(60), otherId);
+
+        mockMvc.perform(get("/api/analytics/shared-breakdown?weeks=12")
+                .header("Authorization", "Bearer " + jwt))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.projects", hasSize(0)));
     }
 }
