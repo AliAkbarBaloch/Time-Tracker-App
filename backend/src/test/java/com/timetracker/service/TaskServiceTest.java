@@ -21,6 +21,7 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
 
 import org.mockito.ArgumentCaptor;
 import org.springframework.data.domain.Page;
@@ -29,7 +30,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
@@ -46,6 +46,7 @@ class TaskServiceTest {
     @Mock TaskRepository taskRepository;
     @Mock UserRepository userRepository;
     @Mock ProjectRepository projectRepository;
+    @Mock ApplicationEventPublisher eventPublisher;
     @InjectMocks TaskService taskService;
 
     private User user;
@@ -73,6 +74,20 @@ class TaskServiceTest {
         assertThat(resp.running()).isTrue();
         assertThat(resp.endTime()).isNull();
         verify(taskRepository).save(any(Task.class));
+        verify(eventPublisher).publishEvent(any(TimerStartedEvent.class));
+    }
+
+    @Test
+    void stopTask_publishesTimerStoppedEvent() {
+        Task running = new Task();
+        running.setUser(user);
+        running.setStartTime(Instant.now().minusSeconds(60));
+        when(taskRepository.findByUserAndEndTimeIsNull(user)).thenReturn(Optional.of(running));
+        when(taskRepository.save(any(Task.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        taskService.stopTask("alice@example.com");
+
+        verify(eventPublisher).publishEvent(any(TimerStoppedEvent.class));
     }
 
     @Test
@@ -250,7 +265,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void deleteTask_validOwner_deletesTask() {
+    void deleteTask_validOwner_softDeletesTask() {
         Task task = new Task();
         task.setUser(user);
         task.setStartTime(Instant.now().minusSeconds(3600));
@@ -259,7 +274,9 @@ class TaskServiceTest {
 
         taskService.deleteTask("alice@example.com", 1L);
 
-        verify(taskRepository).delete(task);
+        assertThat(task.getDeletedAt()).isNotNull();
+        verify(taskRepository).save(task);
+        verify(taskRepository, never()).delete(any(Task.class));
     }
 
     @Test
@@ -645,8 +662,7 @@ class TaskServiceTest {
     }
 
     @Test
-    void deleteTask_clearsProjectsBeforeDelete() {
-        // Kills L246: removed Set::clear mutation
+    void deleteTask_softDelete_preservesProjectAssociations() {
         Project p = new Project(); p.setId(10L); p.setName("Work"); p.setUser(user);
         Task task = new Task();
         task.setUser(user);
@@ -657,8 +673,11 @@ class TaskServiceTest {
 
         taskService.deleteTask("alice@example.com", 1L);
 
-        assertThat(task.getProjects()).isEmpty();
-        verify(taskRepository).delete(task);
+        // Soft delete: deletedAt is set, project links are kept, no hard delete
+        assertThat(task.getDeletedAt()).isNotNull();
+        assertThat(task.getProjects()).hasSize(1);
+        verify(taskRepository).save(task);
+        verify(taskRepository, never()).delete(any(Task.class));
     }
 
     @Test
