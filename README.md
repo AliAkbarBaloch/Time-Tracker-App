@@ -30,18 +30,20 @@ A full-stack time-tracking web application. Users register, start/stop a live ti
 
 ---
 
-## Running the Application
+## Running the Application — from scratch
 
 ### Option A — Docker Compose (recommended)
 
 ```bash
-# Clone and enter the repo
+# 1. Clone and enter the repo
 git clone https://github.com/se2p-classrooms/final-project-AliAkbarBaloch.git
 cd final-project-AliAkbarBaloch
 
-# Build images and start both services
+# 2. Build images and start both services
 docker compose up --build
 ```
+
+Once both services are healthy, open **http://localhost:3000** in your browser, click **Register**, and create your account.
 
 | Service | URL |
 |---------|-----|
@@ -49,12 +51,27 @@ docker compose up --build
 | Backend (REST API) | http://localhost:8080 |
 | Health check | http://localhost:8080/api/health |
 
-Data is persisted in a Docker volume (`timetracker-data`) — it survives container restarts. To start fresh:
+**JWT secret (optional):** The application ships with a built-in development secret — no configuration needed. To supply your own 32+ character secret:
 
 ```bash
-docker compose down -v   # removes the volume
+# Inline (one-off):
+JWT_SECRET=my-strong-secret-at-least-32-chars docker compose up --build
+
+# Or export it first:
+export JWT_SECRET=my-strong-secret-at-least-32-chars
 docker compose up --build
 ```
+
+**Fresh start — wipe all data:**
+
+```bash
+docker compose down -v   # removes the persistent volume
+docker compose up --build
+```
+
+After a fresh start, register a new account — all previous users and tasks are gone.
+
+---
 
 ### Option B — Local development
 
@@ -62,13 +79,29 @@ docker compose up --build
 # Terminal 1 — Backend
 cd backend
 ./mvnw spring-boot:run
-# Starts on http://localhost:8080
+# Starts on http://localhost:8080 — wait for "Started TimeTrackerApplication"
 
 # Terminal 2 — Frontend
 cd frontend
 npm install        # first run only
 npm run dev
 # Starts on http://localhost:3000  (proxies /api/* → :8080 automatically)
+```
+
+Open **http://localhost:3000** and register.
+
+**JWT secret (optional):** Export before starting the backend:
+
+```bash
+export JWT_SECRET=my-strong-secret-at-least-32-chars
+cd backend && ./mvnw spring-boot:run
+```
+
+**Fresh start — wipe all data:**
+
+```bash
+rm -f backend/data/timetracker.mv.db backend/data/timetracker.trace.db
+# Then restart the backend — the schema is recreated automatically
 ```
 
 ---
@@ -84,7 +117,7 @@ cd backend
 ./mvnw test
 ```
 
-Expected: **457 tests, 0 failures, 0 errors.**
+Expected: **487 tests, 0 failures, 0 errors.**
 
 ### Backend — full quality gates (coverage + linter + tests)
 
@@ -115,7 +148,7 @@ npm install   # first run only
 npm test
 ```
 
-Expected: **326 tests, 0 failures.**
+Expected: **328 tests, 0 failures.**
 
 ### Frontend — unit tests + coverage
 
@@ -171,12 +204,11 @@ Playwright report (HTML): `frontend/playwright-report/index.html`
 | Backend | Java 21 / Spring Boot 3.4.1 / Spring Security 6 / Spring Data JPA |
 | Database | H2 — file-based in dev/Docker, in-memory for tests |
 | Frontend | React 19, Vite 6, React Router 7, Axios |
-| Auth | Stateless JWT (jjwt 0.12.6) + BCrypt |
-| Backend testing | JUnit 5, Mockito, Spring MockMvc — 457 tests |
+| Auth | Stateless JWT (jjwt 0.12.6) + BCrypt; secret from `JWT_SECRET` env var |
+| Backend testing | JUnit 5, Mockito, Spring MockMvc — 487 tests |
 | Backend coverage | JaCoCo ≥ 90% line coverage |
 | Mutation testing | PITest ≥ 80% test strength (service layer) |
-| Frontend testing | Vitest + @testing-library/react — 326 tests, ≥ 90% line coverage |
+| Frontend testing | Vitest + @testing-library/react — 328 tests, ≥ 90% line coverage |
 | Linting | Checkstyle (backend), oxlint (frontend) |
 | E2E tests | Playwright 1.61.1 — 31 spec files (Chromium) |
 | CI | GitHub Actions — backend, frontend, and Playwright jobs |
-
