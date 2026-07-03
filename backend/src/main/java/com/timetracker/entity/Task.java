@@ -2,12 +2,16 @@ package com.timetracker.entity;
 
 import jakarta.persistence.*;
 import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.OnDelete;
+import org.hibernate.annotations.OnDeleteAction;
+import org.hibernate.annotations.SQLRestriction;
 
 import java.time.Instant;
 import java.util.HashSet;
 import java.util.Set;
 
 @Entity
+@SQLRestriction("deleted_at IS NULL")
 @Table(name = "tasks", indexes = {
     @Index(name = "idx_tasks_user_start", columnList = "user_id, start_time"),
     @Index(name = "idx_tasks_user_endtime", columnList = "user_id, end_time")
@@ -29,12 +33,14 @@ public class Task {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "user_id", nullable = false)
+    @OnDelete(action = OnDeleteAction.CASCADE)
     private User user;
 
     @ManyToMany
     @JoinTable(
         name = "task_projects",
-        joinColumns = @JoinColumn(name = "task_id"),
+        joinColumns = @JoinColumn(name = "task_id",
+            foreignKey = @ForeignKey(foreignKeyDefinition = "FOREIGN KEY (task_id) REFERENCES tasks(id) ON DELETE CASCADE")),
         inverseJoinColumns = @JoinColumn(name = "project_id")
     )
     @BatchSize(size = 30)
@@ -46,6 +52,9 @@ public class Task {
     @Column(nullable = false)
     private long totalPreviousSeconds = 0L;
 
+    @Column
+    private Instant deletedAt;
+
     public Task() {}
 
     public Long getId() { return id; }
@@ -56,6 +65,7 @@ public class Task {
     public Set<Project> getProjects() { return projects; }
     public Instant getCreatedAt() { return createdAt; }
     public long getTotalPreviousSeconds() { return totalPreviousSeconds; }
+    public Instant getDeletedAt() { return deletedAt; }
 
     public void setDescription(String description) { this.description = description; }
     public void setStartTime(Instant startTime) { this.startTime = startTime; }
@@ -63,6 +73,7 @@ public class Task {
     public void setUser(User user) { this.user = user; }
     public void setProjects(Set<Project> projects) { this.projects = projects; }
     public void setTotalPreviousSeconds(long totalPreviousSeconds) { this.totalPreviousSeconds = totalPreviousSeconds; }
+    public void setDeletedAt(Instant deletedAt) { this.deletedAt = deletedAt; }
 
     public boolean isRunning() { return endTime == null; }
 }

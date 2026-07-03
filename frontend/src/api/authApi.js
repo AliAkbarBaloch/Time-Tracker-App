@@ -1,6 +1,7 @@
 import axios from 'axios'
 
 const TOKEN_KEY = 'tt_token'
+const REFRESH_KEY = 'tt_refresh'
 
 export const api = axios.create({ baseURL: '/api' })
 
@@ -11,32 +12,54 @@ api.interceptors.request.use(config => {
   return config
 })
 
-// On 401 from non-auth endpoints, clear stored credentials and redirect to login
+// On 401 from non-auth endpoints, try to refresh silently before redirecting to login
 api.interceptors.response.use(
   response => response,
-  error => {
-    if (error.response?.status === 401) {
-      const url = error.config?.url ?? ''
-      if (!url.startsWith('/auth/')) {
-        localStorage.removeItem(TOKEN_KEY)
-        localStorage.removeItem('tt_user')
-        window.location.href = '/login'
+  async error => {
+    const url = error.config?.url ?? ''
+    if (error.response?.status === 401 && !url.startsWith('/auth/') && !error.config._retried) {
+      const storedRefresh = localStorage.getItem(REFRESH_KEY)
+      if (storedRefresh) {
+        try {
+          const res = await api.post('/auth/refresh', { refreshToken: storedRefresh }, { _retried: true })
+          const { token, refreshToken: newRefresh } = res.data
+          localStorage.setItem(TOKEN_KEY, token)
+          if (newRefresh) localStorage.setItem(REFRESH_KEY, newRefresh)
+          error.config.headers.Authorization = `Bearer ${token}`
+          error.config._retried = true
+          return api(error.config)
+        } catch {
+          // Refresh failed — fall through to clear storage and redirect
+        }
       }
+      localStorage.removeItem(TOKEN_KEY)
+      localStorage.removeItem(REFRESH_KEY)
+      localStorage.removeItem('tt_user')
+      window.location.href = '/login'
     }
     return Promise.reject(error)
   }
 )
 
 export function register(email, password, displayName) {
-  return api.post('/auth/register', { email, password, displayName })
+  return api.post('/auth/register', { email, password, displayName }).then(res => {
+    if (res.data?.refreshToken) localStorage.setItem(REFRESH_KEY, res.data.refreshToken)
+    return res
+  })
 }
 
 export function login(email, password) {
-  return api.post('/auth/login', { email, password })
+  return api.post('/auth/login', { email, password }).then(res => {
+    if (res.data?.refreshToken) localStorage.setItem(REFRESH_KEY, res.data.refreshToken)
+    return res
+  })
 }
 
 export function logout() {
-  return api.post('/auth/logout')
+  const refreshToken = localStorage.getItem(REFRESH_KEY)
+  return api.post('/auth/logout', refreshToken ? { refreshToken } : undefined).finally(() => {
+    localStorage.removeItem(REFRESH_KEY)
+  })
 }
 
 export function changePassword(currentPassword, newPassword) {

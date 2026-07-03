@@ -35,7 +35,9 @@ test.describe('US-018 — Persistent Timer Across Browser Sessions', () => {
 
     // Navigate to tasks page and back — timer must still be running
     await page.goto('/tasks');
+    await page.waitForLoadState('domcontentloaded');
     await page.goto('/dashboard');
+    await page.waitForLoadState('domcontentloaded');
     await expect(page.getByTestId('stop-btn')).toBeVisible({ timeout: 8_000 });
     await expect(page.getByTestId('elapsed')).toBeVisible();
 
@@ -53,15 +55,18 @@ test.describe('US-018 — Persistent Timer Across Browser Sessions', () => {
 
     // Banner should be visible on the tasks page
     await page.goto('/tasks');
+    await page.waitForLoadState('domcontentloaded');
     await expect(page.getByTestId('topbar-timer')).toBeVisible({ timeout: 5_000 });
 
     // Banner should be visible on the projects page
     await page.goto('/projects');
-    await expect(page.getByTestId('topbar-timer')).toBeVisible();
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByTestId('topbar-timer')).toBeVisible({ timeout: 5_000 });
 
     // Banner should be visible on the overview page
     await page.goto('/overview');
-    await expect(page.getByTestId('topbar-timer')).toBeVisible();
+    await page.waitForLoadState('domcontentloaded');
+    await expect(page.getByTestId('topbar-timer')).toBeVisible({ timeout: 5_000 });
 
     // Clean up — go back to dashboard and stop
     await page.goto('/dashboard');

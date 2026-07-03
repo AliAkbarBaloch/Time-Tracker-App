@@ -40,6 +40,7 @@ test.describe('NFR-003 — Usability', () => {
 
     for (const route of ['/tasks', '/projects', '/overview', '/dashboard']) {
       await page.goto(route);
+      await page.waitForLoadState('domcontentloaded');
       const timer = page.getByTestId('topbar-timer');
       await expect(timer).toBeVisible({ timeout: 5_000 });
       const box = await timer.boundingBox();

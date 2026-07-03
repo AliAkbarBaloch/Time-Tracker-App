@@ -3,6 +3,7 @@ import { ThemeProvider } from './context/ThemeContext'
 import { ToastProvider } from './context/ToastContext'
 import { AuthProvider } from './context/AuthContext'
 import ProtectedRoute from './components/ProtectedRoute'
+import ErrorBoundary from './components/ErrorBoundary'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import ProjectsPage from './pages/ProjectsPage'
@@ -25,13 +26,13 @@ export default function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route element={<ProtectedRoute><TimerProvider><Layout /></TimerProvider></ProtectedRoute>}>
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
-            <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/projects" element={<ProjectsPage />} />
-            <Route path="/projects/:id" element={<ProjectDetailPage />} />
-            <Route path="/overview" element={<OverviewPage />} />
-            <Route path="/tasks" element={<TasksPage />} />
-            <Route path="/settings"  element={<SettingsPage />} />
-            <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/dashboard" element={<ErrorBoundary><DashboardPage /></ErrorBoundary>} />
+            <Route path="/projects" element={<ErrorBoundary><ProjectsPage /></ErrorBoundary>} />
+            <Route path="/projects/:id" element={<ErrorBoundary><ProjectDetailPage /></ErrorBoundary>} />
+            <Route path="/overview" element={<ErrorBoundary><OverviewPage /></ErrorBoundary>} />
+            <Route path="/tasks" element={<ErrorBoundary><TasksPage /></ErrorBoundary>} />
+            <Route path="/settings"  element={<ErrorBoundary><SettingsPage /></ErrorBoundary>} />
+            <Route path="/analytics" element={<ErrorBoundary><AnalyticsPage /></ErrorBoundary>} />
           </Route>
         </Routes>
       </AuthProvider>

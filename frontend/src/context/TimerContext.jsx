@@ -22,6 +22,23 @@ export function TimerProvider({ children }) {
       .catch(() => {})
   }, [])
 
+  // SSE: receive live timer events for cross-tab sync
+  useEffect(() => {
+    if (typeof EventSource === 'undefined') return
+    const token = localStorage.getItem('tt_token')
+    if (!token) return
+
+    const es = new EventSource(`/api/timer/events?token=${encodeURIComponent(token)}`)
+
+    es.addEventListener('timer-started', e => {
+      try { setActiveTask(JSON.parse(e.data)) } catch {}
+    })
+    es.addEventListener('timer-stopped', () => setActiveTask(null))
+    es.onerror = () => es.close()
+
+    return () => es.close()
+  }, [])
+
   // Live clock driven purely by startTime from DB
   useEffect(() => {
     if (!activeTask) { setElapsed('00:00:00'); return }

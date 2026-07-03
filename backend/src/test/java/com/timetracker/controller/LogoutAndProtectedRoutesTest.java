@@ -55,9 +55,10 @@ class LogoutAndProtectedRoutesTest {
     }
 
     @Test
-    void logout_withoutToken_returns401() throws Exception {
+    void logout_withoutToken_returns204() throws Exception {
+        // Logout is a public endpoint; calling it without a token is a no-op and returns 204.
         mockMvc.perform(post("/api/auth/logout"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isNoContent());
     }
 
     @Test
