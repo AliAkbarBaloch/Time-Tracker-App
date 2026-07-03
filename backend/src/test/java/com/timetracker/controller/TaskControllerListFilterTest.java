@@ -114,15 +114,16 @@ class TaskControllerListFilterTest {
     }
 
     @Test
-    void listTasks_withFromAndTo_sortedByStartTimeAscending() throws Exception {
+    void listTasks_withFromAndTo_sortedByStartTimeDescending() throws Exception {
         Instant now  = Instant.now();
         Instant from = now.minusSeconds(10800); // 3 hours ago
         Instant to   = now.plusSeconds(60);
 
-        Instant start1 = now.minusSeconds(3600); // 1h ago
-        Instant start2 = now.minusSeconds(7200); // 2h ago
-        createTask("Second task", start1, start1.plusSeconds(900));
-        createTask("First task",  start2, start2.plusSeconds(900));
+        Instant start1 = now.minusSeconds(3600); // 1h ago — more recent
+        Instant start2 = now.minusSeconds(7200); // 2h ago — older
+
+        createTask("Recent task", start1, start1.plusSeconds(900));
+        createTask("Older task",  start2, start2.plusSeconds(900));
 
         mockMvc.perform(get("/api/tasks")
                 .header("Authorization", "Bearer " + jwt)
@@ -130,8 +131,8 @@ class TaskControllerListFilterTest {
                 .param("to",   to.toString()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(2)))
-                .andExpect(jsonPath("$.content[0].description", is("First task")))
-                .andExpect(jsonPath("$.content[1].description", is("Second task")));
+                .andExpect(jsonPath("$.content[0].description", is("Recent task")))
+                .andExpect(jsonPath("$.content[1].description", is("Older task")));
     }
 
     @Test

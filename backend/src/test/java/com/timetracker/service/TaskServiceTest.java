@@ -23,6 +23,10 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import org.mockito.ArgumentCaptor;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 import java.time.Instant;
 import java.util.ArrayList;
@@ -264,7 +268,7 @@ class TaskServiceTest {
 
         assertThatThrownBy(() -> taskService.deleteTask("alice@example.com", 99L))
                 .isInstanceOf(TaskNotFoundException.class);
-        verify(taskRepository, never()).delete(any());
+        verify(taskRepository, never()).delete(any(Task.class));
     }
 
     @Test
@@ -279,7 +283,7 @@ class TaskServiceTest {
 
         assertThatThrownBy(() -> taskService.deleteTask("alice@example.com", 1L))
                 .isInstanceOf(org.springframework.security.access.AccessDeniedException.class);
-        verify(taskRepository, never()).delete(any());
+        verify(taskRepository, never()).delete(any(Task.class));
     }
 
     // --- project association ---
@@ -719,5 +723,107 @@ class TaskServiceTest {
         List<TaskResponse> result = taskService.listTasks("alice@example.com", null, null, "anything", null);
 
         assertThat(result).isEmpty();
+    }
+
+    // ── listTasksPaged — DB-level pagination ────────────────────────────────
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listTasksPaged_noFilters_returnsFirstPageFromDb() {
+        Task t = new Task();
+        t.setUser(user);
+        t.setStartTime(Instant.now().minusSeconds(60));
+        t.setEndTime(Instant.now());
+        t.setDescription("DB task");
+
+        Page<Task> dbPage = new PageImpl<>(List.of(t));
+        when(taskRepository.count(any(Specification.class))).thenReturn(1L);
+        when(taskRepository.findAll(any(Specification.class), any(Pageable.class))).thenReturn(dbPage);
+
+        var result = taskService.listTasksPaged("alice@example.com", null, null, null, null, null, 0, 20);
+
+        assertThat(result.totalElements()).isEqualTo(1);
+        assertThat(result.totalPages()).isEqualTo(1);
+        assertThat(result.currentPage()).isEqualTo(0);
+        assertThat(result.content()).hasSize(1);
+        assertThat(result.content().get(0).description()).isEqualTo("DB task");
+        verify(taskRepository).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listTasksPaged_sizeClampedToHundred() {
+        when(taskRepository.count(any(Specification.class))).thenReturn(0L);
+        when(taskRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        var result = taskService.listTasksPaged("alice@example.com", null, null, null, null, null, 0, 999);
+
+        assertThat(result.pageSize()).isEqualTo(100);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listTasksPaged_sizeClampedToOne() {
+        when(taskRepository.count(any(Specification.class))).thenReturn(0L);
+        when(taskRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        var result = taskService.listTasksPaged("alice@example.com", null, null, null, null, null, 0, 0);
+
+        assertThat(result.pageSize()).isEqualTo(1);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listTasksPaged_emptyResult_totalPagesIsOne() {
+        when(taskRepository.count(any(Specification.class))).thenReturn(0L);
+        when(taskRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        var result = taskService.listTasksPaged("alice@example.com", null, null, null, null, null, 0, 20);
+
+        assertThat(result.totalElements()).isEqualTo(0);
+        assertThat(result.totalPages()).isEqualTo(1);
+        assertThat(result.content()).isEmpty();
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listTasksPaged_pageOutOfRange_clampsToLastPage() {
+        when(taskRepository.count(any(Specification.class))).thenReturn(5L);
+        when(taskRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        // 5 tasks, size 20 → totalPages = 1; requesting page 99 clamps to page 0
+        var result = taskService.listTasksPaged("alice@example.com", null, null, null, null, null, 99, 20);
+
+        assertThat(result.currentPage()).isEqualTo(0);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listTasksPaged_negativePage_clampsToZero() {
+        when(taskRepository.count(any(Specification.class))).thenReturn(10L);
+        when(taskRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        var result = taskService.listTasksPaged("alice@example.com", null, null, null, null, null, -5, 20);
+
+        assertThat(result.currentPage()).isEqualTo(0);
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void listTasksPaged_delegatesToDbNotInMemorySubList() {
+        when(taskRepository.count(any(Specification.class))).thenReturn(50L);
+        when(taskRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(Page.empty());
+
+        taskService.listTasksPaged("alice@example.com", null, null, null, null, null, 2, 20);
+
+        // Must hit the DB for pagination — NOT the old list-and-subList methods
+        verify(taskRepository, never()).findByUserOrderByStartTimeDesc(any());
+        verify(taskRepository, never()).findByUserAndStartTimeBetweenOrderByStartTimeAsc(any(), any(), any());
     }
 }
