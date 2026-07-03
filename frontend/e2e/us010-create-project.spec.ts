@@ -37,7 +37,9 @@ test.describe('US-010 — Create a Project', () => {
     await page.getByTestId('project-name-input').fill(name);
     await page.getByTestId('create-project-btn').click();
 
-    await expect(page.getByRole('alert')).toBeVisible({ timeout: 5_000 });
+    await expect(
+      page.getByRole('alert').filter({ hasText: /already exist/i })
+    ).toBeVisible({ timeout: 5_000 });
   });
 
   // AC4: project name up to 100 characters is accepted
